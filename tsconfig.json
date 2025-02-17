@@ -1,0 +1,21 @@
+{
+    "compilerOptions": {
+        "target": "es2018",
+        "experimentalDecorators": true,
+        "emitDecoratorMetadata": true,
+        "module": "commonjs",
+        "rootDirs": ["./src"],
+        "outDir": "./dist",
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "strictPropertyInitialization": false,
+        "skipLibCheck": true,
+        "baseUrl": "src",
+        "paths": {
+            "*": ["*", "node_modules/*", "types/*"]
+        }
+    },
+    "include": ["src/**/*", "src/global.d.ts", "migrations", "src/models/.model.ts", "src/middlewares/**/*"],
+    "exclude": ["node_modules"]
+}

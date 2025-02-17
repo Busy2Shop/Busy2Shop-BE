@@ -1,0 +1,78 @@
+{
+    "status": "00",
+    "message": "Successful",
+    "bundles": [
+        { "id": "1", "code": "AEDC", "description": "AEDC Prepaid", "minimum_value": "500", "maximum_value": "10000000" },
+        {
+            "id": "2",
+            "code": "Ikeja_Electric_Bill_Payment",
+            "description": "Ikeja Electric Bill Payment",
+            "minimum_value": "500",
+            "maximum_value": "500000"
+        },
+        { "id": "3", "code": "Ikeja_Token_Purchase", "description": "Ikeja Token Purchase", "minimum_value": "500", "maximum_value": "500000" },
+        { "id": "4", "code": "Eko_Prepaid", "description": "Eko Prepaid", "minimum_value": "1000", "maximum_value": "500000" },
+        { "id": "5", "code": "Eko_Postpaid", "description": "Eko_Postpaid", "minimum_value": "-50", "maximum_value": "300000000" },
+        { "id": "6", "code": "Ibadan_Disco_Prepaid", "description": "Ibadan Disco Prepaid", "minimum_value": "900", "maximum_value": "1000000" },
+        { "id": "7", "code": "Kano_Electricity_Disco", "description": "Kano Electricity DISCO", "minimum_value": "0", "maximum_value": "1000000000" },
+        {
+            "id": "8",
+            "code": "Kaduna_Electricity_Disco",
+            "description": "Kaduna Electricity DISCO",
+            "minimum_value": "500",
+            "maximum_value": "1000000"
+        },
+        { "id": "9", "code": "Jos_Disco", "description": "Jos Electricity Distribution", "minimum_value": "1000", "maximum_value": "5000000" },
+        { "id": "10", "code": "BEDC", "description": "BEDC", "minimum_value": "0", "maximum_value": "3000000" },
+        {
+            "id": "11",
+            "code": "PhED_Electricity",
+            "description": "Port Harcourt Electricity Distribution Prepaid",
+            "minimum_value": "500",
+            "maximum_value": "100000"
+        },
+        {
+            "id": "12",
+            "code": "PH_Disco",
+            "description": "Port Harcourt Electricity Distribution Postpaid",
+            "minimum_value": "900",
+            "maximum_value": "100000"
+        },
+        {
+            "id": "13",
+            "code": "Kaduna_Electricity_Disco_Postpaid",
+            "description": "Kaduna Electricity Disco Postpaid",
+            "minimum_value": "900",
+            "maximum_value": "5000000"
+        },
+        { "id": "14", "code": "AEDC_Postpaid", "description": "AEDC Postpaid", "minimum_value": "900", "maximum_value": "21000000" },
+        { "id": "15", "code": "Jos_Disco_Postpaid", "description": "Jos Electricity Postpaid", "minimum_value": "1000", "maximum_value": "10000000" },
+        {
+            "id": "16",
+            "code": "Enugu_Electricity_Distribution_Prepaid",
+            "description": "Enugu Electricity Distribution Prepaid",
+            "minimum_value": "500",
+            "maximum_value": "200000"
+        },
+        {
+            "id": "17",
+            "code": "Kano_Electricity_Disco_Postpaid",
+            "description": "Kano Electricity Disco Postpaid",
+            "minimum_value": "0",
+            "maximum_value": "200000000"
+        },
+        { "id": "18", "code": "Ibadan_Disco_Postpaid", "description": "Ibadan Disco Postpaid", "minimum_value": "900", "maximum_value": "10000000" },
+        {
+            "id": "19",
+            "code": "Enugu_Electricity_Distribution_Postpaid",
+            "description": "Enugu Electricity Distribution Postpaid",
+            "minimum_value": "500",
+            "maximum_value": "500000"
+        },
+        { "id": "20", "code": "BEDC_Postpaid", "description": "BEDC Postpaid", "minimum_value": "0", "maximum_value": "3000000" },
+        { "id": "21", "code": "Aba_Power_Prepaid", "description": "Aba Power Prepaid", "minimum_value": "900", "maximum_value": "1000000" },
+        { "id": "22", "code": "Aba_Power_Postpaid", "description": "Aba Power Postpaid", "minimum_value": "900", "maximum_value": "1000000" },
+        { "id": "23", "code": "YEDC", "description": "YEDC", "minimum_value": "0", "maximum_value": "3000000" },
+        { "id": "24", "code": "YEDC_Postpaid", "description": "YEDC Postpaid", "minimum_value": "0", "maximum_value": "3000000" }
+    ]
+}
