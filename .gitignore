@@ -141,3 +141,6 @@ dist
 redis_data
 postgres_data
 dump.rdb
+
+#IDE files
+/.idea

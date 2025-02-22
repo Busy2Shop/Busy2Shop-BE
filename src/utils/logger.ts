@@ -27,13 +27,16 @@ const logFormat = printf((info) => {
     }
 
     if (info[Symbol.for('splat')]) {
-        info[Symbol.for('splat')].forEach((item: unknown) => {
-            if (typeof item === 'object') {
-                logMessage += ` ${util.inspect(item, { depth: null, colors: true })}`;
-            } else {
-                logMessage += ` ${item}`;
-            }
-        });
+        const splatInfo = info[Symbol.for('splat')];
+        if (Array.isArray(splatInfo)) {
+            splatInfo.forEach((item: unknown) => {
+                if (typeof item === 'object') {
+                    logMessage += ` ${util.inspect(item, { depth: null, colors: true })}`;
+                } else {
+                    logMessage += ` ${item}`;
+                }
+            });
+        }
     }
 
     return logMessage;
