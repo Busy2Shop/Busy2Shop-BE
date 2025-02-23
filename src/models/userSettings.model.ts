@@ -81,7 +81,7 @@ export interface IUserSettings {
     meta?: IBlockMeta | null;
 }
 
-interface IVendorMeta {
+export interface IVendorMeta {
     nin: string;
     images: string[];
 }

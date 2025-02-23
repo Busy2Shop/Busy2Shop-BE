@@ -28,9 +28,20 @@ paths:
                   type: string
                   format: password
                   example: "Password123!"
+                nin:
+                  type: string
+                  description: National Identification Number (required for vendors)
+                  example: "12345678901"
+                images:
+                  type: array
+                  description: "Additional images for vendor verification"
+                  items:
+                    type: string
+                    format: uri
+                  example: [ "https://example.com/image1.jpg" ]
                 userType:
                   type: string
-                  enum: [user, vendor]
+                  enum: [ user, vendor ]
                   example: "user"
                 firstName:
                   type: string

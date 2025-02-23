@@ -29,11 +29,14 @@ export default class AuthController {
             otherName,
             displayImage,
             gender,
+            nin,
+            images = [],
             phone: {
                 countryCode,
                 number,
             } = {},
         } = req.body;
+
 
         await UserService.isEmailAndUsernameAvailable(email);
 
@@ -45,6 +48,11 @@ export default class AuthController {
             displayImage,
             dob,
             gender,
+            // Add vendor metadata if userType is vendor
+            vendorMeta: userType === 'vendor' ? {
+                nin,
+                images,
+            } : undefined,
             // Properly construct the location object
             location: country ? {
                 country,
@@ -80,7 +88,7 @@ export default class AuthController {
             postMarkTemplateAlias: 'verify-email',
             postmarkInfo: [{
                 postMarkTemplateData: templateData,
-                receipientEmail: email,
+                recipientEmail: email,
             }],
             html: await new EmailTemplate().accountActivation({ otpCode, name: firstName || 'User' }),
         });
@@ -160,7 +168,7 @@ export default class AuthController {
             postMarkTemplateAlias: 'verify-email',
             postmarkInfo: [{
                 postMarkTemplateData: templateData,
-                receipientEmail: email,
+                recipientEmail: email,
             }],
             html: await new EmailTemplate().accountActivation({ otpCode, name: user.firstName }),
         });
@@ -201,7 +209,7 @@ export default class AuthController {
             postMarkTemplateAlias: 'password-reset',
             postmarkInfo: [{
                 postMarkTemplateData: templateData,
-                receipientEmail: email,
+                recipientEmail: email,
             }],
             html: await new EmailTemplate().forgotPassword({ link: resetLink, name: user.firstName }),
         });
@@ -317,7 +325,7 @@ export default class AuthController {
                 postMarkTemplateAlias: 'verify-email',
                 postmarkInfo: [{
                     postMarkTemplateData: templateData,
-                    receipientEmail: user.email,
+                    recipientEmail: user.email,
                 }],
                 html: await new EmailTemplate().accountActivation({ otpCode, name: user.firstName }),
             });
