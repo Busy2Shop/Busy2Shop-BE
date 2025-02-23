@@ -191,7 +191,7 @@ export default class AuthController {
         }
 
         const resetToken = await AuthUtil.generateCode({ type: 'passwordreset', identifier: user.id, expiry: 60 * 10 });
-        const redirectLink: string = redirectUrl ? redirectUrl : `${WEBSITE_URL}/reset-password`;
+        const redirectLink: string = redirectUrl || `${WEBSITE_URL}/reset-password`;
 
         const resetLink = `${redirectLink}?prst=${resetToken}&e=${encodeURIComponent(email)}`;
 
@@ -239,10 +239,10 @@ export default class AuthController {
 
         const password = await user.$get('password');
         if (!password) {
-            // if email is verified and not activated, create new password for user
+            // if email is verified and not activated, create the new password for user
             if (!user.status.activated) {
                 if (!user.status.emailVerified) {
-                    user.update({ status: { ...user.status, emailVerified: true } });
+                    await user.update({ status: { ...user.status, emailVerified: true } });
                 }
                 // create new password for user
                 await Password.create({ userId: user.id, password: newPassword });
@@ -278,7 +278,7 @@ export default class AuthController {
         const password = await user.$get('password');
         if (!password) throw new ForbiddenError('Please contact support');
 
-        const validOldPassword = await password.isValidPassword(oldPassword);
+        const validOldPassword = password.isValidPassword(oldPassword);
         if (!validOldPassword) {
             throw new BadRequestError('Invalid old password');
         }
@@ -337,7 +337,7 @@ export default class AuthController {
             throw new BadRequestError('Oops Please set a password, you can do that by clicking on the forgot password link');
         }
 
-        const validPassword = await userPassword.isValidPassword(password);
+        const validPassword = userPassword.isValidPassword(password);
         if (!validPassword) {
             throw new BadRequestError('Invalid credential combination');
         }

@@ -294,7 +294,11 @@ paths:
       tags:
         - Authentication
       security:
-        - BearerAuth: [ ]
+        - BearerAuth: [ ] ## Paste either the access token
+                          ## in the authorized field in the
+                          ## swagger documentation on the browser
+                          ## without the word "Bearer".
+                          ## ONLY PASTE IN THE TOKEN.
       summary: Logout user
       responses:
         200:
