@@ -5,7 +5,7 @@ import {
 import Password from './password.model';
 import UserSettings from './userSettings.model';
 import { FindOptions } from 'sequelize';
-
+export type userTypeValues = 'vendor' | 'user';
 @Scopes(() => ({
     withSettings: {
         include: [
@@ -18,7 +18,7 @@ import { FindOptions } from 'sequelize';
     },
 }))
 @Table
-export default class User extends Model<User | IUser> {
+export default class User extends Model<User | IUser > {
     @IsUUID(4)
     @PrimaryKey
     @Default(DataType.UUIDV4)
@@ -74,10 +74,14 @@ export default class User extends Model<User | IUser> {
     @Column({ type: DataType.STRING })
         displayImage: string;
 
-    @Column({ type: DataType.JSONB, allowNull: false, defaultValue: { activated: false, emailVerified: false } })
+    @Column({
+        type: DataType.JSONB, allowNull: false,
+        defaultValue: { activated: false, emailVerified: false, userType: 'user' },
+    })
         status: {
         activated: boolean;
         emailVerified: boolean;
+        userType: userTypeValues;
     };
 
     @Column({ type: DataType.JSONB })
@@ -122,7 +126,7 @@ export default class User extends Model<User | IUser> {
         },
     })
         dob: Date;
-    
+
     // Associations
     @HasOne(() => Password)
         password: Password;
@@ -174,6 +178,7 @@ export interface IUser {
     status: {
         activated: boolean;
         emailVerified: boolean;
+        userType: userTypeValues;
     };
     displayImage?: string;
     fullName?: string;
@@ -182,4 +187,5 @@ export interface IUser {
         number: string
     };
     dob?: Date;
+    gender?: string;
 }

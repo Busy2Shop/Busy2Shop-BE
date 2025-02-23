@@ -14,15 +14,51 @@ import { Transaction } from 'sequelize';
 export default class AuthController {
 
     static async signup(req: Request, res: Response) {
-        const { email, password } = req.body;
+        const {
+            firstName,
+            lastName,
+            dob,
+            email,
+            location: {
+                country,
+                city,
+                address,
+            } = {},
+            password,
+            userType,
+            otherName,
+            displayImage,
+            gender,
+            phone: {
+                countryCode,
+                number,
+            } = {},
+        } = req.body;
 
         await UserService.isEmailAndUsernameAvailable(email);
 
         const newUser = await UserService.addUser({
+            firstName,
+            lastName,
             email,
+            otherName,
+            displayImage,
+            dob,
+            gender,
+            // Properly construct the location object
+            location: country ? {
+                country,
+                city,
+                address,
+            } : undefined,
+            phone: countryCode ? {
+                countryCode,
+                number,
+            } : undefined,
             status: {
                 activated: false,
                 emailVerified: false,
+                userType,
             },
         });
 
@@ -32,7 +68,7 @@ export default class AuthController {
 
         const templateData = {
             otpCode,
-            name: 'User',
+            name: firstName || 'User',
         };
 
         console.log('sending email');
@@ -46,7 +82,7 @@ export default class AuthController {
                 postMarkTemplateData: templateData,
                 receipientEmail: email,
             }],
-            html: await new EmailTemplate().accountActivation({ otpCode, name: 'User' }),
+            html: await new EmailTemplate().accountActivation({ otpCode, name: firstName || 'User' }),
         });
 
         const validPassword = Validator.isValidPassword(password);

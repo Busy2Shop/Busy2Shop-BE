@@ -13,21 +13,66 @@ paths:
               type: object
               required:
                 - email
+                - firstName
+                - lastName
                 - password
+                - dob
                 - userType
+                - gender
               properties:
                 email:
                   type: string
                   format: email
-                  example: user@example.com
+                  example: "user@example.com"
                 password:
                   type: string
                   format: password
                   example: "Password123!"
                 userType:
                   type: string
-                  enum: [ user, vendor ]
-                  example: user
+                  enum: [user, vendor]
+                  example: "user"
+                firstName:
+                  type: string
+                  example: "John"
+                lastName:
+                  type: string
+                  example: "Doe"
+                otherName:
+                  type: string
+                  example: "Smith"
+                gender:
+                  type: string
+                  example: "male"
+                displayImage:
+                  type: string
+                  format: uri
+                  example: "https://example.com/image.jpg"
+                location:
+                  type: object
+                  properties:
+                    country:
+                      type: string
+                      example: "United States"
+                    city:
+                      type: string
+                      example: "New York"
+                    address:
+                      type: string
+                      example: "123 Main St"
+                phone:
+                  type: object
+                  properties:
+                    countryCode:
+                      type: string
+                      example: "+1"
+                    number:
+                      type: string
+                      example: "2345678900"
+                dob:
+                  type: string
+                  format: date
+                  example: "1990-01-01"
       responses:
         201:
           description: User created successfully
@@ -38,17 +83,71 @@ paths:
                 properties:
                   status:
                     type: string
-                    example: success
+                    example: "success"
                   message:
                     type: string
-                    example: Email verification code sent successfully
+                    example: "Email verification code sent successfully"
                   data:
                     type: object
                     properties:
                       user:
                         type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          email:
+                            type: string
+                            format: email
+                          firstName:
+                            type: string
+                          lastName:
+                            type: string
+                          otherName:
+                            type: string
+                          fullName:
+                            type: string
+                          gender:
+                            type: string
+                          displayImage:
+                            type: string
+                          location:
+                            type: object
+                            properties:
+                              country:
+                                type: string
+                              city:
+                                type: string
+                              address:
+                                type: string
+                          phone:
+                            type: object
+                            properties:
+                              countryCode:
+                                type: string
+                              number:
+                                type: string
+                          status:
+                            type: object
+                            properties:
+                              activated:
+                                type: boolean
+                              emailVerified:
+                                type: boolean
+                              userType:
+                                type: string
+                          dob:
+                            type: string
+                            format: date
+                          createdAt:
+                            type: string
+                            format: date-time
+                          updatedAt:
+                            type: string
+                            format: date-time
         409:
           description: Email already exists
+
 
   /auth/verifyemail:
     post:
@@ -93,6 +192,7 @@ paths:
                       refreshToken:
                         type: string
 
+
   /auth/resendverifyemail:
     get:
       tags:
@@ -108,6 +208,7 @@ paths:
       responses:
         200:
           description: Verification email resent
+
 
   /auth/login:
     post:
