@@ -6,7 +6,7 @@ import Market from './market.model';
 import Category from './category.model';
 
 @Table
-export default class MarketCategory extends Model<MarketCategory> {
+export default class MarketCategory extends Model<MarketCategory | IMarketCategory> {
     @IsUUID(4)
     @PrimaryKey
     @Default(DataType.UUIDV4)
@@ -28,4 +28,10 @@ export default class MarketCategory extends Model<MarketCategory> {
 
     @BelongsTo(() => Category)
         category: Category;
+}
+
+export interface IMarketCategory {
+    id?: string;
+    marketId: string;
+    categoryId: string;
 }
