@@ -1,10 +1,14 @@
 import {
     Table, Column, Model, DataType, HasOne, Default, BeforeFind, Scopes,
     IsEmail, IsUUID, PrimaryKey, Index, BeforeCreate, BeforeUpdate,
+    HasMany,
 } from 'sequelize-typescript';
 import Password from './password.model';
 import UserSettings, { IVendorMeta }  from './userSettings.model';
 import { FindOptions } from 'sequelize';
+import Market from './market.model';
+import Review from './review.model';
+import ShoppingList from './shoppingList.model';
 export type userTypeValues = 'vendor' | 'user';
 @Scopes(() => ({
     withSettings: {
@@ -178,6 +182,23 @@ export default class User extends Model<User | IUser > {
         }
     }
 
+
+    // Markets owned by the user (for vendors/supermarket owners)
+    @HasMany(() => Market)
+        ownedMarkets: Market[];
+
+    // Shopping lists created by the user
+    @HasMany(() => ShoppingList)
+        shoppingLists: ShoppingList[];
+
+    // Shopping lists assigned to the user as a vendor
+    @HasMany(() => ShoppingList, 'vendorId')
+        assignedOrders: ShoppingList[];
+
+    // Reviews written by the user
+    @HasMany(() => Review, 'reviewerId')
+        reviews: Review[];
+
     static capitalizeFirstLetter(str: string): string {
         return str.charAt(0).toUpperCase() + str.slice(1);
     }
@@ -207,4 +228,8 @@ export interface IUser {
     dob?: Date;
     gender?: string;
     vendorMeta?: IVendorMeta;
+    ownedMarkets?: Market[];
+    shoppingLists?: ShoppingList[];
+    assignedOrders?: ShoppingList[];
+    reviews?: Review[];
 }
