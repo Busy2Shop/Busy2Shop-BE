@@ -1,8 +1,10 @@
 import {
     Table, Column, Model, DataType, ForeignKey, BelongsTo,
     IsUUID, PrimaryKey, Default,
+    HasMany,
 } from 'sequelize-typescript';
 import Market from './market.model';
+import Review from './review.model';
 
 @Table
 export default class Product extends Model<Product | IProduct> {
@@ -79,6 +81,9 @@ export default class Product extends Model<Product | IProduct> {
 
     @BelongsTo(() => Market)
         market: Market;
+
+    @HasMany(() => Review, 'reviewerId')
+        reviews: Review[];
 }
 
 export interface IProduct {
@@ -94,4 +99,6 @@ export interface IProduct {
     attributes?: object;
     isAvailable?: boolean;
     marketId: string;
+    market?: Market;
+    reviews?: Review[];
 }
