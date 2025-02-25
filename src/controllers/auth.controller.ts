@@ -14,15 +14,59 @@ import { Transaction } from 'sequelize';
 export default class AuthController {
 
     static async signup(req: Request, res: Response) {
-        const { email, password } = req.body;
+        const {
+            firstName,
+            lastName,
+            dob,
+            email,
+            location: {
+                country,
+                city,
+                address,
+            } = {},
+            password,
+            userType,
+            otherName,
+            displayImage,
+            gender,
+            nin,
+            images = [],
+            phone: {
+                countryCode,
+                number,
+            } = {},
+        } = req.body;
+
 
         await UserService.isEmailAndUsernameAvailable(email);
 
         const newUser = await UserService.addUser({
+            firstName,
+            lastName,
             email,
+            otherName,
+            displayImage,
+            dob,
+            gender,
+            // Add vendor metadata if userType is vendor
+            vendorMeta: userType === 'vendor' ? {
+                nin,
+                images,
+            } : undefined,
+            // Properly construct the location object
+            location: country ? {
+                country,
+                city,
+                address,
+            } : undefined,
+            phone: countryCode ? {
+                countryCode,
+                number,
+            } : undefined,
             status: {
                 activated: false,
                 emailVerified: false,
+                userType,
             },
         });
 
@@ -32,7 +76,7 @@ export default class AuthController {
 
         const templateData = {
             otpCode,
-            name: 'User',
+            name: firstName || 'User',
         };
 
         console.log('sending email');
@@ -44,9 +88,9 @@ export default class AuthController {
             postMarkTemplateAlias: 'verify-email',
             postmarkInfo: [{
                 postMarkTemplateData: templateData,
-                receipientEmail: email,
+                recipientEmail: email,
             }],
-            html: await new EmailTemplate().accountActivation({ otpCode, name: 'User' }),
+            html: await new EmailTemplate().accountActivation({ otpCode, name: firstName || 'User' }),
         });
 
         const validPassword = Validator.isValidPassword(password);
@@ -124,7 +168,7 @@ export default class AuthController {
             postMarkTemplateAlias: 'verify-email',
             postmarkInfo: [{
                 postMarkTemplateData: templateData,
-                receipientEmail: email,
+                recipientEmail: email,
             }],
             html: await new EmailTemplate().accountActivation({ otpCode, name: user.firstName }),
         });
@@ -147,7 +191,7 @@ export default class AuthController {
         }
 
         const resetToken = await AuthUtil.generateCode({ type: 'passwordreset', identifier: user.id, expiry: 60 * 10 });
-        const redirectLink: string = redirectUrl ? redirectUrl : `${WEBSITE_URL}/reset-password`;
+        const redirectLink: string = redirectUrl || `${WEBSITE_URL}/reset-password`;
 
         const resetLink = `${redirectLink}?prst=${resetToken}&e=${encodeURIComponent(email)}`;
 
@@ -165,7 +209,7 @@ export default class AuthController {
             postMarkTemplateAlias: 'password-reset',
             postmarkInfo: [{
                 postMarkTemplateData: templateData,
-                receipientEmail: email,
+                recipientEmail: email,
             }],
             html: await new EmailTemplate().forgotPassword({ link: resetLink, name: user.firstName }),
         });
@@ -195,10 +239,10 @@ export default class AuthController {
 
         const password = await user.$get('password');
         if (!password) {
-            // if email is verified and not activated, create new password for user
+            // if email is verified and not activated, create the new password for user
             if (!user.status.activated) {
                 if (!user.status.emailVerified) {
-                    user.update({ status: { ...user.status, emailVerified: true } });
+                    await user.update({ status: { ...user.status, emailVerified: true } });
                 }
                 // create new password for user
                 await Password.create({ userId: user.id, password: newPassword });
@@ -234,7 +278,7 @@ export default class AuthController {
         const password = await user.$get('password');
         if (!password) throw new ForbiddenError('Please contact support');
 
-        const validOldPassword = await password.isValidPassword(oldPassword);
+        const validOldPassword = password.isValidPassword(oldPassword);
         if (!validOldPassword) {
             throw new BadRequestError('Invalid old password');
         }
@@ -281,7 +325,7 @@ export default class AuthController {
                 postMarkTemplateAlias: 'verify-email',
                 postmarkInfo: [{
                     postMarkTemplateData: templateData,
-                    receipientEmail: user.email,
+                    recipientEmail: user.email,
                 }],
                 html: await new EmailTemplate().accountActivation({ otpCode, name: user.firstName }),
             });
@@ -293,7 +337,7 @@ export default class AuthController {
             throw new BadRequestError('Oops Please set a password, you can do that by clicking on the forgot password link');
         }
 
-        const validPassword = await userPassword.isValidPassword(password);
+        const validPassword = userPassword.isValidPassword(password);
         if (!validPassword) {
             throw new BadRequestError('Invalid credential combination');
         }

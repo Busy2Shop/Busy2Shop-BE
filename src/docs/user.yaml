@@ -1,0 +1,70 @@
+openapi: 3.0.0
+paths:
+  /user/update:
+    patch:
+      tags:
+        - Users
+      security:
+        - BearerAuth: [ ]
+      summary: Update user profile
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                otherName:
+                  type: string
+                displayImage:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+                gender:
+                  type: string
+                location:
+                  type: object
+                  properties:
+                    country:
+                      type: string
+                      default: NGN
+                    city:
+                      type: string
+                    address:
+                      type: string
+                isDeactivated:
+                  type: string
+                  enum: [ 'true', 'false' ]
+      responses:
+        200:
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  data:
+                    type: object
+        400:
+          description: Bad request - No new data to update
+
+info:
+  title: User Management API
+  description: User management endpoints for Busy2Shop e-commerce platform
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server

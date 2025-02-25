@@ -3,9 +3,9 @@ import {
     IsEmail, IsUUID, PrimaryKey, Index, BeforeCreate, BeforeUpdate,
 } from 'sequelize-typescript';
 import Password from './password.model';
-import UserSettings from './userSettings.model';
+import UserSettings, { IVendorMeta }  from './userSettings.model';
 import { FindOptions } from 'sequelize';
-
+export type userTypeValues = 'vendor' | 'user';
 @Scopes(() => ({
     withSettings: {
         include: [
@@ -18,7 +18,7 @@ import { FindOptions } from 'sequelize';
     },
 }))
 @Table
-export default class User extends Model<User | IUser> {
+export default class User extends Model<User | IUser > {
     @IsUUID(4)
     @PrimaryKey
     @Default(DataType.UUIDV4)
@@ -74,11 +74,33 @@ export default class User extends Model<User | IUser> {
     @Column({ type: DataType.STRING })
         displayImage: string;
 
-    @Column({ type: DataType.JSONB, allowNull: false, defaultValue: { activated: false, emailVerified: false } })
+    @Column({
+        type: DataType.JSONB, allowNull: false,
+        defaultValue: { activated: false, emailVerified: false, userType: 'user' },
+    })
         status: {
         activated: boolean;
         emailVerified: boolean;
+        userType: userTypeValues;
     };
+
+    @Column({
+        type: DataType.JSONB,
+        allowNull: true,
+        validate: {
+            isValidVendorMeta(this: User, value: IVendorMeta | null) {
+                if (this.status?.userType === 'vendor') {
+                    if (!value?.nin) {
+                        throw new Error('NIN is required for vendors');
+                    }
+                    if (!/^\d{11}$/.test(value.nin)) {
+                        throw new Error('Invalid NIN format. Must be 11 digits');
+                    }
+                }
+            },
+        },
+    })
+        vendorMeta: IVendorMeta;
 
     @Column({ type: DataType.JSONB })
         location: {
@@ -122,7 +144,7 @@ export default class User extends Model<User | IUser> {
         },
     })
         dob: Date;
-    
+
     // Associations
     @HasOne(() => Password)
         password: Password;
@@ -144,7 +166,7 @@ export default class User extends Model<User | IUser> {
     @BeforeCreate
     @BeforeUpdate
     static beforeSaveHook(instance: User) {
-        // Only capitalize if the field is changed (for updates) or new (for creates)
+        // Only capitalize if the field is changed (for updates) or new (for creations)
         if (instance.changed('firstName')) {
             instance.firstName = User.capitalizeFirstLetter(instance.firstName);
         }
@@ -174,6 +196,7 @@ export interface IUser {
     status: {
         activated: boolean;
         emailVerified: boolean;
+        userType: userTypeValues;
     };
     displayImage?: string;
     fullName?: string;
@@ -182,4 +205,6 @@ export interface IUser {
         number: string
     };
     dob?: Date;
+    gender?: string;
+    vendorMeta?: IVendorMeta;
 }

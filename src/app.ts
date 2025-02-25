@@ -9,6 +9,8 @@ import router from './routes';
 import morgan from 'morgan';
 import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
+import swaggerUi from 'swagger-ui-express';
+import { specs } from './swagger.config';
 // import passport from 'passport';
 import { getServerHealth } from './views/serverHealthCheck';
 import cookieParser from 'cookie-parser';
@@ -52,6 +54,17 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     next();
 });
 
+//Swagger documentation route
+app.use('/api-docs', swaggerUi.serve);
+app.get('/api-docs', swaggerUi.setup(specs, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    swaggerOptions: {
+        docExpansion: 'list',
+        filter: true,
+        showRequestDuration: true,
+    },
+}));
 // server health check
 app.get('/serverhealth', getServerHealth);
 

@@ -1,0 +1,329 @@
+openapi: 3.0.0
+paths:
+  /auth/signup:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - firstName
+                - lastName
+                - password
+                - dob
+                - userType
+                - gender
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "user@example.com"
+                password:
+                  type: string
+                  format: password
+                  example: "Password123!"
+                nin:
+                  type: string
+                  description: National Identification Number (required for vendors)
+                  example: "12345678901"
+                images:
+                  type: array
+                  description: "Additional images for vendor verification"
+                  items:
+                    type: string
+                    format: uri
+                  example: [ "https://example.com/image1.jpg" ]
+                userType:
+                  type: string
+                  enum: [ user, vendor ]
+                  example: "user"
+                firstName:
+                  type: string
+                  example: "John"
+                lastName:
+                  type: string
+                  example: "Doe"
+                otherName:
+                  type: string
+                  example: "Smith"
+                gender:
+                  type: string
+                  example: "male"
+                displayImage:
+                  type: string
+                  format: uri
+                  example: "https://example.com/image.jpg"
+                location:
+                  type: object
+                  properties:
+                    country:
+                      type: string
+                      example: "United States"
+                    city:
+                      type: string
+                      example: "New York"
+                    address:
+                      type: string
+                      example: "123 Main St"
+                phone:
+                  type: object
+                  properties:
+                    countryCode:
+                      type: string
+                      example: "+1"
+                    number:
+                      type: string
+                      example: "2345678900"
+                dob:
+                  type: string
+                  format: date
+                  example: "1990-01-01"
+      responses:
+        201:
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Email verification code sent successfully"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          email:
+                            type: string
+                            format: email
+                          firstName:
+                            type: string
+                          lastName:
+                            type: string
+                          otherName:
+                            type: string
+                          fullName:
+                            type: string
+                          gender:
+                            type: string
+                          displayImage:
+                            type: string
+                          location:
+                            type: object
+                            properties:
+                              country:
+                                type: string
+                              city:
+                                type: string
+                              address:
+                                type: string
+                          phone:
+                            type: object
+                            properties:
+                              countryCode:
+                                type: string
+                              number:
+                                type: string
+                          status:
+                            type: object
+                            properties:
+                              activated:
+                                type: boolean
+                              emailVerified:
+                                type: boolean
+                              userType:
+                                type: string
+                          dob:
+                            type: string
+                            format: date
+                          createdAt:
+                            type: string
+                            format: date-time
+                          updatedAt:
+                            type: string
+                            format: date-time
+        409:
+          description: Email already exists
+
+
+  /auth/verifyemail:
+    post:
+      tags:
+        - Authentication
+      summary: Verify email with OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - otpCode
+                - email
+              properties:
+                otpCode:
+                  type: string
+                  example: "123456"
+                email:
+                  type: string
+                  format: email
+      responses:
+        200:
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+
+
+  /auth/resendverifyemail:
+    get:
+      tags:
+        - Authentication
+      summary: Resend verification email
+      parameters:
+        - in: query
+          name: email
+          schema:
+            type: string
+            format: email
+          required: true
+      responses:
+        200:
+          description: Verification email resent
+
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                      accessToken:
+                        type: string
+                      refreshToken:
+                        type: string
+
+  /auth/changepassword:
+    post:
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: [ ]
+      summary: Change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - oldPassword
+                - newPassword
+              properties:
+                oldPassword:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        200:
+          description: Password changed successfully
+
+  /auth/logout:
+    get:
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: [ ] ## Paste either the access token
+                          ## in the authorized field in the
+                          ## swagger documentation on the browser
+                          ## without the word "Bearer".
+                          ## ONLY PASTE IN THE TOKEN.
+      summary: Logout user
+      responses:
+        200:
+          description: Logout successful
+
+  /auth/loggeduser:
+    get:
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: [ ]
+      summary: Get logged in user data
+      responses:
+        200:
+          description: User data retrieved successfully
+
+info:
+  title: Authentication API
+  description: Authentication endpoints for Busy2Shop e-commerce platform
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server

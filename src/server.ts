@@ -13,8 +13,8 @@ async function startServer(): Promise<void> {
         await initiateDB();
 
         // Start the server and listen on port 8080
-        app.listen(process.env.PORT || 8090, () => {
-            logger.info(`Server is running on Port ${process.env.PORT || 8088}`);
+        app.listen(process.env.PORT ?? 8090, () => {
+            logger.info(`Server is running on Port ${process.env.PORT ?? 8088}`);
         });
     } catch (err) {
         console.log(err);

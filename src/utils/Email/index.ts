@@ -14,7 +14,7 @@ import nodemailer from 'nodemailer';
 
 export type postmarkInfo = {
     postMarkTemplateData: Record<string, unknown>;
-    receipientEmail: string
+    recipientEmail: string
 }
 
 type EmailOptions = {
@@ -76,7 +76,7 @@ export default class EmailService {
                 await Promise.all((options.postmarkInfo ?? []).map(async (recipient) => {
                     const mailOptions = {
                         from: `Base Accounts<${EMAIL_HOST_ADDRESS}>`,
-                        to: recipient.receipientEmail,
+                        to: recipient.recipientEmail,
                         subject: options.subject,
                         html: options.html ? options.html : undefined,
                         attachments: options.attachments,
