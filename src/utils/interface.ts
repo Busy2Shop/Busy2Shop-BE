@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import User, { IUser } from '../models/user.model';
 
 export interface SaveTokenToCache {
@@ -57,4 +58,47 @@ export interface AWSKeyData {
     id: string,
     fileName: string,
     type: AWSUploadType,
+}
+
+export interface TenantQueries {
+    TenantId: number;
+    type: string;
+    query: string;
+}
+
+export enum NotificationTypes {
+    // Order Notifications
+    ORDER_CREATED = 'Order Created',
+    ORDER_UPDATED = 'Order Updated',
+    ORDER_DELETED = 'Order Deleted',
+    ORDER_ACCEPTED = 'Order Accepted',
+    ORDER_REJECTED = 'Order Rejected',
+    ORDER_COMPLETED = 'Order Completed',
+
+    // User Notifications
+    USER_CREATED = 'User Created',
+    USER_UPDATED = 'User Updated',
+    USER_DELETED = 'User Deleted',
+    USER_BLOCKED = 'User Blocked',
+    USER_UNBLOCKED = 'User Unblocked',
+
+    // Admin Notifications
+    ADMIN_CREATED = 'Admin Created',
+    ADMIN_UPDATED = 'Admin Updated',
+    ADMIN_DELETED = 'Admin Deleted',
+    ADMIN_BLOCKED = 'Admin Blocked',
+
+    // Product Notifications
+    
+}
+
+export interface Notifications {
+    title: NotificationTypes;
+    message: string;
+    heading: string;
+    id?: string;
+    read?: boolean;
+    resource?: string | null;
+    icon?: string | null;
+    userId?: string;
 }

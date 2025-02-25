@@ -5,6 +5,12 @@ export interface IPaging {
     size: number | null;
 }
 
+export interface IPaginationQuery {
+    page?: number;
+    size?: number;
+    q?: string;
+}
+
 export default class Pagination {
     static getPagination = ({ page, size }: IPaging): { limit: number | null; offset: number | null } => {
         const limit = size ?? null;

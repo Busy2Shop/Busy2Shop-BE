@@ -74,3 +74,21 @@ export const ZOOM_ACCOUNT_ID = process.env.ZOOM_ACCOUNT_ID as string;
 export const ZOOM_CLIENT_ID = process.env.ZOOM_CLIENT_ID as string;
 
 export const ZOOM_CLIENT_SECRET = process.env.ZOOM_CLIENT_SECRET as string;
+
+export const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY as string;
+
+export const ONESIGNAL_USER_AUTH_KEY = process.env.ONESIGNAL_USER_AUTH_KEY as string;
+
+export const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID as string;
+
+export const PAYSTACK_CONFIG = {
+    SECRET_KEY: process.env.PAYSTACK_SECRET_KEY as string,
+    PUBLIC_KEY: process.env.PAYSTACK_PUBLIC_KEY as string,
+    SANDBOX_URL: 'https://api.paystack.co',
+    LIVE_URL: 'https://api.paystack.co',
+};
+export const TYM_BUSINESS_ID = process.env.TYM_BUSINESS_ID as string;
+
+export const BULL_BOARD_USER = process.env.BULL_BOARD_USER as string;
+
+export const BULL_BOARD_PASS = process.env.BULL_BOARD_PASS as string;
