@@ -6,7 +6,7 @@ import {
 import User from './user.model';
 import Market from './market.model';
 import Product from './product.model';
-import { BadRequestError } from 'utils/customErrors';
+import { BadRequestError } from '../utils/customErrors';
 
 @Table
 export default class Review extends Model<Review | IReview> {

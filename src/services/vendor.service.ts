@@ -7,7 +7,7 @@ import ShoppingList from '../models/shoppingList.model';
 import Order from '../models/order.model';
 import { NotFoundError, BadRequestError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
-import { Database } from 'models';
+import { Database } from '../models';
 
 export interface IViewVendorsQuery {
     page?: number;
