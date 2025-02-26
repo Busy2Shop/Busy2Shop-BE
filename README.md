@@ -1,3 +1,9 @@
+# Go to this web address to see the swagger documentation.
+```
+   http://localhost:8000/api-docs
+```
+
+
 # **Base Git Workflow Documentation**
 Git Repository Structure
 
