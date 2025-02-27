@@ -1,0 +1,851 @@
+openapi: 3.0.0
+info:
+  title: Shopping List API
+  description: Shopping list management endpoints for Busy2Shop e-commerce platform
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server
+
+components:
+  schemas:
+    ShoppingListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier for the shopping list item
+        name:
+          type: string
+          description: Name of the item
+        quantity:
+          type: integer
+          description: Quantity of the item
+          default: 1
+        unit:
+          type: string
+          description: Unit of measurement (e.g., kg, pcs)
+        notes:
+          type: string
+          description: Additional notes about the item
+        estimatedPrice:
+          type: number
+          format: decimal
+          description: Estimated price of the item
+        actualPrice:
+          type: number
+          format: decimal
+          description: Actual price of the item (added by vendor)
+        productId:
+          type: string
+          format: uuid
+          description: ID of the linked product, if any
+      required:
+        - name
+
+    ShoppingList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier for the shopping list
+        name:
+          type: string
+          description: Name of the shopping list
+        notes:
+          type: string
+          description: Additional notes about the shopping list
+        estimatedTotal:
+          type: number
+          format: decimal
+          description: Estimated total cost of all items
+        status:
+          type: string
+          enum: [draft, pending, accepted, processing, completed, cancelled]
+          description: Current status of the shopping list
+          default: draft
+        marketId:
+          type: string
+          format: uuid
+          description: ID of the market for this shopping list
+        vendorId:
+          type: string
+          format: uuid
+          description: ID of the vendor assigned to this list
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ShoppingListItem'
+          description: Items in the shopping list
+      required:
+        - name
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /shopping-list:
+    post:
+      tags:
+        - Shopping List
+      summary: Create a new shopping list
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Name of the shopping list
+                notes:
+                  type: string
+                  description: Additional notes about the shopping list
+                marketId:
+                  type: string
+                  format: uuid
+                  description: ID of the market for this shopping list
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: Name of the item
+                      quantity:
+                        type: integer
+                        description: Quantity of the item
+                        default: 1
+                      unit:
+                        type: string
+                        description: Unit of measurement
+                      notes:
+                        type: string
+                        description: Additional notes about the item
+                      estimatedPrice:
+                        type: number
+                        format: decimal
+                        description: Estimated price of the item
+                      productId:
+                        type: string
+                        format: uuid
+                        description: ID of the linked product, if any
+              required:
+                - name
+      responses:
+        '201':
+          description: Shopping list created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shopping list created successfully
+                  data:
+                    $ref: '#/components/schemas/ShoppingList'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+
+    get:
+      tags:
+        - Shopping List
+      summary: Get user's shopping lists
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number for pagination
+        - in: query
+          name: size
+          schema:
+            type: integer
+          description: Number of items per page
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [draft, pending, accepted, processing, completed, cancelled]
+          description: Filter by shopping list status
+        - in: query
+          name: marketId
+          schema:
+            type: string
+            format: uuid
+          description: Filter by market ID
+      responses:
+        '200':
+          description: Shopping lists retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shopping lists retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      lists:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ShoppingList'
+                      count:
+                        type: integer
+                        description: Total count of shopping lists
+                      totalPages:
+                        type: integer
+                        description: Total number of pages
+        '401':
+          description: Unauthorized
+
+  /shopping-list/vendor:
+    get:
+      tags:
+        - Shopping List
+      summary: Get vendor's assigned shopping lists
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number for pagination
+        - in: query
+          name: size
+          schema:
+            type: integer
+          description: Number of items per page
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, accepted, processing, completed, cancelled]
+          description: Filter by shopping list status
+      responses:
+        '200':
+          description: Assigned shopping lists retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Assigned shopping lists retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      lists:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ShoppingList'
+                      count:
+                        type: integer
+                      totalPages:
+                        type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not a vendor
+
+  /shopping-list/{id}:
+    get:
+      tags:
+        - Shopping List
+      summary: Get a shopping list by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list to retrieve
+      responses:
+        '200':
+          description: Shopping list retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shopping list retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/ShoppingList'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not allowed to access this list
+        '404':
+          description: Shopping list not found
+
+    put:
+      tags:
+        - Shopping List
+      summary: Update a shopping list
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Name of the shopping list
+                notes:
+                  type: string
+                  description: Additional notes about the shopping list
+                marketId:
+                  type: string
+                  format: uuid
+                  description: ID of the market for this shopping list
+      responses:
+        '200':
+          description: Shopping list updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shopping list updated successfully
+                  data:
+                    $ref: '#/components/schemas/ShoppingList'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not owner of this list
+        '404':
+          description: Shopping list not found
+
+    delete:
+      tags:
+        - Shopping List
+      summary: Delete a shopping list
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list to delete
+      responses:
+        '200':
+          description: Shopping list deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shopping list deleted successfully
+                  data:
+                    type: string
+                    nullable: true
+        '400':
+          description: Bad request - List cannot be deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not owner of this list
+        '404':
+          description: Shopping list not found
+
+  /shopping-list/{listId}/items:
+    post:
+      tags:
+        - Shopping List Items
+      summary: Add item to shopping list
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: listId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list to add item to
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Name of the item
+                quantity:
+                  type: integer
+                  description: Quantity of the item
+                  default: 1
+                unit:
+                  type: string
+                  description: Unit of measurement
+                notes:
+                  type: string
+                  description: Additional notes about the item
+                estimatedPrice:
+                  type: number
+                  format: decimal
+                  description: Estimated price of the item
+                productId:
+                  type: string
+                  format: uuid
+                  description: ID of the linked product, if any
+              required:
+                - name
+      responses:
+        '201':
+          description: Item added to shopping list successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Item added to shopping list successfully
+                  data:
+                    $ref: '#/components/schemas/ShoppingListItem'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not owner of this list
+        '404':
+          description: Shopping list not found
+
+  /shopping-list/{listId}/items/{itemId}:
+    put:
+      tags:
+        - Shopping List Items
+      summary: Update item in shopping list
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: listId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the item to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Name of the item
+                quantity:
+                  type: integer
+                  description: Quantity of the item
+                unit:
+                  type: string
+                  description: Unit of measurement
+                notes:
+                  type: string
+                  description: Additional notes about the item
+                estimatedPrice:
+                  type: number
+                  format: decimal
+                  description: Estimated price of the item
+      responses:
+        '200':
+          description: Shopping list item updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shopping list item updated successfully
+                  data:
+                    $ref: '#/components/schemas/ShoppingListItem'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not owner of this list
+        '404':
+          description: Item or shopping list not found
+
+    delete:
+      tags:
+        - Shopping List Items
+      summary: Remove item from shopping list
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: listId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list
+        - in: path
+          name: itemId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the item to remove
+      responses:
+        '200':
+          description: Item removed from shopping list successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Item removed from shopping list successfully
+                  data:
+                    type: string
+                    nullable: true
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not owner of this list
+        '404':
+          description: Item or shopping list not found
+
+  /shopping-list/{id}/submit:
+    post:
+      tags:
+        - Shopping List
+      summary: Submit a shopping list
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list to submit
+      responses:
+        '200':
+          description: Shopping list submitted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shopping list submitted successfully
+                  data:
+                    $ref: '#/components/schemas/ShoppingList'
+        '400':
+          description: Bad request - List cannot be submitted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not owner of this list
+        '404':
+          description: Shopping list not found
+
+  /shopping-list/{id}/status:
+    patch:
+      tags:
+        - Shopping List
+      summary: Update shopping list status
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [draft, pending, accepted, processing, completed, cancelled]
+                  description: New status for the shopping list
+              required:
+                - status
+      responses:
+        '200':
+          description: Shopping list status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shopping list status updated successfully
+                  data:
+                    $ref: '#/components/schemas/ShoppingList'
+        '400':
+          description: Bad request - Invalid status transition
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not authorized to change status
+        '404':
+          description: Shopping list not found
+
+  /shopping-list/{id}/accept:
+    post:
+      tags:
+        - Shopping List
+      summary: Accept a shopping list (vendor only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list to accept
+      responses:
+        '200':
+          description: Shopping list accepted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Shopping list accepted successfully
+                  data:
+                    $ref: '#/components/schemas/ShoppingList'
+        '400':
+          description: Bad request - List cannot be accepted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not a vendor
+        '404':
+          description: Shopping list not found
+
+  /shopping-list/{id}/assign:
+    post:
+      tags:
+        - Shopping List
+      summary: Assign vendor to shopping list
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vendorId:
+                  type: string
+                  format: uuid
+                  description: ID of the vendor to assign
+              required:
+                - vendorId
+      responses:
+        '200':
+          description: Vendor assigned to shopping list successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Vendor assigned to shopping list successfully
+                  data:
+                    $ref: '#/components/schemas/ShoppingList'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not authorized to assign vendors
+        '404':
+          description: Shopping list or vendor not found
+
+  /shopping-list/{id}/prices:
+    post:
+      tags:
+        - Shopping List
+      summary: Update actual prices (vendor only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the shopping list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      itemId:
+                        type: string
+                        format: uuid
+                        description: ID of the shopping list item
+                      actualPrice:
+                        type: number
+                        format: decimal
+                        description: Actual price of the item
+                  description: Array of items with actual prices
+              required:
+                - items
+      responses:
+        '200':
+          description: Actual prices updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Actual prices updated successfully
+                  data:
+                    $ref: '#/components/schemas/ShoppingList'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - Not the assigned vendor
+        '404':
+          description: Shopping list not found
