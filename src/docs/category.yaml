@@ -1,4 +1,17 @@
 openapi: 3.0.0
+info:
+  title: Category API
+  description: Category endpoints for Busy2Shop e-commerce platform
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support\@busy2shop.com
+  license:
+    name: proprietary
+
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server
 paths:
   /category:
     get:
@@ -53,7 +66,7 @@ paths:
         - Categories
       summary: Create a new category
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       requestBody:
         required: true
         content:
@@ -120,7 +133,7 @@ paths:
         - Categories
       summary: Update a category
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -167,7 +180,7 @@ paths:
         - Categories
       summary: Delete a category
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -243,7 +256,7 @@ paths:
         - Categories
       summary: Toggle category pin status
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -291,16 +304,3 @@ components:
         icon:
           type: string
 
-info:
-  title: Category API
-  description: Category endpoints for Busy2Shop e-commerce platform
-  version: 1.0.0
-  contact:
-    name: API Support
-    email: support\@busy2shop.com
-  license:
-    name: proprietary
-
-servers:
-  - url: http://localhost:8000/api/v0
-    description: Development server

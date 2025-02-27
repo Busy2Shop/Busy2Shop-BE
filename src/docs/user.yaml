@@ -1,4 +1,16 @@
 openapi: 3.0.0
+info:
+  title: User Management API
+  description: User management endpoints for Busy2Shop e-commerce platform
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server
 paths:
   /user/update:
     patch:
@@ -55,16 +67,3 @@ paths:
                     type: object
         400:
           description: Bad request - No new data to update
-
-info:
-  title: User Management API
-  description: User management endpoints for Busy2Shop e-commerce platform
-  version: 1.0.0
-  contact:
-    name: API Support
-    email: support@busy2shop.com
-  license:
-    name: proprietary
-servers:
-  - url: http://localhost:8000/api/v0
-    description: Development server
