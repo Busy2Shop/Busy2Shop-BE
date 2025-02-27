@@ -1,4 +1,16 @@
 openapi: 3.0.0
+info:
+  title: Authentication API
+  description: Authentication endpoints for Busy2Shop e-commerce platform
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server
 paths:
   /auth/signup:
     post:
@@ -294,11 +306,11 @@ paths:
       tags:
         - Authentication
       security:
-        - BearerAuth: [ ] ## Paste either the access token
-                          ## in the authorized field in the
-                          ## swagger documentation on the browser
-                          ## without the word "Bearer".
-                          ## ONLY PASTE IN THE TOKEN.
+        - BearerAuth: [ ] ## Paste only the access token
+            ## in the authorized field in the
+            ## swagger documentation on the browser
+            ## without the word "Bearer".
+          ## ONLY PASTE IN THE TOKEN.
       summary: Logout user
       responses:
         200:
@@ -315,15 +327,3 @@ paths:
         200:
           description: User data retrieved successfully
 
-info:
-  title: Authentication API
-  description: Authentication endpoints for Busy2Shop e-commerce platform
-  version: 1.0.0
-  contact:
-    name: API Support
-    email: support@busy2shop.com
-  license:
-    name: proprietary
-servers:
-  - url: http://localhost:8000/api/v0
-    description: Development server

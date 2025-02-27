@@ -1,0 +1,481 @@
+openapi: 3.0.0
+info:
+  title: Product API
+  version: 1.0.0
+  description: API for managing products
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server
+
+components:
+  schemas:
+    ProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The name of the product
+        description:
+          type: string
+          description: A description of the product
+        price:
+          type: number
+          format: float
+          description: The price of the product
+        discountPrice:
+          type: number
+          format: float
+          description: The discount price of the product
+        images:
+          type: array
+          items:
+            type: string
+            format: URL
+          description: URLs of images associated with the product
+        barcode:
+          type: string
+          description: The barcode of the product
+        sku:
+          type: string
+          description: The stock keeping unit of the product
+        stockQuantity:
+          type: integer
+          description: The stock quantity of the product
+        attributes:
+          type: object
+          additionalProperties: true
+          description: Additional attributes of the product
+        isAvailable:
+          type: boolean
+          description: Indicates if the product is available
+        marketId:
+          type: string
+          format: uuid
+          description: The ID of the market the product belongs to
+      required:
+        - name
+        - price
+        - marketId
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier for the product
+        name:
+          type: string
+          description: The name of the product
+        description:
+          type: string
+          description: A description of the product
+        price:
+          type: number
+          format: float
+          description: The price of the product
+        discountPrice:
+          type: number
+          format: float
+          description: The discount price of the product
+        images:
+          type: array
+          items:
+            type: string
+            format: URL
+          description: URLs of images associated with the product
+        barcode:
+          type: string
+          description: The barcode of the product
+        sku:
+          type: string
+          description: The stock keeping unit of the product
+        stockQuantity:
+          type: integer
+          description: The stock quantity of the product
+        attributes:
+          type: object
+          additionalProperties: true
+          description: Additional attributes of the product
+        isAvailable:
+          type: boolean
+          description: Indicates if the product is available
+        marketId:
+          type: string
+          format: uuid
+          description: The ID of the market the product belongs to
+      required:
+        - name
+        - price
+        - marketId
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /product:
+    get:
+      summary: Get all products
+      tags:
+        - Product
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number for pagination
+        - in: query
+          name: size
+          schema:
+            type: integer
+          description: Number of items per page
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Search query
+        - in: query
+          name: marketId
+          schema:
+            type: string
+            format: uuid
+          description: Filter by market ID
+        - in: query
+          name: minPrice
+          schema:
+            type: number
+            format: float
+          description: Minimum price for filtering
+        - in: query
+          name: maxPrice
+          schema:
+            type: number
+            format: float
+          description: Maximum price for filtering
+        - in: query
+          name: isAvailable
+          schema:
+            type: boolean
+          description: Filter by availability status
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Products retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      products:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ProductResponse'
+                      count:
+                        type: integer
+                        description: Total count of products
+                      totalPages:
+                        type: integer
+                        description: Total number of pages
+    post:
+      summary: Create a new product
+      tags:
+        - Product
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+      responses:
+        '201':
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Product created successfully
+                  data:
+                    $ref: '#/components/schemas/ProductResponse'
+
+  /product/{id}:
+    get:
+      summary: Get a product by ID
+      tags:
+        - Product
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the product to retrieve
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Product retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/ProductResponse'
+        '404':
+          description: Product not found
+    put:
+      summary: Update a product by ID
+      tags:
+        - Product
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the product to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+      responses:
+        '200':
+          description: Product updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Product updated successfully
+                  data:
+                    $ref: '#/components/schemas/ProductResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: Product not found
+    delete:
+      summary: Delete a product by ID
+      tags:
+        - Product
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the product to delete
+      responses:
+        '200':
+          description: Product deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Product deleted successfully
+                  data:
+                    type: string
+                    nullable: true
+        '403':
+          description: Forbidden
+        '404':
+          description: Product not found
+
+  /product/{id}/toggle:
+    patch:
+      summary: Toggle product availability status
+      tags:
+        - Product
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the product to toggle availability status
+      responses:
+        '200':
+          description: Product availability status toggled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Product {enabled/disabled} successfully
+                  data:
+                    $ref: '#/components/schemas/ProductResponse'
+        '403':
+          description: Forbidden
+        '404':
+          description: Product not found
+
+  /product/bulk:
+    post:
+      summary: Bulk create products
+      tags:
+        - Product
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                products:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ProductRequest'
+              required:
+                - products
+      responses:
+        '201':
+          description: Products created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Products created successfully
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductResponse'
+        '400':
+          description: Bad request
+
+  /product/market/{marketId}:
+    get:
+      summary: Get products by market ID
+      tags:
+        - Product
+      parameters:
+        - in: path
+          name: marketId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the market to retrieve products for
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number for pagination
+        - in: query
+          name: size
+          schema:
+            type: integer
+          description: Number of items per page
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Search query
+        - in: query
+          name: minPrice
+          schema:
+            type: number
+            format: float
+          description: Minimum price for filtering
+        - in: query
+          name: maxPrice
+          schema:
+            type: number
+            format: float
+          description: Maximum price for filtering
+        - in: query
+          name: isAvailable
+          schema:
+            type: boolean
+          description: Filter by availability status
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Products retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      products:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ProductResponse'
+                      count:
+                        type: integer
+                        description: Total count of products
+                      totalPages:
+                        type: integer
+                        description: Total number of pages
+        '404':
+          description: Market not found
+

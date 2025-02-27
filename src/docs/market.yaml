@@ -3,6 +3,14 @@ info:
   title: Market API
   version: 1.0.0
   description: API for managing markets
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server
 
 components:
   schemas:
