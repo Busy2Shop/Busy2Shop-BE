@@ -1,0 +1,680 @@
+openapi: 3.0.0
+info:
+  title: Market API
+  version: 1.0.0
+  description: API for managing markets
+
+components:
+  schemas:
+    Market:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier for the market
+        name:
+          type: string
+          description: The name of the market
+        address:
+          type: string
+          description: The address of the market
+        location:
+          type: object
+          properties:
+            latitude:
+              type: number
+              format: float
+            longitude:
+              type: number
+              format: float
+            city:
+              type: string
+            state:
+              type: string
+            country:
+              type: string
+          description: The geographical location of the market
+        phoneNumber:
+          type: string
+          description: The phone number of the market
+        marketType:
+          type: string
+          enum:
+            - supermarket
+            - local_market
+            - pharmacy
+            - specialty_store
+          description: The type of market
+        description:
+          type: string
+          description: A description of the market
+        images:
+          type: array
+          items:
+            type: string
+            format: URL
+          description: URLs of images associated with the market
+        isPinned:
+          type: boolean
+          description: Indicates if the market is pinned
+        operatingHours:
+          type: object
+          properties:
+            monday:
+              type: object
+              properties:
+                open:
+                  type: string
+                close:
+                  type: string
+            tuesday:
+              type: object
+              properties:
+                open:
+                  type: string
+                close:
+                  type: string
+            wednesday:
+              type: object
+              properties:
+                open:
+                  type: string
+                close:
+                  type: string
+            thursday:
+              type: object
+              properties:
+                open:
+                  type: string
+                close:
+                  type: string
+            friday:
+              type: object
+              properties:
+                open:
+                  type: string
+                close:
+                  type: string
+            saturday:
+              type: object
+              properties:
+                open:
+                  type: string
+                close:
+                  type: string
+            sunday:
+              type: object
+              properties:
+                open:
+                  type: string
+                close:
+                  type: string
+          description: Operating hours for each day of the week
+        isActive:
+          type: boolean
+          description: Indicates if the market is active
+        ownerId:
+          type: string
+          format: uuid
+          description: The ID of the user who owns the market
+      required:
+        - address
+        - location
+        - marketType
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /market:
+    get:
+      summary: Get all markets
+      tags:
+        - Market
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number for pagination
+        - in: query
+          name: size
+          schema:
+            type: integer
+          description: Number of items per page
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Search query
+        - in: query
+          name: categoryId
+          schema:
+            type: string
+            format: uuid
+          description: Filter by category ID
+        - in: query
+          name: marketType
+          schema:
+            type: string
+          description: Filter by market type
+        - in: query
+          name: isPinned
+          schema:
+            type: boolean
+          description: Filter by pinned status
+        - in: query
+          name: lat
+          schema:
+            type: number
+            format: float
+          description: Latitude for location-based search
+        - in: query
+          name: lng
+          schema:
+            type: number
+            format: float
+          description: Longitude for location-based search
+        - in: query
+          name: distance
+          schema:
+            type: number
+            format: float
+          description: Distance in kilometers for location-based search
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Markets retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      markets:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Market'
+                      count:
+                        type: integer
+                        description: Total count of markets
+                      totalPages:
+                        type: integer
+                        description: Total number of pages
+    post:
+      summary: Create a new market
+      tags:
+        - Market
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name of the market
+                address:
+                  type: string
+                  description: The address of the market
+                location:
+                  type: object
+                  properties:
+                    latitude:
+                      type: number
+                      format: float
+                    longitude:
+                      type: number
+                      format: float
+                    city:
+                      type: string
+                    state:
+                      type: string
+                    country:
+                      type: string
+                  description: The geographical location of the market
+                phoneNumber:
+                  type: string
+                  description: The phone number of the market
+                marketType:
+                  type: string
+                  enum:
+                    - supermarket
+                    - local_market
+                    - pharmacy
+                    - specialty_store
+                  description: The market type
+                description:
+                  type: string
+                  description: The description of the market
+                operatingHours:
+                  type: object
+                  properties:
+                    monday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    tuesday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    wednesday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    thursday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    friday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    saturday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    sunday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                  description: The operating hours of the market
+                categoryIds:
+                  type: array
+                  items:
+                    type: string
+                  description: The category IDs of the market
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Images for the market
+              required:
+                - address
+                - location
+                - marketType
+      responses:
+        '201':
+          description: Market created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Market created successfully
+                  data:
+                    $ref: '#/components/schemas/Market'
+
+  /market/{id}:
+    get:
+      summary: Get a market by ID
+      tags:
+        - Market
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the market to retrieve
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Market retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/Market'
+        '404':
+          description: Market not found
+    put:
+      summary: Update a market by ID
+      tags:
+        - Market
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the market to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: The name of the market
+                address:
+                  type: string
+                  description: The address of the market
+                location:
+                  type: object
+                  properties:
+                    latitude:
+                      type: number
+                      format: float
+                    longitude:
+                      type: number
+                      format: float
+                    city:
+                      type: string
+                    state:
+                      type: string
+                    country:
+                      type: string
+                  description: The geographical location of the market
+                phoneNumber:
+                  type: string
+                  description: The phone number of the market
+                marketType:
+                  type: string
+                  enum:
+                    - supermarket
+                    - local_market
+                    - pharmacy
+                    - specialty_store
+                  description: The market type
+                description:
+                  type: string
+                  description: The description of the market
+                operatingHours:
+                  type: object
+                  properties:
+                    monday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    tuesday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    wednesday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    thursday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    friday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    saturday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                    sunday:
+                      type: object
+                      properties:
+                        open:
+                          type: string
+                        close:
+                          type: string
+                  description: The operating hours of the market
+                categoryIds:
+                  type: array
+                  items:
+                    type: string
+                  description: The category IDs of the market
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Images for the market
+      responses:
+        '200':
+          description: Market updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Market updated successfully
+                  data:
+                    $ref: '#/components/schemas/Market'
+        '403':
+          description: Forbidden
+        '404':
+          description: Market not found
+    delete:
+      summary: Delete a market by ID
+      tags:
+        - Market
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the market to delete
+      responses:
+        '200':
+          description: Market deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Market deleted successfully
+                  data:
+                    type: string
+                    nullable: true
+        '403':
+          description: Forbidden
+        '404':
+          description: Market not found
+
+  /market/{id}/pin:
+    patch:
+      summary: Toggle market pin status
+      tags:
+        - Market
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the market to toggle pin status
+      responses:
+        '200':
+          description: Market pin status toggled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Market {pinned/unpinned} successfully
+                  data:
+                    $ref: '#/components/schemas/Market'
+        '403':
+          description: Forbidden
+        '404':
+          description: Market not found
+
+  /market/category:
+    post:
+      summary: Add market to category
+      tags:
+        - Market
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                marketId:
+                  type: string
+                  format: uuid
+                  description: The ID of the market
+                categoryId:
+                  type: string
+                  format: uuid
+                  description: The ID of the category
+              required:
+                - marketId
+                - categoryId
+      responses:
+        '200':
+          description: Market added to category successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Market added to category successfully
+                  data:
+                    nullable: true
+        '403':
+          description: Forbidden
+        '404':
+          description: Market or category not found
+
+  /market/{marketId}/category/{categoryId}:
+    delete:
+      summary: Remove market from category
+      tags:
+        - Market
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: marketId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the market
+        - in: path
+          name: categoryId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the category
+      responses:
+        '200':
+          description: Market removed from category successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Market removed from category successfully
+                  data:
+                    nullable: true
+        '403':
+          description: Forbidden
+        '404':
+          description: Market or category not found
