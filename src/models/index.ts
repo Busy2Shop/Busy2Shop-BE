@@ -22,7 +22,7 @@ async function createSequelizeInstance(): Promise<Sequelize> {
                 },
                 dialectOptions: {
                     ssl: {
-                        require: true,
+                        require: false,
                         rejectUnauthorized: true,
                     },
                     keepAlive: true,
