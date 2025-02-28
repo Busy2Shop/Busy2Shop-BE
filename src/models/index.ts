@@ -22,8 +22,8 @@ async function createSequelizeInstance(): Promise<Sequelize> {
                 },
                 dialectOptions: {
                     ssl: {
-                        require: false,
-                        rejectUnauthorized: true,
+                        require: true,
+                        rejectUnauthorized: false,
                     },
                     keepAlive: true,
                 },
