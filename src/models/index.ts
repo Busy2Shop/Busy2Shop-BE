@@ -15,12 +15,17 @@ async function createSequelizeInstance(): Promise<Sequelize> {
                     max: 5,
                     min: 1,
                     idle: 10000,
+                    acquire: 60000, 
+                },
+                retry: {
+                    max: 5, // Add retry logic
                 },
                 dialectOptions: {
                     ssl: {
                         require: true,
                         rejectUnauthorized: true,
                     },
+                    keepAlive: true,
                 },
             }
         );
