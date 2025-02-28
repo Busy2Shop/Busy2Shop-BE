@@ -68,7 +68,7 @@ components:
           description: Estimated total cost of all items
         status:
           type: string
-          enum: [draft, pending, accepted, processing, completed, cancelled]
+          enum: [ draft, pending, accepted, processing, completed, cancelled ]
           description: Current status of the shopping list
           default: draft
         marketId:
@@ -94,13 +94,14 @@ components:
       bearerFormat: JWT
 
 paths:
+  # Section 1: Shopping List Routes
   /shopping-list:
     post:
       tags:
         - Shopping List
       summary: Create a new shopping list
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       requestBody:
         required: true
         content:
@@ -172,7 +173,7 @@ paths:
         - Shopping List
       summary: Get user's shopping lists
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: query
           name: page
@@ -188,7 +189,7 @@ paths:
           name: status
           schema:
             type: string
-            enum: [draft, pending, accepted, processing, completed, cancelled]
+            enum: [ draft, pending, accepted, processing, completed, cancelled ]
           description: Filter by shopping list status
         - in: query
           name: marketId
@@ -232,7 +233,7 @@ paths:
         - Shopping List
       summary: Get vendor's assigned shopping lists
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: query
           name: page
@@ -248,7 +249,7 @@ paths:
           name: status
           schema:
             type: string
-            enum: [pending, accepted, processing, completed, cancelled]
+            enum: [ pending, accepted, processing, completed, cancelled ]
           description: Filter by shopping list status
       responses:
         '200':
@@ -286,7 +287,7 @@ paths:
         - Shopping List
       summary: Get a shopping list by ID
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -323,7 +324,7 @@ paths:
         - Shopping List
       summary: Update a shopping list
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -379,7 +380,7 @@ paths:
         - Shopping List
       summary: Delete a shopping list
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -414,13 +415,14 @@ paths:
         '404':
           description: Shopping list not found
 
+  # Section 2: Shopping List Item Management
   /shopping-list/{listId}/items:
     post:
       tags:
         - Shopping List Items
       summary: Add item to shopping list
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: listId
@@ -490,7 +492,7 @@ paths:
         - Shopping List Items
       summary: Update item in shopping list
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: listId
@@ -559,7 +561,7 @@ paths:
         - Shopping List Items
       summary: Remove item from shopping list
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: listId
@@ -601,13 +603,14 @@ paths:
         '404':
           description: Item or shopping list not found
 
+  # Section 3: Status Management of Shopping List
   /shopping-list/{id}/submit:
     post:
       tags:
-        - Shopping List
+        - Shopping List Status Management
       summary: Submit a shopping list
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -644,10 +647,10 @@ paths:
   /shopping-list/{id}/status:
     patch:
       tags:
-        - Shopping List
+        - Shopping List Status Management
       summary: Update shopping list status
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -665,7 +668,7 @@ paths:
               properties:
                 status:
                   type: string
-                  enum: [draft, pending, accepted, processing, completed, cancelled]
+                  enum: [ draft, pending, accepted, processing, completed, cancelled ]
                   description: New status for the shopping list
               required:
                 - status
@@ -697,10 +700,10 @@ paths:
   /shopping-list/{id}/accept:
     post:
       tags:
-        - Shopping List
+        - Shopping List Status Management
       summary: Accept a shopping list (vendor only)
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -737,10 +740,10 @@ paths:
   /shopping-list/{id}/assign:
     post:
       tags:
-        - Shopping List
+        - Shopping List Status Management
       summary: Assign vendor to shopping list
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -790,10 +793,10 @@ paths:
   /shopping-list/{id}/prices:
     post:
       tags:
-        - Shopping List
+        - Shopping List Status Management
       summary: Update actual prices (vendor only)
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
