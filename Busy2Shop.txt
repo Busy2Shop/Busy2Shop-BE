@@ -1,0 +1,96 @@
+vendor auth login.
+{
+  "email": "ghostofvendor@yopmail.com",
+  "password": "P@ssword123!"
+}
+
+user auth login
+{
+  "email": "ghostofeshop@yopmail.com",
+  "password": "Password123!"
+}
+
+Json model to create a market.
+{
+  "name": "Home Affairs Supermarket",
+  "address": "24 Diya St, Gbagada, Lagos",
+  "location": {
+    "latitude": 6.553191,
+    "longitude": 3.391058,
+    "city": "Gbagada",
+    "state": "Lagos",
+    "country": "Nigeria"
+  },
+  "phoneNumber": "08044233345",
+  "marketType": "supermarket",
+  "description": "Amazing all in one stop shop. Our staffs are courteous and helpful",
+  "operatingHours": {
+    "monday": {
+      "open": "09:00 AM",
+      "close": "09:00 PM"
+    },
+    "tuesday": {
+      "open": "09:00 AM",
+      "close": "09:00 PM"
+    },
+    "wednesday": {
+      "open": "09:00 AM",
+      "close": "09:00 PM"
+    },
+    "thursday": {
+      "open": "09:00 AM",
+      "close": "09:00 PM"
+    },
+    "friday": {
+      "open": "09:00 AM",
+      "close": "09:00 PM"
+    },
+    "Saturday": {
+      "open": "09:00 AM",
+      "close": "09:00 PM"
+    },
+    "sunday": {
+      "open": "09:30 AM",
+      "close": "09:00 PM"
+    }
+  }
+}
+
+Bulk upload Json Data.
+{
+  "products": [
+    {
+      "name": "Chicken-pie",
+      "description": "The best chicken-pie you will ever come across.",
+      "price": 950,
+      "discountPrice": 0,
+      "sku": "25",
+      "stockQuantity": 3,
+      "isAvailable": true,
+      "marketId": "4d581548-3451-44d8-85ad-c1972a31e115"
+    },
+
+    {
+      "name": "Fish-pie",
+      "description": "The best fish-pie you will ever come across.",
+      "price": 1000,
+      "discountPrice": 0,
+      "sku": "29",
+      "stockQuantity": 12,
+      "isAvailable": true,
+      "marketId": "4d581548-3451-44d8-85ad-c1972a31e115"
+    }
+  ]
+}
+
+#TODO
+Add isDeleted column to all database tables.
+
+#TODO
+1] The create endpoint json request is not complete.
+
+#Todo
+1] A vendor can create a shopping list and a shopping item.
+
+#Todo
+1] If i am updating an item in a shopping list, i am meant to update the productId of the item I changed it to.
