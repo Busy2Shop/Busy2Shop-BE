@@ -2,11 +2,11 @@
 import { Transaction, Op, FindAndCountOptions } from 'sequelize';
 import Order, { IOrder } from '../models/order.model';
 import ShoppingList from '../models/shoppingList.model';
-import ShoppingListItem from '../models/shoppingList.model';
+import ShoppingListItem from '../models/shoppingListItem.model';
 import User from '../models/user.model';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
-import { Database } from '../models/index';
+import { Database } from '../models';
 
 export interface IViewOrdersQuery {
     page?: number;
