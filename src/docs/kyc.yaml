@@ -1,0 +1,199 @@
+openapi: 3.0.0
+info:
+  title: KYC API
+  version: 1.0.0
+  description: API for managing Know Your Customer (KYC) verification processes
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the user
+        email:
+          type: string
+          format: email
+          description: Email of the user
+        status:
+          type: object
+          properties:
+            userType:
+              type: string
+              enum: [vendor, customer]
+            emailVerified:
+              type: boolean
+        settings:
+          type: object
+          properties:
+            isKycVerified:
+              type: boolean
+              description: Whether the user's KYC verification is complete
+        vendorMeta:
+          type: object
+          properties:
+            nin:
+              type: string
+              description: National Identification Number
+            images:
+              type: array
+              items:
+                type: string
+                format: uri
+              description: URLs to verification images
+
+    NinUploadRequest:
+      type: object
+      properties:
+        nin:
+          type: string
+          pattern: '^\d{11}$'
+          description: National Identification Number (11 digits)
+      required:
+        - nin
+
+    VerificationStatusResponse:
+      type: object
+      properties:
+        isVerified:
+          type: boolean
+          description: Whether the vendor is verified
+        documents:
+          type: object
+          properties:
+            nin:
+              type: boolean
+              description: Whether NIN document has been uploaded
+            images:
+              type: boolean
+              description: Whether verification images have been uploaded
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /kyc/nin:
+    post:
+      summary: Upload NIN document for vendor verification
+      tags:
+        - KYC
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NinUploadRequest'
+      responses:
+        '200':
+          description: NIN uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: NIN uploaded successfully
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid NIN format
+        '401':
+          description: Unauthorized - Authentication required
+        '403':
+          description: Forbidden - Only vendors can upload NIN or email not verified
+
+  /kyc/images:
+    post:
+      summary: Upload verification images for vendor
+      tags:
+        - KYC
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Up to 5 verification images
+      responses:
+        '200':
+          description: Verification images uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Verification images uploaded successfully
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: No images uploaded or failed to upload images
+        '401':
+          description: Unauthorized - Authentication required
+        '403':
+          description: Forbidden - Only vendors can upload verification images or email not verified
+
+  /kyc/status:
+    get:
+      summary: Get vendor verification status
+      tags:
+        - KYC
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Verification status retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Verification status retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/VerificationStatusResponse'
+        '401':
+          description: Unauthorized - Authentication required
+        '403':
+          description: Forbidden - Only vendors can check verification status or email not verified

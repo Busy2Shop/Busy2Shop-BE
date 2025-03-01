@@ -15,12 +15,12 @@ export default class KycController {
         const { nin } = req.body;
         const { id, status } = req.user;
 
-        // Ensure user is a vendor
+        // Ensure the user is a vendor
         if (status.userType !== 'vendor') {
             throw new ForbiddenError('Only vendors can upload NIN documents');
         }
 
-        // Check if email is verified
+        // Check if the email is verified
         if (!status.emailVerified) {
             throw new ForbiddenError('Please verify your email before uploading KYC documents');
         }
@@ -50,12 +50,12 @@ export default class KycController {
     static async uploadVerificationImages(req: AuthenticatedRequest, res: Response) {
         const { id, status } = req.user;
 
-        // Ensure user is a vendor
+        // Ensure the user is a vendor
         if (status.userType !== 'vendor') {
             throw new ForbiddenError('Only vendors can upload verification images');
         }
 
-        // Check if email is verified
+        // Check if the email is verified
         if (!status.emailVerified) {
             throw new ForbiddenError('Please verify your email before uploading KYC documents');
         }
@@ -66,7 +66,7 @@ export default class KycController {
         }
 
         // eslint-disable-next-line no-undef
-        const files = req.files as Express.Multer.File[];
+        const files = req.files;
         const imageUrls: string[] = [];
 
         // Upload each file to Cloudinary
@@ -107,12 +107,12 @@ export default class KycController {
     static async getVerificationStatus(req: AuthenticatedRequest, res: Response) {
         const { id, status } = req.user;
 
-        // Ensure user is a vendor
+        // Ensure the user is a vendor
         if (status.userType !== 'vendor') {
             throw new ForbiddenError('Only vendors can check verification status');
         }
 
-        // Check if email is verified
+        // Check if the email is verified
         if (!status.emailVerified) {
             throw new ForbiddenError('Please verify your email before checking KYC status');
         }
