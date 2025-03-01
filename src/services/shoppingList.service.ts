@@ -7,7 +7,7 @@ import User from '../models/user.model';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import Order, { IOrder } from '../models/order.model';
-import { Database } from '../models/index';
+import { Database } from '../models';
 
 export interface IViewShoppingListsQuery {
     page?: number;
