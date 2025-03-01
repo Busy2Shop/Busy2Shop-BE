@@ -1,4 +1,4 @@
-import { AuthToken, DecodedTokenData } from '../utils/interface';
+import { AuthToken, DecodedTokenData, ENCRYPTEDTOKEN } from '../utils/interface';
 import { Request, Response, NextFunction } from 'express';
 import { UnauthorizedError, NotFoundError, ForbiddenError } from '../utils/customErrors';
 import User from '../models/user.model';
@@ -7,6 +7,8 @@ import { logger } from '../utils/logger';
 import { AuthUtil, TokenCacheUtil } from '../utils/token';
 // import AdminService from '../services/AdminServices/admin.service';
 import Admin from '../models/admin.model';
+import AdminService from 'services/AdminServices/admin.service';
+import { ADMIN_EMAIL } from 'utils/constants';
 // import { ADMIN_EMAIL } from '../utils/constants';
 
 
@@ -15,9 +17,9 @@ export interface AuthenticatedRequest extends Request {
 }
 
 export interface AdminAuthenticatedRequest extends Request {
-    isSuperAdmin: boolean;
     email: string;
-    admin: Admin;
+    admin?: Admin;
+    isSuperAdmin: boolean;
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -31,13 +33,15 @@ export function AuthenticatedController<T = AuthenticatedRequest>(
     };
 }
 
-export function AdminAuthenticatedController<T = AdminAuthenticatedRequest>(
-    controller: AuthenticatedAsyncController<T>
-) {
+export const AdminAuthenticatedController = (controller: (req: AdminAuthenticatedRequest, res: Response, next: NextFunction) => Promise<void>) => {
     return async (req: Request, res: Response, next: NextFunction) => {
-        return controller(req as T, res, next);
+        try {
+            await controller(req as AdminAuthenticatedRequest, res, next);
+        } catch (error) {
+            next(error);
+        }
     };
-}
+};
 
 export const basicAuth = function (tokenType: AuthToken) {
     return async (req: Request, res: Response, next: NextFunction) => {
@@ -99,48 +103,48 @@ export const basicAuth = function (tokenType: AuthToken) {
     };
 };
 
-// export const adminAuth = function (tokenType: ENCRYPTEDTOKEN) {
-//     return async (req: Request, res: Response, next: NextFunction) => {
-//         const authHeader = req.headers.authorization;
-//         if (!authHeader?.startsWith('Bearer'))
-//             return next(new UnauthorizedError('Invalid authorization header'));
+export const adminAuth = function (tokenType: ENCRYPTEDTOKEN) {
+    return async (req: Request, res: Response, next: NextFunction) => {
+        const authHeader = req.headers.authorization;
+        if (!authHeader?.startsWith('Bearer'))
+            return next(new UnauthorizedError('Invalid authorization header'));
 
-//         const jwtToken = authHeader.split(' ')[1];
+        const jwtToken = authHeader.split(' ')[1];
 
-//         const payload = AuthUtil.verifyAdminToken(jwtToken, tokenType);
+        const payload = AuthUtil.verifyAdminToken(jwtToken, tokenType);
 
-//         const tokenData = payload as unknown as Omit<DecodedTokenData, 'user'>;
-//         logger.payload('Admin Token data', tokenData);
+        const tokenData = payload as unknown as Omit<DecodedTokenData, 'user'>;
+        logger.payload('Admin Token data', tokenData);
 
-//         if (tokenData.tokenType !== 'admin') {
-//             return next(new UnauthorizedError('You are not authorized to perform this action'));
-//         }
+        if (tokenData.tokenType !== 'admin') {
+            return next(new UnauthorizedError('You are not authorized to perform this action'));
+        }
 
-//         const key = `${tokenType}_token:${tokenData.authKey}`;
-//         const token = await TokenCacheUtil.getTokenFromCache(key);
+        const key = `${tokenType}_token:${tokenData.authKey}`;
+        const token = await TokenCacheUtil.getTokenFromCache(key);
 
-//         if (token !== jwtToken) {
-//             return next(new UnauthorizedError('You are not authorized to perform this action'));
-//         }
+        if (token !== jwtToken) {
+            return next(new UnauthorizedError('You are not authorized to perform this action'));
+        }
 
-//         let emailToUse = (tokenData.authKey as string).toLowerCase().trim();
-//         if ((tokenData.authKey as string) !== ADMIN_EMAIL) {
-//             const admin = await AdminService.getAdminByEmail(tokenData.authKey as string);
-//             emailToUse = admin.email;
-//             (req as AdminAuthenticatedRequest).admin = admin;
-//             (req as AdminAuthenticatedRequest).isSuperAdmin = admin.isSuperAdmin;
-//         } else {
-//             (req as AdminAuthenticatedRequest).isSuperAdmin = true;
-//         }
+        let emailToUse = (tokenData.authKey as string).toLowerCase().trim();
+        if ((tokenData.authKey as string) !== ADMIN_EMAIL) {
+            const admin = await AdminService.getAdminByEmail(tokenData.authKey as string);
+            emailToUse = admin.email;
+            (req as AdminAuthenticatedRequest).admin = admin;
+            (req as AdminAuthenticatedRequest).isSuperAdmin = admin.isSuperAdmin;
+        } else {
+            (req as AdminAuthenticatedRequest).isSuperAdmin = true;
+        }
 
-//         (req as AdminAuthenticatedRequest).email = emailToUse;
+        (req as AdminAuthenticatedRequest).email = emailToUse;
 
 
-//         logger.authorized('User authorized');
+        logger.authorized('User authorized');
 
-//         next();
-//     };
-// };
+        next();
+    };
+};
 
 // Add custom middleware to allow optional authentication
 export const optionalAuth = (req: Request, res: Response, next: NextFunction) => {

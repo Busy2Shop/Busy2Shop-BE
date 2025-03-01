@@ -10,6 +10,7 @@ import UserService, { IDynamicQueryOptions } from '../services/user.service';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { WEBSITE_URL } from '../utils/constants';
 import { Transaction } from 'sequelize';
+import CloudinaryClientConfig from 'clients/cloudinary.config';
 
 export default class AuthController {
 
@@ -400,6 +401,69 @@ export default class AuthController {
             data: {
                 user: user.dataValues,
             },
+        });
+    }
+
+    static async updateUser(req: AuthenticatedRequest, res: Response) {
+        const { firstName, lastName, otherName, displayImage, location, gender, isDeactivated } = req.body;
+
+        // eslint-disable-next-line no-undef
+        const file = req.file as Express.Multer.File | undefined;
+        let url;
+        if (file) {
+            const result = await CloudinaryClientConfig.uploadtoCloudinary({
+                fileBuffer: file.buffer,
+                id: req.user.id,
+                name: file.originalname,
+                type: 'image',
+            });
+            url = result.url as string;
+        } else if (displayImage) {
+            url = displayImage;
+        }
+
+        // Prepare the update data for the user profile
+        const updateData = {
+            ...(firstName && { firstName }),
+            ...(lastName && { lastName }),
+            ...(otherName && { otherName }),
+            ...(gender && { gender }),
+            ...(url && { displayImage: url }),
+            ...(location && {
+                location: {
+                    country: location.country || 'NGN',
+                    city: location.city,
+                    address: location.address,
+                },
+            }),
+        };
+
+        // Only update settings if isDeactivated is provided in the request body
+        let settingsData = {};
+        if (isDeactivated !== undefined && isDeactivated === 'true') {
+            const state: boolean = isDeactivated === 'true';
+            settingsData = {
+                ...(state === req.user.settings.isDeactivated ? {} : { isDeactivated: state }),
+            };
+        }
+
+        const dataKeys = Object.keys(updateData);
+        const settingsKeys = Object.keys(settingsData);
+
+        if (dataKeys.length === 0 && settingsKeys.length === 0) {
+            throw new BadRequestError('No new data to update');
+        }
+
+        const updatedUser = await UserService.updateUser(req.user, updateData);
+
+        if (settingsKeys.length > 0) {
+            await UserService.updateUserSettings(req.user.id, settingsData);
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: 'User updated successfully',
+            data: updatedUser,
         });
     }
 

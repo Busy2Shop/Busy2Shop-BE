@@ -5,12 +5,14 @@ import Validator from '../utils/validators';
 import Pagination, { IPaging } from '../utils/pagination';
 import { Sequelize } from '../models';
 import UserSettings, { IUserSettings } from '../models/userSettings.model';
+
 export interface IViewUsersQuery {
     page?: number;
     size?: number;
     q?: string;
     isBlocked?: boolean;
     isDeactivated?: boolean;
+    userType?: string;
 }
 
 export interface IDynamicQueryOptions {
@@ -81,7 +83,7 @@ export default class UserService {
     }
 
     static async viewUsers(queryData?: IViewUsersQuery): Promise<{ users: User[], count: number, totalPages?: number }> {
-        const { page, size, q: query, isBlocked, isDeactivated } = queryData || {};
+        const { page, size, q: query, isBlocked, isDeactivated, userType } = queryData || {};
 
         const where: Record<string | symbol, unknown> = {};
         const settingsWhere: Record<string, unknown> = {};
@@ -101,6 +103,11 @@ export default class UserService {
 
         if (isDeactivated !== undefined) {
             settingsWhere.isDeactivated = isDeactivated;
+        }
+
+        // Add filter for user type
+        if (userType) {
+            where['status'] = { [Op.contains]: { userType } };
         }
 
         const queryOptions: FindAndCountOptions<User> = {
@@ -181,14 +188,14 @@ export default class UserService {
         return updatedUser;
     }
 
-    static async updateUserSettings(userId: string, dataToUpdate: Partial<IUserSettings>): Promise<UserSettings> {
+    static async updateUserSettings(userId: string, settingsData: Partial<IUserSettings>): Promise<UserSettings> {
         const userSettings = await UserSettings.findOne({ where: { userId } });
+        
         if (!userSettings) {
-            throw new NotFoundError('Oops User not found');
+            throw new NotFoundError('User settings not found');
         }
-
-        await userSettings.update(dataToUpdate);
-
+        
+        await userSettings.update(settingsData);
         return userSettings;
     }
 
