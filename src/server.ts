@@ -33,4 +33,6 @@ async function startServer(): Promise<void> {
 }
 
 // Call the function to start the server
-startServer().then(r => r);
+(async () => {
+    await startServer();
+})();
