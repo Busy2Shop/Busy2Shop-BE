@@ -5,7 +5,7 @@ import CloudinaryClientConfig from '../clients/cloudinary.config';
 import VendorService from '../services/vendor.service';
 import UserService from '../services/user.service';
 
-export default class VendorDocumentController {
+export default class KycController {
     /**
      * Upload NIN document for vendor verification
      * @param req AuthenticatedRequest
@@ -18,6 +18,11 @@ export default class VendorDocumentController {
         // Ensure user is a vendor
         if (status.userType !== 'vendor') {
             throw new ForbiddenError('Only vendors can upload NIN documents');
+        }
+
+        // Check if email is verified
+        if (!status.emailVerified) {
+            throw new ForbiddenError('Please verify your email before uploading KYC documents');
         }
 
         // Validate NIN format
@@ -48,6 +53,11 @@ export default class VendorDocumentController {
         // Ensure user is a vendor
         if (status.userType !== 'vendor') {
             throw new ForbiddenError('Only vendors can upload verification images');
+        }
+
+        // Check if email is verified
+        if (!status.emailVerified) {
+            throw new ForbiddenError('Please verify your email before uploading KYC documents');
         }
 
         // Check if files were uploaded
@@ -100,6 +110,11 @@ export default class VendorDocumentController {
         // Ensure user is a vendor
         if (status.userType !== 'vendor') {
             throw new ForbiddenError('Only vendors can check verification status');
+        }
+
+        // Check if email is verified
+        if (!status.emailVerified) {
+            throw new ForbiddenError('Please verify your email before checking KYC status');
         }
 
         const user = await UserService.viewSingleUser(id);

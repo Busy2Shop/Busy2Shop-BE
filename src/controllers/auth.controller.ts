@@ -35,6 +35,26 @@ export default class AuthController {
             } = {},
         } = req.body;
 
+        // Validate required fields
+        if (!firstName || !lastName || !email || !password) {
+            throw new BadRequestError('First name, last name, email, and password are required');
+        }
+
+        // Validate user type
+        if (!userType || !['user', 'vendor'].includes(userType)) {
+            throw new BadRequestError('User type must be either "user" or "vendor"');
+        }
+
+        // Validate email format
+        const validEmail = Validator.isValidEmail(email);
+        if (!validEmail) {
+            throw new BadRequestError('Invalid email format');
+        }
+
+        // Validate password format
+        if (!Validator.isValidPassword(password)) {
+            throw new BadRequestError('Invalid password format');
+        }
 
         await UserService.isEmailAndUsernameAvailable(email);
 
@@ -90,12 +110,6 @@ export default class AuthController {
             }],
             html: await new EmailTemplate().accountActivation({ otpCode, name: firstName || 'User' }),
         });
-
-        const validPassword = Validator.isValidPassword(password);
-
-        if (!validPassword) {
-            throw new BadRequestError('Invalid password format');
-        }
 
         // Create a new password for the user
         await Password.create({ userId: newUser.id, password: password });
