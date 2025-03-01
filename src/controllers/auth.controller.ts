@@ -10,7 +10,7 @@ import UserService, { IDynamicQueryOptions } from '../services/user.service';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { WEBSITE_URL } from '../utils/constants';
 import { Transaction } from 'sequelize';
-import CloudinaryClientConfig from 'clients/cloudinary.config';
+import CloudinaryClientConfig from '../clients/cloudinary.config';
 
 export default class AuthController {
 
@@ -216,7 +216,7 @@ export default class AuthController {
         // TODO: Send email with the reset password link with the resetToken as query param
         await emailService.send({
             email: 'batch',
-            subject: 'Password Reset 🔑',
+            subject: 'Password Reset ',
             from: 'auth',
             isPostmarkTemplate: true,
             postMarkTemplateAlias: 'password-reset',
@@ -465,6 +465,36 @@ export default class AuthController {
             message: 'User updated successfully',
             data: updatedUser,
         });
+    }
+
+    static async googleSignIn(req: AuthenticatedRequest, res: Response) {
+        try {
+            // The user object is attached to the request by Passport
+            const user = req.user;
+            
+            if (!user) {
+                return res.redirect(`${WEBSITE_URL}/login?error=Authentication failed`);
+            }
+            
+            // Generate tokens for the user
+            const accessToken = await AuthUtil.generateToken({
+                type: 'access',
+                user: user,
+            });
+            
+            const refreshToken = await AuthUtil.generateToken({
+                type: 'refresh',
+                user: user,
+            });
+            
+            // Redirect to frontend with tokens
+            return res.redirect(
+                `${WEBSITE_URL}/auth/social-callback?accessToken=${accessToken}&refreshToken=${refreshToken}`
+            );
+        } catch (error) {
+            logger.error('Google sign-in error:', error);
+            return res.redirect(`${WEBSITE_URL}/login?error=Authentication failed`);
+        }
     }
 
 }

@@ -202,4 +202,62 @@ export default class UserService {
     static async deleteUser(user: User, transaction?: Transaction): Promise<void> {
         transaction ? await user.destroy({ transaction }) : await user.destroy();
     }
+
+    static async findOrCreateUserByGoogleProfile(profileData: {
+        email: string;
+        firstName: string;
+        lastName: string;
+        username?: string;
+        googleId: string;
+        displayImage?: string;
+        status: {
+            activated: boolean;
+            emailVerified: boolean;
+        };
+    }): Promise<User> {
+        // Check if user with this email already exists
+        const user = await User.findOne({
+            where: { email: profileData.email },
+        });
+
+        if (user) {
+            // User exists, update googleId if not already set
+            if (!user.googleId) {
+                await user.update({
+                    googleId: profileData.googleId,
+                    displayImage: profileData.displayImage || user.displayImage,
+                });
+            }
+            
+            // Update email verification status if not already verified
+            if (!user.status.emailVerified) {
+                await user.update({
+                    status: {
+                        ...user.status,
+                        emailVerified: true,
+                    },
+                });
+            }
+            
+            return user;
+        }
+
+        // Create a new user
+        const newUserData: IUser = {
+            email: profileData.email,
+            firstName: profileData.firstName,
+            lastName: profileData.lastName,
+            displayImage: profileData.displayImage,
+            googleId: profileData.googleId,
+            status: {
+                userType: 'user',
+                emailVerified: true,
+                activated: true,
+            },
+        };
+
+        // Create the user
+        const newUser = await this.addUser(newUserData);
+        return newUser;
+    }
 }

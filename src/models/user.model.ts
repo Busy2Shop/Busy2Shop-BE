@@ -137,6 +137,12 @@ export default class User extends Model<User | IUser > {
     };
 
     @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+        googleId: string;
+
+    @Column({
         type: DataType.DATEONLY,
         validate: {
             isDate: true,
@@ -209,6 +215,7 @@ export interface IUser {
     firstName?: string;
     lastName?: string;
     otherName?: string;
+    googleId?: string;
     location?: {
         country: string;
         city: string;

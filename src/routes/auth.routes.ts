@@ -1,9 +1,9 @@
 import express, { Router } from 'express';
 import AuthController from '../controllers/auth.controller';
 import { basicAuth, AuthenticatedController } from '../middlewares/authMiddleware';
-import { uploadMiddleware, UploadType } from 'middlewares/uploadMiddleware';
+import { uploadMiddleware, UploadType } from '../middlewares/uploadMiddleware';
 // import { rateLimiter } from '../middlewares/rateLimiter';
-// import passport from 'passport';
+import passport from 'passport';
 
 
 
@@ -28,16 +28,15 @@ router
     .get('/authtoken', basicAuth('refresh'));
 
 // Google authentication route
-// router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-// router.get(
-//     '/google/callback',
-//     passport.authenticate('google', {
-//         failureRedirect: '/register',
-//         session: false,
-//     }),
-//     AuthController.googleSignIn,
-// );
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+router.get(
+    '/google/callback',
+    passport.authenticate('google', {
+        failureRedirect: '/register',
+        session: false,
+    }),
+    AuthenticatedController(AuthController.googleSignIn),
+);
 
 
 export default router;
-
