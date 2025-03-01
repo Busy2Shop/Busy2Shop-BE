@@ -1,7 +1,7 @@
 import express, { Router } from 'express';
 import AuthController from '../controllers/auth.controller';
 import { basicAuth, AuthenticatedController } from '../middlewares/authMiddleware';
-import { uploadMiddleware, UploadType } from 'middlewares/uploadMiddleware';
+import { uploadMiddleware, UploadType } from '../middlewares/uploadMiddleware';
 // import { rateLimiter } from '../middlewares/rateLimiter';
 // import passport from 'passport';
 

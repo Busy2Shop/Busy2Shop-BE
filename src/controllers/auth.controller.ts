@@ -10,7 +10,7 @@ import UserService, { IDynamicQueryOptions } from '../services/user.service';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { WEBSITE_URL } from '../utils/constants';
 import { Transaction } from 'sequelize';
-import CloudinaryClientConfig from 'clients/cloudinary.config';
+import CloudinaryClientConfig from '../clients/cloudinary.config';
 
 export default class AuthController {
 
