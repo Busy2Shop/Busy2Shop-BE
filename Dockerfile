@@ -16,6 +16,12 @@ COPY . .
 # Build the TypeScript code
 RUN npm run build
 
+# Make sure the docs directory exists in dist
+RUN mkdir -p dist/docs
+
+# Copy YAML files to dist/docs
+RUN if [ -d "src/docs" ]; then cp -r src/docs/*.yaml dist/docs/; fi
+
 # Start a new stage for a smaller production image
 FROM node:18-alpine
 
@@ -30,6 +36,9 @@ RUN npm ci --only=production
 
 # Copy the built application from the previous stage
 COPY --from=builder /usr/src/app/dist ./dist
+
+# Copy src/docs directory to dist/docs for Swagger documentation
+COPY --from=builder /usr/src/app/src/docs ./dist/docs
 
 # Expose the port the app runs on
 EXPOSE 8080
