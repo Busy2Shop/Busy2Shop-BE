@@ -46,6 +46,9 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Serve static files from the public directory
+app.use(express.static('src/public'));
+
 // Request logger middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
     logger.warn(`Incoming request: ${req.method} ${req.path} ${req.originalUrl} from ${req.ip} at ${new Date().toISOString()}`);

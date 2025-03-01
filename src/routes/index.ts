@@ -10,6 +10,7 @@ import orderRoute from './order.routes';
 import vendorRoute from './vendor.routes';
 import kycRoute from './kyc.routes';
 import AdminRoutes from './Admin/admin.routes';
+import chatRoute from './chat.routes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/kyc', kycRoute);
 router.use('/review', reviewRoutes);
 router.use('/referral', referralRoute);
 router.use('/admin', AdminRoutes);
+router.use('/chat', chatRoute);
 
 export default router;
