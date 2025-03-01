@@ -2,7 +2,6 @@
 import { Sequelize } from 'sequelize-typescript';
 import { logger } from '../utils/logger';
 import { DB_CONFIG, NODE_ENV } from '../utils/constants';
-// import AwsClientConfig from '../clients/aws.config';
 
 // Function to create Sequelize instance with IAM auth token for production
 async function createSequelizeInstance(): Promise<Sequelize> {

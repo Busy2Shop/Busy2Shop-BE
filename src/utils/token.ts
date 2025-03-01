@@ -3,7 +3,7 @@ import { JWT_SECRET, JWT_ACCESS_SECRET, JWT_ADMIN_ACCESS_SECRET, JWT_REFRESH_SEC
 import { v4 as uuidv4 } from 'uuid';
 import { redisClient } from './redis';
 import { UnauthorizedError, TokenExpiredError, JsonWebTokenError } from './customErrors';
-import { AWSKeyData, AuthToken, CompareTokenData, CompareAdminTokenData, DecodedTokenData, DeleteToken, ENCRYPTEDTOKEN, GenerateCodeData, GenerateTokenData, SaveTokenToCache, GenerateAdminTokenData } from './interface';
+import { AuthToken, CompareTokenData, CompareAdminTokenData, DecodedTokenData, DeleteToken, ENCRYPTEDTOKEN, GenerateCodeData, GenerateTokenData, SaveTokenToCache, GenerateAdminTokenData } from './interface';
 
 class TokenCacheUtil {
     static saveTokenToCache({ key, token, expiry }: SaveTokenToCache) {
@@ -73,34 +73,6 @@ class TokenCacheUtil {
 
 class AuthUtil {
 
-    static getKeyForAWSUploadType({ id, fileName, type }: AWSKeyData): { key: string, tokenKey: string, expiry: number } {
-        switch (type) {
-        case 'profile':
-            return {
-                key: `Profile/${id}_${fileName}`,
-                tokenKey: `Profile_uploads:${id}:${fileName}`,
-                expiry: 60 * 5, // 5min
-            };
-        case 'posts':
-            return {
-                key: `Posts/${id}_${fileName}`,
-                tokenKey: `Posts_uploads:${id}:${fileName}`,
-                expiry: 60 * 10, // 10min
-            }; 
-        case 'document':
-            return {
-                key: `Docs/${id}_${fileName}`,
-                tokenKey: `Docs_uploads:${id}:${fileName}`,
-                expiry: 60 * 15, // 15min
-            };
-        default:
-            return {
-                key: `Other/${id}_${fileName}`,
-                tokenKey: `Other_uploads:${id}:${fileName}`,
-                expiry: 60 * 10, // 10min
-            };
-        }
-    }
     static getSecretKeyForTokenType(type: ENCRYPTEDTOKEN): { secretKey: string, expiry: number } {
         switch (type) {
         case 'access':

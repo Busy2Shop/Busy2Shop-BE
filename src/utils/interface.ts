@@ -11,8 +11,6 @@ export type AuthToken = 'access' | 'refresh' | 'passwordreset' | 'emailverificat
 
 export type ENCRYPTEDTOKEN = AuthToken | 'admin'
 
-export type AWSUploadType = 'profile' | 'posts' | 'document' | 'other';
-
 export interface GenerateTokenData {
     type: AuthToken,
     user: User,
@@ -52,12 +50,6 @@ export interface DecodedTokenData {
     token: string,
     tokenType: AuthToken
     authKey?: string
-}
-
-export interface AWSKeyData {
-    id: string,
-    fileName: string,
-    type: AWSUploadType,
 }
 
 export interface TenantQueries {
