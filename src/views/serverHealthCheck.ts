@@ -14,7 +14,7 @@ export async function getServerHealth(req: Request, res: Response): Promise<void
     };
 
     try {
-        const html = await serverHealth(data);
+        const html = serverHealth(data);
         res.send(html);
 
     } catch (error) {

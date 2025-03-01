@@ -6,7 +6,7 @@ import { redisClient } from './utils/redis';
 // Asynchronous function to start the server
 async function startServer(): Promise<void> {
     try {      
-        await redisClient.on('connect', () => {
+        redisClient.on('connect', () => {
             logger.info('Connection to REDIS database successful');
         });
         // Initiate a connection to the database
@@ -33,4 +33,4 @@ async function startServer(): Promise<void> {
 }
 
 // Call the function to start the server
-startServer();
+startServer().then(r => r);

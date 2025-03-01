@@ -12,19 +12,18 @@ class EmailTemplate {
         return container(forgotPassword({ link, name }));
     };
     accountActivation = async ({ otpCode, name }: { otpCode: string, name: string }) => {
-        return container(await accountActivation(otpCode, name));
+        return container(accountActivation(otpCode, name));
     };
     adminLogin = async ({ otpCode, name }: { otpCode: string, name: string }) => {
-        return container(await adminLogin(otpCode, name));
+        return container(adminLogin(otpCode, name));
     };
     emailInvite = async ({ link, name }: { link: string, name: string }) => {
-        return container(await emailInvite(link, name));
+        return container(emailInvite(link, name));
     };
 
     certificate = async ({ name, courseTitle, instructorName, date }: { name: string, courseTitle: string, instructorName: string, date: string }) => {
-        const certificateTemplate = await certificate({ name, courseTitle, instructorName, date });
-        return certificateTemplate;
-    }
+        return certificate({ name, courseTitle, instructorName, date });
+    };
 }
 
 export default EmailTemplate;
