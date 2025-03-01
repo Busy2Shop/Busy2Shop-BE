@@ -134,7 +134,7 @@ src/config
 src/migrations
 # src/seeders
 
-dist
+/dist
 
 .sequelizerc
 
