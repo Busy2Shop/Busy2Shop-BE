@@ -1,4 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+export interface PaystackErrorResponse {
+    message?: string;
+    errors?: Record<string, string[]>;
+    status?: boolean;
+}
+
 export interface PaystackResponse<T> {
     status: boolean;
     message: string;

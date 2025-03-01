@@ -4,7 +4,7 @@ import Validator from '../utils/validators';
 import Password from '../models/password.model';
 import { AuthUtil } from '../utils/token';
 import { logger } from '../utils/logger';
-import { Database } from '../models/index';
+import { Database } from '../models';
 import { emailService, EmailTemplate } from '../utils/Email';
 import UserService, { IDynamicQueryOptions } from '../services/user.service';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
