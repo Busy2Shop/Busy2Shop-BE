@@ -29,8 +29,6 @@ export default class AuthController {
             otherName,
             displayImage,
             gender,
-            nin,
-            images = [],
             phone: {
                 countryCode,
                 number,
@@ -48,11 +46,11 @@ export default class AuthController {
             displayImage,
             dob,
             gender,
-            // Add vendor metadata if userType is vendor
-            vendorMeta: userType === 'vendor' ? {
-                nin,
-                images,
-            } : undefined,
+            // Vendor metadata is now handled separately
+            // vendorMeta: userType === 'vendor' ? {
+            //     nin,
+            //     images,
+            // } : undefined,
             // Properly construct the location object
             location: country ? {
                 country,

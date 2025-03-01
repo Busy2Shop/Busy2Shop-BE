@@ -8,6 +8,7 @@ import Order from '../models/order.model';
 import { NotFoundError, BadRequestError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import { Database } from '../models';
+import { IVendorMeta } from '../models/userSettings.model';
 
 export interface IViewVendorsQuery {
     page?: number;
@@ -260,6 +261,47 @@ export default class VendorService {
             );
 
             return order;
+        });
+    }
+
+    /**
+     * Update vendor documents (NIN and verification images)
+     * @param vendorId Vendor ID
+     * @param documents Document data (NIN or images)
+     * @returns Updated vendor
+     */
+    static async updateVendorDocuments(vendorId: string, documents: Partial<IVendorMeta>): Promise<User> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            const vendor = await User.findOne({
+                where: {
+                    id: vendorId,
+                    'status.userType': 'vendor',
+                },
+                transaction,
+            });
+
+            if (!vendor) {
+                throw new NotFoundError('Vendor not found');
+            }
+
+            // Get current vendor metadata or initialize empty object
+            const currentVendorMeta = vendor.vendorMeta || {};
+            
+            // Update with new document data
+            const updatedVendorMeta = {
+                ...currentVendorMeta,
+                ...(documents.nin && { nin: documents.nin }),
+                ...(documents.images && { 
+                    images: documents.images.length > 0 
+                        ? [...(currentVendorMeta.images || []), ...documents.images]
+                        : currentVendorMeta.images || [],
+                }),
+            };
+
+            // Update vendor with new metadata
+            await vendor.update({ vendorMeta: updatedVendorMeta }, { transaction });
+
+            return vendor;
         });
     }
 }
