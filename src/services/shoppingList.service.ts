@@ -19,7 +19,7 @@ export interface IViewShoppingListsQuery {
 export default class ShoppingListService {
     static async createShoppingList(listData: IShoppingList, items: IShoppingListItem[] = []): Promise<ShoppingList> {
         // Validate required fields
-        if (!listData.name || !listData.userId) {
+        if (!listData.name || !listData.customerId) {
             throw new BadRequestError('Shopping list name and user ID are required');
         }
 
@@ -51,10 +51,10 @@ export default class ShoppingListService {
         });
     }
 
-    static async viewUserShoppingLists(userId: string, queryData?: IViewShoppingListsQuery): Promise<{ lists: ShoppingList[], count: number, totalPages?: number }> {
+    static async viewUserShoppingLists(customerId: string, queryData?: IViewShoppingListsQuery): Promise<{ lists: ShoppingList[], count: number, totalPages?: number }> {
         const { page, size, status, marketId } = queryData || {};
 
-        const where: Record<string, unknown> = { userId };
+        const where: Record<string, unknown> = { customerId };
 
         // Filter by status if provided
         if (status) {
@@ -137,7 +137,7 @@ export default class ShoppingListService {
                 },
                 {
                     model: User,
-                    as: 'user',
+                    as: 'customer',
                     attributes: ['id', 'firstName', 'lastName', 'email'],
                 },
             ],
@@ -176,7 +176,7 @@ export default class ShoppingListService {
                 },
                 {
                     model: User,
-                    as: 'user',
+                    as: 'customer',
                     attributes: ['id', 'firstName', 'lastName', 'email'],
                 },
                 {
@@ -195,11 +195,11 @@ export default class ShoppingListService {
         return list;
     }
 
-    static async updateShoppingList(id: string, userId: string, updateData: Partial<IShoppingList>): Promise<ShoppingList> {
+    static async updateShoppingList(id: string, customerId: string, updateData: Partial<IShoppingList>): Promise<ShoppingList> {
         const list = await this.getShoppingList(id);
 
         // Check if user is the owner of the list
-        if (list.userId !== userId) {
+        if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to update this shopping list');
         }
 
@@ -213,11 +213,11 @@ export default class ShoppingListService {
         return await this.getShoppingList(id);
     }
 
-    static async deleteShoppingList(id: string, userId: string): Promise<void> {
+    static async deleteShoppingList(id: string, customerId: string): Promise<void> {
         const list = await this.getShoppingList(id);
 
         // Check if user is the owner of the list
-        if (list.userId !== userId) {
+        if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to delete this shopping list');
         }
 
@@ -238,11 +238,11 @@ export default class ShoppingListService {
         });
     }
 
-    static async addItemToList(listId: string, userId: string, itemData: IShoppingListItem): Promise<ShoppingListItem> {
+    static async addItemToList(listId: string, customerId: string, itemData: IShoppingListItem): Promise<ShoppingListItem> {
         const list = await this.getShoppingList(listId);
 
         // Check if user is the owner of the list
-        if (list.userId !== userId) {
+        if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to modify this shopping list');
         }
 
@@ -273,11 +273,11 @@ export default class ShoppingListService {
         return newItem;
     }
 
-    static async updateListItem(listId: string, itemId: string, userId: string, updateData: Partial<IShoppingListItem>): Promise<ShoppingListItem> {
+    static async updateListItem(listId: string, itemId: string, customerId: string, updateData: Partial<IShoppingListItem>): Promise<ShoppingListItem> {
         const list = await this.getShoppingList(listId);
 
         // Check if user is the owner of the list
-        if (list.userId !== userId) {
+        if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to modify this shopping list');
         }
 
@@ -305,11 +305,11 @@ export default class ShoppingListService {
         return item;
     }
 
-    static async removeItemFromList(listId: string, itemId: string, userId: string): Promise<void> {
+    static async removeItemFromList(listId: string, itemId: string, customerId: string): Promise<void> {
         const list = await this.getShoppingList(listId);
 
         // Check if user is the owner of the list
-        if (list.userId !== userId) {
+        if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to modify this shopping list');
         }
 
@@ -355,11 +355,11 @@ export default class ShoppingListService {
         );
     }
 
-    static async submitShoppingList(id: string, userId: string): Promise<ShoppingList> {
+    static async submitShoppingList(id: string, customerId: string): Promise<ShoppingList> {
         const list = await this.getShoppingList(id);
 
         // Check if user is the owner of the list
-        if (list.userId !== userId) {
+        if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to submit this shopping list');
         }
 
@@ -388,11 +388,11 @@ export default class ShoppingListService {
         return await this.getShoppingList(id);
     }
 
-    static async createOrderFromShoppingList(listId: string, userId: string, orderData: Partial<IOrder>): Promise<Order> {
+    static async createOrderFromShoppingList(listId: string, customerId: string, orderData: Partial<IOrder>): Promise<Order> {
         const list = await this.getShoppingList(listId);
 
         // Check if user is the owner of the list
-        if (list.userId !== userId) {
+        if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to create an order from this shopping list');
         }
 
@@ -404,7 +404,7 @@ export default class ShoppingListService {
         // Create the order
         const order = await Order.create({
             ...orderData,
-            customerId: userId,
+            customerId: customerId,
             shoppingListId: listId,
             status: 'pending',
         } as IOrder);
@@ -443,7 +443,7 @@ export default class ShoppingListService {
         return await this.getShoppingList(listId);
     }
 
-    static async updateListStatus(listId: string, userId: string, status: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled'): Promise<ShoppingList> {
+    static async updateListStatus(listId: string, customerId: string, status: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled'): Promise<ShoppingList> {
         const list = await this.getShoppingList(listId);
 
         // Validate the status transition
@@ -452,14 +452,14 @@ export default class ShoppingListService {
         }
 
         // Check permissions based on the user role
-        const user = await User.findByPk(userId);
+        const user = await User.findByPk(customerId);
         if (!user) {
             throw new NotFoundError('User not found');
         }
 
         if (user.status.userType === 'vendor') {
             // Vendors can only update lists assigned to them
-            if (list.vendorId !== userId) {
+            if (list.vendorId !== customerId) {
                 throw new ForbiddenError('You are not assigned to this shopping list');
             }
 
@@ -467,7 +467,7 @@ export default class ShoppingListService {
             if (!['processing', 'completed'].includes(status)) {
                 throw new ForbiddenError('Vendors can only update to processing or completed status');
             }
-        } else if (list.userId === userId) {
+        } else if (list.customerId === customerId) {
             // List owners can cancel or modify their own lists
             if (!['cancelled', 'draft'].includes(status)) {
                 throw new ForbiddenError('You can only cancel or revert to draft your shopping lists');

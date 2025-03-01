@@ -42,7 +42,7 @@ export default class AuthController {
         }
 
         // Validate user type
-        if (!userType || !['user', 'vendor'].includes(userType)) {
+        if (!userType || !['customer', 'vendor'].includes(userType)) {
             throw new BadRequestError('User type must be either "user" or "vendor"');
         }
 

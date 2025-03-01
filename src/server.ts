@@ -1,25 +1,22 @@
 import app from './app';
 import { initiateDB } from './models';
 import { logger } from './utils/logger';
-import { redisClient } from './utils/redis';
+import { redisClient, redisPubClient, redisSubClient } from './utils/redis';
 import http from 'http';
-import SocketConfig from './clients/socket.config';
+import SocketConfig from './clients/socket/index.config';
 
 // Create HTTP server
 const server = http.createServer(app);
 
 // Asynchronous function to start the server
 async function startServer(): Promise<void> {
-    try {      
-        redisClient.on('connect', () => {
-            logger.info('Connection to REDIS database successful');
-        });
+    try {
         // Initiate a connection to the database
         await initiateDB();
 
         // Initialize Socket.IO
         new SocketConfig(server);
-        logger.info('Socket.IO server initialized');
+        logger.info('Chat Client initialized');
 
         // Start the server and listen on port 8080
         server.listen(process.env.PORT ?? 8090, () => {
@@ -28,14 +25,23 @@ async function startServer(): Promise<void> {
     } catch (err) {
         console.log(err);
         logger.error(err);
-        // exit redis client
-        redisClient.quit((err, result) => {
-            if (err) {
-                console.error('Error quitting Redis:', err);
-            } else {
-                console.log('Redis instance has been stopped:', result);
+
+        // Clean up Redis connections
+        const closeRedis = async () => {
+            try {
+                await Promise.all([
+                    redisClient.quit(),
+                    redisPubClient.quit(),
+                    redisSubClient.quit(),
+                ]);
+                logger.info('All Redis instances have been stopped');
+            } catch (redisErr) {
+                logger.error('Error closing Redis connections:', redisErr);
             }
-        });
+        };
+
+        await closeRedis();
+
         // Exit the process with a non-zero status code to indicate an error
         process.exit(1);
     }

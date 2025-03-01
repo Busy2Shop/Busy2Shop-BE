@@ -9,7 +9,7 @@ import { FindOptions } from 'sequelize';
 import Market from './market.model';
 import Review from './review.model';
 import ShoppingList from './shoppingList.model';
-export type userTypeValues = 'vendor' | 'user';
+export type userTypeValues = 'vendor' | 'customer';
 @Scopes(() => ({
     withSettings: {
         include: [
@@ -80,7 +80,7 @@ export default class User extends Model<User | IUser > {
 
     @Column({
         type: DataType.JSONB, allowNull: false,
-        defaultValue: { activated: false, emailVerified: false, userType: 'user' },
+        defaultValue: { activated: false, emailVerified: false, userType: 'customer' },
     })
         status: {
         activated: boolean;

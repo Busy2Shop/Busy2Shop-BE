@@ -250,7 +250,7 @@ export default class UserService {
             displayImage: profileData.displayImage,
             googleId: profileData.googleId,
             status: {
-                userType: 'user',
+                userType: 'customer',
                 emailVerified: true,
                 activated: true,
             },

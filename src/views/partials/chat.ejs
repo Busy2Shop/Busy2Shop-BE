@@ -1,0 +1,55 @@
+<!-- Chat Component -->
+<link rel="stylesheet" href="/css/chat.css">
+
+<div class="chat-inactive-message" id="chat-inactive-message">
+    <p>Chat is not active for this order yet. Click the button below to activate it.</p>
+    <button id="activate-chat-button">Activate Chat</button>
+</div>
+
+<div class="chat-container" id="chat-container" style="display: none;" data-order-id="<%= orderId %>" data-user-id="<%= userId %>">
+    <div class="chat-header">
+        <h3>Order Chat</h3>
+    </div>
+    
+    <div class="message-container" id="message-container">
+        <!-- Messages will be populated here -->
+    </div>
+    
+    <div id="typing-indicator"></div>
+    
+    <div class="chat-input-container">
+        <button id="image-upload-button" title="Upload Image">
+            <i class="fas fa-image"></i>
+        </button>
+        <input type="file" id="image-input" accept="image/*">
+        
+        <input type="text" id="message-input" placeholder="Type a message...">
+        
+        <button id="send-button">
+            <i class="fas fa-paper-plane"></i>
+        </button>
+    </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/chat.js"></script>
+<script>
+    // Initialize chat when the DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get order ID and user ID from data attributes
+        const orderId = document.getElementById('chat-container').dataset.orderId;
+        const userId = document.getElementById('chat-container').dataset.userId;
+        
+        if (orderId && userId) {
+            // Initialize chat client
+            const chat = new ChatClient(orderId, userId);
+            
+            // Handle page unload
+            window.addEventListener('beforeunload', function() {
+                chat.leaveChat();
+            });
+        } else {
+            console.error('Missing order ID or user ID for chat initialization');
+        }
+    });
+</script>

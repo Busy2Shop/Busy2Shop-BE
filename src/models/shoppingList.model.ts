@@ -41,10 +41,10 @@ export default class ShoppingList extends Model<ShoppingList | IShoppingList> {
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column
-        userId: string;
+        customerId: string;
 
-    @BelongsTo(() => User)
-        user: User;
+    @BelongsTo(() => User, 'customerId')
+        customer: User;
 
     @IsUUID(4)
     @ForeignKey(() => Market)
@@ -77,7 +77,7 @@ export interface IShoppingList {
     notes?: string;
     estimatedTotal?: number;
     status?: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled';
-    userId: string;
+    customerId: string;
     marketId?: string;
     vendorId?: string;
 }

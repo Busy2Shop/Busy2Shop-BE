@@ -17,7 +17,7 @@ export default class ShoppingListController {
                 name,
                 notes,
                 marketId,
-                userId: req.user.id,
+                customerId: req.user.id,
                 status: 'draft',
             },
             items || []
@@ -90,7 +90,7 @@ export default class ShoppingListController {
         const shoppingList = await ShoppingListService.getShoppingList(id);
 
         // Check if user is authorized to view this list
-        if (shoppingList.userId !== req.user.id && shoppingList.vendorId !== req.user.id) {
+        if (shoppingList.customerId !== req.user.id && shoppingList.vendorId !== req.user.id) {
             throw new ForbiddenError('You are not authorized to view this shopping list');
         }
 

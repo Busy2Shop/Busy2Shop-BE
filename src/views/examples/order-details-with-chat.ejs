@@ -1,0 +1,76 @@
+<%- include('../partials/header') %>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Order #<%= order.id %></h2>
+                </div>
+                <div class="card-body">
+                    <!-- Order details content -->
+                    <div class="order-details">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h4>Order Information</h4>
+                                <p><strong>Status:</strong> <%= order.status %></p>
+                                <p><strong>Date:</strong> <%= new Date(order.createdAt).toLocaleDateString() %></p>
+                                <p><strong>Total:</strong> $<%= order.totalAmount.toFixed(2) %></p>
+                            </div>
+                            <div class="col-md-6">
+                                <h4>Delivery Information</h4>
+                                <p><strong>Address:</strong> <%= order.deliveryAddress %></p>
+                                <p><strong>Expected Delivery:</strong> <%= order.expectedDeliveryDate ? new Date(order.expectedDeliveryDate).toLocaleDateString() : 'Not scheduled' %></p>
+                            </div>
+                        </div>
+                        
+                        <h4 class="mt-4">Items</h4>
+                        <div class="table-responsive">
+                            <table class="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th>Quantity</th>
+                                        <th>Price</th>
+                                        <th>Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <% order.items.forEach(item => { %>
+                                    <tr>
+                                        <td><%= item.name %></td>
+                                        <td><%= item.quantity %></td>
+                                        <td>$<%= item.price.toFixed(2) %></td>
+                                        <td>$<%= (item.price * item.quantity).toFixed(2) %></td>
+                                    </tr>
+                                    <% }); %>
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <th colspan="3" class="text-right">Subtotal:</th>
+                                        <td>$<%= order.subtotal.toFixed(2) %></td>
+                                    </tr>
+                                    <tr>
+                                        <th colspan="3" class="text-right">Delivery Fee:</th>
+                                        <td>$<%= order.deliveryFee.toFixed(2) %></td>
+                                    </tr>
+                                    <tr>
+                                        <th colspan="3" class="text-right">Total:</th>
+                                        <td>$<%= order.totalAmount.toFixed(2) %></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <!-- Chat component -->
+            <%- include('../partials/chat', { orderId: order.id, userId: user.id }) %>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

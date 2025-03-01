@@ -1,162 +1,207 @@
-import ChatMessage from '../models/chatMessage.model';
-import { Transaction } from 'sequelize';
+import { Op } from 'sequelize';
 import { Database } from '../models';
+import ChatMessage, { SenderType } from '../models/chatMessage.model';
 import User from '../models/user.model';
-import { logger } from '../utils/logger';
+import { redisClient } from '../utils/redis';
+import { Transaction } from 'sequelize';
+import { ChatMessageType } from 'clients/socket/types';
+
+export interface ChatActivationType {
+    orderId: string;
+    activatedBy: {
+        id: string;
+        type: SenderType;
+        name: string;
+    };
+}
 
 interface IMessageData {
     orderId: string;
     senderId: string;
-    senderType: 'vendor' | 'user';
+    senderType: SenderType;
     message: string;
+    imageUrl?: string;
 }
 
 export class ChatService {
-    /**
-     * Save a new chat message
-     * @param messageData Message data to save
-     * @returns Saved message with sender info
-     */
-    static async saveMessage(messageData: IMessageData): Promise<any> {
-        const transaction = await Database.transaction();
-        try {
-            const { orderId, senderId, senderType, message } = messageData;
+    static async saveMessage(messageData: IMessageData): Promise<ChatMessageType> {
+        const { orderId, senderId, senderType, message, imageUrl } = messageData;
 
-            // Create the message
-            const chatMessage = await ChatMessage.create(
-                {
-                    orderId,
-                    senderId,
-                    senderType,
-                    message,
-                    isRead: false,
-                },
-                { transaction }
-            );
+        return await Database.transaction(async (transaction: Transaction) => {
+            // Create message
+            const newMessage = await ChatMessage.create({
+                orderId,
+                senderId,
+                senderType,
+                message,
+                imageUrl: imageUrl || null,
+                isRead: false,
+            } as ChatMessage, { transaction });
 
             // Get sender info
-            const sender = await User.findByPk(senderId, {
+            await User.findByPk(senderId, {
                 attributes: ['id', 'firstName', 'lastName', 'displayImage'],
                 transaction,
             });
 
-            await transaction.commit();
-
-            // Return message with sender info
-            return {
-                id: chatMessage.id,
-                orderId: chatMessage.orderId,
-                message: chatMessage.message,
-                createdAt: chatMessage.createdAt,
-                isRead: chatMessage.isRead,
-                sender: {
-                    id: sender?.id,
-                    name: `${sender?.firstName} ${sender?.lastName}`,
-                    displayImage: sender?.displayImage,
-                    type: senderType,
-                },
+            // Format message for response
+            const formattedMessage: ChatMessageType = {
+                id: newMessage.id,
+                orderId: newMessage.orderId,
+                senderId: newMessage.senderId,
+                senderType: newMessage.senderType,
+                message: newMessage.message,
+                imageUrl: newMessage.imageUrl || undefined,
+                isRead: newMessage.isRead,
+                createdAt: newMessage.createdAt,
+                updatedAt: newMessage.updatedAt,
             };
-        } catch (error) {
-            await transaction.rollback();
-            logger.error('Error saving chat message:', error);
-            throw error;
-        }
+
+            return formattedMessage;
+        });
     }
 
-    /**
-     * Get all messages for a specific order
-     * @param orderId Order ID to get messages for
-     * @returns Array of messages with sender info
-     */
-    static async getMessagesByOrderId(orderId: string): Promise<any[]> {
-        try {
-            // Get all messages for the order
-            const messages = await ChatMessage.findAll({
-                where: { orderId },
-                order: [['createdAt', 'ASC']],
-                include: [
-                    {
-                        model: User,
-                        as: 'sender',
-                        attributes: ['id', 'firstName', 'lastName', 'displayImage'],
-                    },
-                ],
+    static async getMessagesByOrderId(orderId: string): Promise<ChatMessageType[]> {
+        const messages = await ChatMessage.findAll({
+            where: { orderId },
+            include: [
+                {
+                    model: User,
+                    as: 'sender',
+                    attributes: ['id', 'firstName', 'lastName', 'displayImage'],
+                },
+            ],
+            order: [['createdAt', 'ASC']],
+        });
+
+        // Format messages for response
+        const formattedMessages: ChatMessageType[] = messages.map((message) => ({
+            id: message.id,
+            orderId: message.orderId,
+            senderId: message.senderId,
+            senderType: message.senderType,
+            message: message.message,
+            imageUrl: message.imageUrl || undefined,
+            isRead: message.isRead,
+            createdAt: message.createdAt,
+            updatedAt: message.updatedAt,
+        }));
+
+        return formattedMessages;
+    }
+
+    static async markMessagesAsRead(orderId: string, userId: string): Promise<number> {
+        const [updatedCount] = await ChatMessage.update(
+            { isRead: true },
+            {
+                where: {
+                    orderId,
+                    senderId: { [Op.ne]: userId },
+                    isRead: false,
+                },
+            }
+        );
+
+        return updatedCount;
+    }
+
+    static async getUnreadMessageCount(userId: string, orderId?: string): Promise<{ total: number; byOrder?: Record<string, number> }> {
+        // If orderId is provided, just get the count for that order
+        if (orderId) {
+            const count = await ChatMessage.count({
+                where: {
+                    senderId: { [Op.ne]: userId },
+                    orderId,
+                    isRead: false,
+                },
             });
 
-            // Format messages
-            return messages.map((message) => ({
-                id: message.id,
-                orderId: message.orderId,
-                message: message.message,
-                createdAt: message.createdAt,
-                isRead: message.isRead,
-                sender: {
-                    id: message.sender?.id,
-                    name: `${message.sender?.firstName} ${message.sender?.lastName}`,
-                    displayImage: message.sender?.displayImage,
-                    type: message.senderType,
-                },
-            }));
-        } catch (error) {
-            logger.error('Error getting chat messages:', error);
-            throw error;
+            return { total: count };
         }
+
+        // If no orderId provided, get counts grouped by orderId
+        interface UnreadMessageCount {
+            orderId: string;
+            count: string | number;
+        }
+
+        const unreadMessages = await ChatMessage.findAll({
+            where: {
+                senderId: { [Op.ne]: userId },
+                isRead: false,
+            },
+            attributes: ['orderId', [Database.fn('COUNT', Database.col('id')), 'count']],
+            group: ['orderId'],
+            raw: true,
+        }) as unknown as UnreadMessageCount[];
+
+        // Initialize the result object
+        const byOrder: Record<string, number> = {};
+        let total = 0;
+
+        // Process the results
+        unreadMessages.forEach((message: { orderId: string; count: string | number }) => {
+            const count = typeof message.count === 'string' ? parseInt(message.count, 10) : message.count;
+            byOrder[message.orderId] = count;
+            total += count;
+        });
+
+        return { total, byOrder };
     }
 
-    /**
-     * Mark messages as read
-     * @param orderId Order ID
-     * @param userId User ID who is reading the messages
-     */
-    static async markMessagesAsRead(orderId: string, userId: string): Promise<void> {
-        const transaction = await Database.transaction();
+    static async activateChat(data: ChatActivationType): Promise<boolean> {
         try {
-            // Mark all messages sent to this user as read
-            await ChatMessage.update(
-                { isRead: true },
-                {
-                    where: {
-                        orderId,
-                        senderId: { [Database.Op.ne]: userId }, // All messages not sent by this user
-                        isRead: false,
-                    },
-                    transaction,
-                }
+            const { orderId, activatedBy } = data;
+
+            // Store in Redis
+            const chatKey = `chat:active:${orderId}`;
+            await redisClient.set(
+                chatKey,
+                JSON.stringify({
+                    activatedAt: new Date().toISOString(),
+                    activatedBy,
+                })
             );
 
-            await transaction.commit();
+            // Set expiration separately
+            await redisClient.expire(chatKey, 86400); // 24 hours
+
+            return true;
         } catch (error) {
-            await transaction.rollback();
-            logger.error('Error marking messages as read:', error);
-            throw error;
+            console.error('Error activating chat:', error);
+            return false;
         }
     }
 
-    /**
-     * Get unread message count for a user
-     * @param userId User ID
-     * @returns Count of unread messages
-     */
-    static async getUnreadMessageCount(userId: string, orderId?: string): Promise<number> {
+    static async getChatActivationData(orderId: string): Promise<ChatActivationType | null> {
         try {
-            const whereClause: any = {
-                senderId: { [Database.Op.ne]: userId }, // Messages not sent by this user
-                isRead: false,
-            };
+            const chatKey = `chat:active:${orderId}`;
+            const chatData = await redisClient.get(chatKey);
 
-            // If orderId is provided, only count messages for that order
-            if (orderId) {
-                whereClause.orderId = orderId;
+            if (!chatData) {
+                return null;
             }
 
-            const count = await ChatMessage.count({
-                where: whereClause,
-            });
-
-            return count;
+            const parsedData = JSON.parse(chatData);
+            return {
+                orderId,
+                activatedBy: parsedData.activatedBy,
+            };
         } catch (error) {
-            logger.error('Error getting unread message count:', error);
-            throw error;
+            console.error('Error getting chat activation data:', error);
+            return null;
+        }
+    }
+
+    static async isChatActive(orderId: string): Promise<boolean> {
+        try {
+            const chatKey = `chat:active:${orderId}`;
+            const chatData = await redisClient.get(chatKey);
+
+            return !!chatData;
+        } catch (error) {
+            console.error('Error checking if chat is active:', error);
+            return false;
         }
     }
 }

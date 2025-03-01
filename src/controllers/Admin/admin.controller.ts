@@ -256,7 +256,7 @@ export default class AdminController {
         }
 
         // Add filter for user type (vendor, user)
-        if (userType && ['vendor', 'user'].includes(userType as string)) {
+        if (userType && ['vendor', 'customer'].includes(userType as string)) {
             queryParams.userType = userType;
         }
 

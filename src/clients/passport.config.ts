@@ -44,6 +44,7 @@ export default class FederationLoginConfig {
                             status: {
                                 activated: false,
                                 emailVerified: false,
+                                userType: 'customer',
                             },
                             // role: 'user',
                         };

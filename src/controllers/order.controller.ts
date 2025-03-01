@@ -15,7 +15,7 @@ export default class OrderController {
         // Get the shopping list to verify ownership
         const shoppingList = await ShoppingListService.getShoppingList(shoppingListId);
 
-        if (shoppingList.userId !== req.user.id) {
+        if (shoppingList.customerId !== req.user.id) {
             throw new ForbiddenError('You are not authorized to create an order from this shopping list');
         }
 

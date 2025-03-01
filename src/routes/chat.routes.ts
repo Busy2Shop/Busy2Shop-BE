@@ -1,12 +1,17 @@
-import express, { Router } from 'express';
+import { Router } from 'express';
 import ChatController from '../controllers/chat.controller';
 import { basicAuth, AuthenticatedController } from '../middlewares/authMiddleware';
+import { uploadMiddleware, UploadType } from '../middlewares/uploadMiddleware';
 
-const router: Router = express.Router();
+const router = Router();
+const upload = uploadMiddleware(UploadType.Single, 'file');
 
-router
-    .get('/messages/:orderId', basicAuth('access'), AuthenticatedController(ChatController.getOrderMessages))
-    .get('/unread', basicAuth('access'), AuthenticatedController(ChatController.getUnreadMessageCount))
-    .post('/read/:orderId', basicAuth('access'), AuthenticatedController(ChatController.markMessagesAsRead));
+router.get('/orders/:orderId/messages', basicAuth('access'), AuthenticatedController(ChatController.getOrderMessages));
+
+router.post('/orders/:orderId/activate', basicAuth('access'), AuthenticatedController(ChatController.activateChat));
+
+router.get('/orders/:orderId/active', basicAuth('access'), AuthenticatedController(ChatController.isChatActive));
+
+router.post('/upload-image', basicAuth('access'), upload, AuthenticatedController(ChatController.uploadChatImage));
 
 export default router;

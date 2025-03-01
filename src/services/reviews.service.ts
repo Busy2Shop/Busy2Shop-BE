@@ -304,11 +304,11 @@ export default class ReviewService {
         return completedOrders > 0 && !existingReview;
     }
 
-    static async getUserReviewableItems(userId: string): Promise<{ markets: Market[], products: Product[] }> {
+    static async getUserReviewableItems(customerId: string): Promise<{ markets: Market[], products: Product[] }> {
         // Find all markets the user has ordered from
         const completedShoppingLists = await ShoppingList.findAll({
             where: {
-                userId,
+                customerId,
                 status: 'completed',
             },
             attributes: ['marketId'],
@@ -320,7 +320,7 @@ export default class ReviewService {
         // Find markets that haven't been reviewed yet
         const reviewedMarketIds = (await Review.findAll({
             where: {
-                reviewerId: userId,
+                reviewerId: customerId,
                 marketId: { [Op.in]: marketIds },
             },
             attributes: ['marketId'],
@@ -354,7 +354,7 @@ export default class ReviewService {
                     model: Review,
                     as: 'reviews',
                     where: {
-                        reviewerId: userId,
+                        reviewerId: customerId,
                     },
                     required: false,
                 },
