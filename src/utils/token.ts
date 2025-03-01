@@ -104,11 +104,11 @@ class AuthUtil {
     static getSecretKeyForTokenType(type: ENCRYPTEDTOKEN): { secretKey: string, expiry: number } {
         switch (type) {
         case 'access':
-            // 1day
-            return { secretKey: JWT_ACCESS_SECRET, expiry: 60 * 60 * 24 }; 
+            // 30day
+            return { secretKey: JWT_ACCESS_SECRET, expiry: 60 * 60 * 24 * 30 }; 
         case 'refresh':
-            // 7days
-            return { secretKey: JWT_REFRESH_SECRET, expiry: 60 * 60 * 24 * 7 };
+            // 90days
+            return { secretKey: JWT_REFRESH_SECRET, expiry: 60 * 60 * 24 * 90 };
         case 'admin':
             // 7days
             return { secretKey: JWT_ADMIN_ACCESS_SECRET, expiry: 60 * 60 * 24 * 7 };
