@@ -9,7 +9,7 @@ import shoppingListRoute from './shoppingList.routes';
 import orderRoute from './order.routes';
 import vendorRoute from './vendor.routes';
 import kycRoute from './kyc.routes';
-import AdminRoutes from './Admin/admin.routes';
+import AdminRoutes from './admin.routes';
 import chatRoute from './chat.routes';
 
 const router = Router();
