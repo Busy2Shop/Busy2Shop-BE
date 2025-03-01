@@ -1,7 +1,7 @@
 import axios, { AxiosError, Method } from 'axios';
 import {
     PaystackResponse, InitializeTransactionResponseData, CustomerData, BankData,
-    AccountVerificationData, TransferRecipientData, TransferData,
+    AccountVerificationData, TransferRecipientData, TransferData, PaystackErrorResponse,
 } from './paystack.types';
 
 import { BadRequestError, UnauthorizedError, NotFoundError } from '../../utils/customErrors';
@@ -32,21 +32,27 @@ export class PaystackConfigService {
                     data: params,
                 });
 
-            // Check if the response status is not successful (2xx)
-            if (response.status < 200 || response.status >= 300) {
-                if (response.status === 400) {
-                    throw new BadRequestError(response.data.message || 'Bad Request');
-                } else if (response.status === 401) {
-                    throw new UnauthorizedError(response.data.message || 'Unauthorized');
-                } else if (response.status === 404) {
-                    throw new NotFoundError(response.data.message || 'Not Found');
+            // Axios only returns successful responses in the try block
+            return response.data;
+        } catch (error) {
+            const axiosError = error as AxiosError<PaystackErrorResponse>;
+            console.error(`Error in Paystack API request: ${endpoint}`, axiosError.response?.data || axiosError.message);
+
+            // Now handle different error status codes here
+            if (axiosError.response) {
+                const status = axiosError.response.status;
+                const errorMessage = axiosError.response.data?.message ?? 'An error occurred';
+
+                if (status === 400) {
+                    throw new BadRequestError(errorMessage || 'Bad Request');
+                } else if (status === 401) {
+                    throw new UnauthorizedError(errorMessage || 'Unauthorized');
+                } else if (status === 404) {
+                    throw new NotFoundError(errorMessage || 'Not Found');
                 }
             }
 
-            return response.data;
-        } catch (error) {
-            const axiosError = error as AxiosError;
-            console.error(`Error in Paystack API request: ${endpoint}`, axiosError.response?.data || axiosError.message);
+            // Default case for network errors or unhandled status codes
             throw new BadRequestError('Error in Paystack API request');
         }
     }
