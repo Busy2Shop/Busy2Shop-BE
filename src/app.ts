@@ -15,7 +15,7 @@ import passport from 'passport';
 import { getServerHealth } from './views/serverHealthCheck';
 import cookieParser from 'cookie-parser';
 import cookieSession from 'cookie-session';
-import { SESSION_SECRET } from './utils/constants';
+import { NODE_ENV, SESSION_SECRET } from './utils/constants';
 import FederationLoginConfig from './clients/passport.config';
 const app = express();
 
@@ -60,19 +60,30 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Swagger documentation route
 app.use('/api-docs', swaggerUi.serve);
 app.get('/api-docs', (req, res, next) => {
-    // Update the Swagger specs with the current host
-    const currentSpecs = updateSwaggerHost(req);
+    try {
+        // Update the Swagger specs with the current host
+        const currentSpecs = updateSwaggerHost(req);
 
-    // Setup Swagger UI with the updated specs
-    swaggerUi.setup(currentSpecs, {
-        explorer: true,
-        customCss: '.swagger-ui .topbar { display: none }',
-        swaggerOptions: {
-            docExpansion: 'list',
-            filter: true,
-            showRequestDuration: true,
-        },
-    })(req, res, next);
+        // Debug in production
+        if (NODE_ENV === 'production') {
+            console.log('Swagger server URL:', currentSpecs.servers[0].url);
+            console.log('Swagger paths count:', Object.keys(currentSpecs.paths || {}).length);
+        }
+
+        // Setup Swagger UI with the updated specs
+        swaggerUi.setup(currentSpecs, {
+            explorer: true,
+            customCss: '.swagger-ui .topbar { display: none }',
+            swaggerOptions: {
+                docExpansion: 'list',
+                filter: true,
+                showRequestDuration: true,
+            },
+        })(req, res, next);
+    } catch (error) {
+        console.error('Error setting up Swagger UI:', error);
+        res.status(500).send('Error setting up API documentation');
+    }
 });
 
 // server health check

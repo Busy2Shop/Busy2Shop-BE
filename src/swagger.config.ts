@@ -1,7 +1,31 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import * as path from 'node:path';
-import { PORT } from './utils/constants';
+import { PORT, NODE_ENV } from './utils/constants';
 import { Request } from 'express';
+import fs from 'fs';
+
+// Determine the API patterns to include based on environment
+const getApiPatterns = () => {
+    // In production, the file paths may be different due to transpilation
+    if (NODE_ENV === 'production') {
+        return [
+            // For JavaScript files in production
+            path.join(__dirname, './docs/*.yaml'),
+            path.join(__dirname, './routes/**/*.js'),
+            path.join(__dirname, './routes/*.js'),
+            // Include both JS and TS patterns to be safe
+            path.join(__dirname, './routes/**/*.ts'),
+            path.join(__dirname, './routes/*.ts'),
+        ];
+    }
+
+    // Default patterns for development
+    return [
+        path.join(__dirname, './docs/*.yaml'),
+        path.join(__dirname, './routes/**/*.ts'),
+        path.join(__dirname, './routes/*.ts'),
+    ];
+};
 
 // Initial swagger options with placeholder URL that will be dynamically updated
 const options = {
@@ -40,12 +64,31 @@ const options = {
             },
         },
     },
-    apis: [
-        path.join(__dirname, './docs/*.yaml'),
-        path.join(__dirname, './routes/**/*.ts'),
-        path.join(__dirname, './routes/*.ts'),
-    ],
+    apis: getApiPatterns(),
 };
+
+// Debugging - log the paths being checked
+if (NODE_ENV === 'production') {
+    console.log('Swagger API patterns:', options.apis);
+
+    // Check if files exist at these paths
+    options.apis.forEach(pattern => {
+        try {
+            const dir = path.dirname(pattern);
+            const filePattern = path.basename(pattern);
+            if (fs.existsSync(dir)) {
+                const files = fs.readdirSync(dir).filter(file =>
+                    new RegExp(filePattern.replace('*', '.*')).test(file)
+                );
+                console.log(`Files matching ${pattern}:`, files);
+            } else {
+                console.log(`Directory does not exist: ${dir}`);
+            }
+        } catch (error) {
+            console.error(`Error checking path ${pattern}:`, error);
+        }
+    });
+}
 
 // Generate the base Swagger spec
 export const specs = swaggerJsdoc(options);
@@ -67,6 +110,11 @@ export const updateSwaggerHost = (req: Request) => {
             updatedSpecs.servers[0].variables.protocol.default = protocol;
             updatedSpecs.servers[0].variables.host.default = host;
         }
+    }
+
+    // Debug output in production
+    if (NODE_ENV === 'production') {
+        console.log('Routes defined in spec:', Object.keys(updatedSpecs.paths || {}).length);
     }
 
     return updatedSpecs;
