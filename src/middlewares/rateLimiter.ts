@@ -37,7 +37,7 @@ const rateLimiter = (secondsLimit: number, limitAmount: number, type: RateLimitT
 
             console.log('Sending suspicious email notification', attempts);
             // await suspiciousActivityEmail(email, attempts);
-            throw new BadRequestError('Too many attempts. Please try again later.');
+            return next(new BadRequestError('Too many attempts. Please try again later.'));
         } else {
             // Store attempt details in Redis hash
             await redisClient.hset(emailHashKey, incrResult.toString(), JSON.stringify({
@@ -87,7 +87,7 @@ const slidingWindowRateLimiter = (windowSizeInSeconds: number, limitAmount: numb
 
         if (requestCount >= limitAmount) {
             // Too many requests
-            throw new BadRequestError('Too many attempts. Please try again later.');
+            return next(new BadRequestError('Too many attempts. Please try again later.'));
         } else {
             // Add the current request timestamp to the sorted set
             await redisClient.zadd(emailTimestampsKey, currentTimestamp.toString(), currentTimestamp.toString());
