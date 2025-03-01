@@ -1,5 +1,16 @@
 import swaggerJsdoc from 'swagger-jsdoc';
 import * as path from 'node:path';
+import { PORT, NODE_ENV } from './utils/constants';
+
+// Determine the base URL based on environment
+const getBaseUrl = () => {
+    if (NODE_ENV === 'production') {
+        // For production, use the server's actual URL
+        return process.env.WEBSITE_URL ?? 'https://busy2shop-production.up.railway.app';
+    }
+    // For development, use localhost with the configured port
+    return `http://localhost:${PORT}`;
+};
 
 const options = {
     definition: {
@@ -15,8 +26,8 @@ const options = {
         },
         servers: [
             {
-                url: 'http://localhost:8000/api/v0',
-                description: 'Development server',
+                url: `${getBaseUrl()}/api/v0`,
+                description: `${NODE_ENV.charAt(0).toUpperCase() + NODE_ENV.slice(1)} server`,
             },
         ],
         components: {
