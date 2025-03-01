@@ -38,20 +38,18 @@ type EmailOptions = {
 type SendEmailFunction = (options: EmailOptions) => Promise<void | Error>;
 
 export default class EmailService {
-    private sendEmail: SendEmailFunction;
+    private readonly sendEmail: SendEmailFunction;
 
     constructor(service: string) {
-        switch (service) {
-            case 'nodemailer':
-                this.sendEmail = this.createNodemailerEmail();
-                break;
-            // case 'postmark':
+        if (service === 'nodemailer') {
+            this.sendEmail = this.createNodemailerEmail();
+            // } else if (service === 'postmark') {
             //     this.sendEmail = this.createPostmarkEmail();
-            //     break;
-            default:
-                throw new Error('Invalid email service specified');
+        } else {
+            throw new Error('Invalid email service specified');
         }
     }
+
     private createNodemailerEmail(): SendEmailFunction {
         const transporter = nodemailer.createTransport({
             host: 'smtp.gmail.com',
@@ -72,7 +70,7 @@ export default class EmailService {
 
             try {
 
-                // Use Promise.all to wait for all emails to be sent
+                // Use Promise.all to wait for all emails to send
                 await Promise.all((options.postmarkInfo ?? []).map(async (recipient) => {
                     const mailOptions = {
                         from: `Base Accounts<${EMAIL_HOST_ADDRESS}>`,
@@ -84,10 +82,10 @@ export default class EmailService {
 
                     try {
                         await transporter.sendMail(mailOptions);
-                        logger.info(`Email sent to ${recipient}`);
+                        logger.info(`Email sent to ${recipient.recipientEmail}`);
                     } catch (error) {
                         // Log the error without throwing it
-                        logger.error(`Error sending email to ${recipient}: ${error}`);
+                        logger.error(`Error sending email to ${recipient.recipientEmail}: ${error}`);
                     }
                 }));
             } catch (error) {
@@ -111,7 +109,7 @@ export default class EmailService {
     // }
 
     // private createPostmarkEmail(): SendEmailFunction {
-    //     const postmarkClient = new postmark.ServerClient(POSTMARK_API_KEY);
+    //     const postmarkClient = new postmark.ServerClient(POSTMARK_API_KEY) };
 
     //     return async (options) => {
     //         const senderEmail = EmailService.getSenderEmail(options.from ? options.from : 'auth');
@@ -129,7 +127,7 @@ export default class EmailService {
     //             emailsWithTemplateMessages = (options.postmarkInfo).map((recipient) => {
     //                 const message: postmark.TemplatedMessage = {
     //                     From: senderEmail,
-    //                     To: recipient.receipientEmail,
+    //                     To: recipient.recipientEmail,
     //                     Attachments: options.attachments ? options.attachments : [],
     //                     TemplateModel: recipient.postMarkTemplateData as Record<string, unknown>,
     //                     TemplateAlias: options.postMarkTemplateAlias,
