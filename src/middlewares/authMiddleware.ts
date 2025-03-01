@@ -5,11 +5,9 @@ import User from '../models/user.model';
 import UserService from '../services/user.service';
 import { logger } from '../utils/logger';
 import { AuthUtil, TokenCacheUtil } from '../utils/token';
-// import AdminService from '../services/AdminServices/admin.service';
 import Admin from '../models/admin.model';
-import AdminService from 'services/AdminServices/admin.service';
-import { ADMIN_EMAIL } from 'utils/constants';
-// import { ADMIN_EMAIL } from '../utils/constants';
+import AdminService from '../services/AdminServices/admin.service';
+import { ADMIN_EMAIL } from '../utils/constants';
 
 
 export interface AuthenticatedRequest extends Request {
