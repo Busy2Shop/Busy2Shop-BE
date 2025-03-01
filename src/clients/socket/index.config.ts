@@ -24,7 +24,9 @@ export default class SocketConfig {
         this.io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, {
             cors: {
                 origin: '*',
-                methods: ['GET', 'POST'],
+                methods: ['*'],
+                credentials: true,
+                allowedHeaders: ['*'],
             },
         });
 
