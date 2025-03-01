@@ -10,7 +10,7 @@ import morgan from 'morgan';
 import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
 import swaggerUi from 'swagger-ui-express';
-import { specs } from './swagger.config';
+import { updateSwaggerHost } from './swagger.config';
 import passport from 'passport';
 import { getServerHealth } from './views/serverHealthCheck';
 import cookieParser from 'cookie-parser';
@@ -57,17 +57,24 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     next();
 });
 
-//Swagger documentation route
+// Swagger documentation route
 app.use('/api-docs', swaggerUi.serve);
-app.get('/api-docs', swaggerUi.setup(specs, {
-    explorer: true,
-    customCss: '.swagger-ui .topbar { display: none }',
-    swaggerOptions: {
-        docExpansion: 'list',
-        filter: true,
-        showRequestDuration: true,
-    },
-}));
+app.get('/api-docs', (req, res, next) => {
+    // Update the Swagger specs with the current host
+    const currentSpecs = updateSwaggerHost(req);
+
+    // Setup Swagger UI with the updated specs
+    swaggerUi.setup(currentSpecs, {
+        explorer: true,
+        customCss: '.swagger-ui .topbar { display: none }',
+        swaggerOptions: {
+            docExpansion: 'list',
+            filter: true,
+            showRequestDuration: true,
+        },
+    })(req, res, next);
+});
+
 // server health check
 app.get('/serverhealth', getServerHealth);
 
