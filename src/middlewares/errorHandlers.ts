@@ -63,7 +63,7 @@ class Middlewares {
             customError.statusCode = 400;
         }
 
-        // end of  block for dev related errors //
+        // end of block for dev-related errors. //
 
 
         // if the error is not one of the specific types above, return a generic internal server error
