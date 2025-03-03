@@ -1,0 +1,251 @@
+openapi: 3.0.0
+info:
+  title: Notifications API
+  description: Notification management endpoints
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server
+
+components:
+  schemas:
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the notification
+        title:
+          type: string
+          description: Type of notification
+        message:
+          type: string
+          description: Notification message content
+        heading:
+          type: string
+          description: Notification heading/subject
+        read:
+          type: boolean
+          description: Whether the notification has been read
+        resource:
+          type: string
+          nullable: true
+          description: Related resource identifier
+        icon:
+          type: string
+          nullable: true
+          description: Icon for the notification
+        userId:
+          type: string
+          format: uuid
+          description: User who received the notification
+        actorId:
+          type: string
+          format: uuid
+          nullable: true
+          description: User who triggered the notification
+
+    NotificationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            notifications:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  title:
+                    type: string
+                  message:
+                    type: string
+                  heading:
+                    type: string
+                  read:
+                    type: boolean
+                  resource:
+                    type: string
+                    nullable: true
+                  icon:
+                    type: string
+                    nullable: true
+                  userId:
+                    type: string
+                    format: uuid
+                  actorId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  count:
+                    type: integer
+                    description: Number of similar notifications
+                  latest_id:
+                    type: string
+                    format: uuid
+                  latest_date:
+                    type: string
+                    format: date-time
+            stats:
+              type: object
+              properties:
+                total:
+                  type: integer
+                  description: Total number of notifications
+                read:
+                  type: integer
+                  description: Number of read notifications
+                unread:
+                  type: integer
+                  description: Number of unread notifications
+                totalPages:
+                  type: integer
+                  description: Total number of pages
+                  nullable: true
+                currentPage:
+                  type: integer
+                  description: Current page number
+                  nullable: true
+
+    SingleNotificationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Notification retrieved successfully
+        data:
+          $ref: '#/components/schemas/Notification'
+
+    MarkReadResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Notification marked as read
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /notifications:
+    get:
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: [ ]
+      summary: List user notifications
+      description: Returns a list of notifications for the authenticated user
+      parameters:
+        - in: query
+          name: read
+          schema:
+            type: string
+            enum: [ true, false ]
+          description: Filter by read status
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number for pagination
+        - in: query
+          name: size
+          schema:
+            type: integer
+          description: Number of items per page
+      responses:
+        200:
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResponse'
+        400:
+          description: Invalid query parameters
+        401:
+          description: Unauthorized - User not authenticated
+
+  /notifications/single:
+    get:
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: [ ]
+      summary: Get a single notification
+      description: Retrieves details for a specific notification
+      parameters:
+        - in: query
+          name: notificationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the notification to retrieve
+      responses:
+        200:
+          description: Notification retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleNotificationResponse'
+        400:
+          description: Notification ID is required
+        404:
+          description: Notification not found
+        401:
+          description: Unauthorized - User not authenticated
+
+  /notifications/read:
+    patch:
+      tags:
+        - Notifications
+      security:
+        - BearerAuth: [ ]
+      summary: Mark notification(s) as read
+      description: Marks a single notification or all notifications as read
+      parameters:
+        - in: query
+          name: notificationId
+          schema:
+            type: string
+            format: uuid
+          description: ID of the notification to mark as read (required if 'all' is not true)
+        - in: query
+          name: all
+          schema:
+            type: string
+            enum: [ true ]
+          description: Mark all notifications as read if set to 'true'
+      responses:
+        200:
+          description: Notification(s) marked as read successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarkReadResponse'
+        400:
+          description: Notification ID is required when not marking all as read
+        401:
+          description: Unauthorized - User not authenticated
