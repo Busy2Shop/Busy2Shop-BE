@@ -1,6 +1,6 @@
 import z from 'zod';
-import { version as uuidVersion } from 'uuid';
-import { validate as uuidValidate } from 'uuid';
+import { version as uuidVersion, validate as uuidValidate } from 'uuid';
+
 
 export interface IFileDataType {
     mimeType: string;

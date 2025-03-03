@@ -1,0 +1,549 @@
+openapi: 3.0.0
+info:
+  title: Admin API
+  description: Admin management endpoints for Busy2Shop e-commerce platform
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server
+
+components:
+  schemas:
+    Admin:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the admin
+        name:
+          type: string
+          description: Admin's full name
+        email:
+          type: string
+          format: email
+          description: Admin's email address
+        isSuperAdmin:
+          type: boolean
+          description: Whether the admin has super admin privileges
+
+    AdminLoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: Admin's email address
+      required:
+        - email
+
+    AdminVerifyRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: Admin's email address
+        otpCode:
+          type: string
+          description: OTP code sent to admin's email
+      required:
+        - email
+        - otpCode
+
+    CreateAdminRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Admin's full name
+        email:
+          type: string
+          format: email
+          description: Admin's email address
+        isSuperAdmin:
+          type: boolean
+          description: Whether the admin has super admin privileges
+      required:
+        - name
+        - email
+
+    DeleteAdminRequest:
+      type: object
+      properties:
+        adminId:
+          type: string
+          format: uuid
+          description: ID of the admin to delete
+      required:
+        - adminId
+
+    UserActionRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: ID of the user to perform action on
+        reason:
+          type: string
+          description: Reason for the action (required for block/unblock)
+      required:
+        - userId
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        settings:
+          type: object
+          properties:
+            isBlocked:
+              type: boolean
+            isDeactivated:
+              type: boolean
+            meta:
+              type: object
+              properties:
+                blockHistory:
+                  type: array
+                  items:
+                    type: object
+                unblockHistory:
+                  type: array
+                  items:
+                    type: object
+
+  securitySchemes:
+    AdminAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /admin/login:
+    post:
+      tags:
+        - Admin Authentication
+      summary: Login as admin
+      description: Sends a verification code to the admin's email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminLoginRequest'
+      responses:
+        200:
+          description: Verification code sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Verification code sent to admin email
+        400:
+          description: Invalid request - Bad email format
+        404:
+          description: Admin not found
+
+  /admin/verify:
+    post:
+      tags:
+        - Admin Authentication
+      summary: Verify admin login
+      description: Verifies the OTP code and generates an admin token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminVerifyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminVerifyRequest'
+      responses:
+        200:
+          description: Admin login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Admin login successful
+                  data:
+                    type: object
+                    properties:
+                      adminToken:
+                        type: string
+                      admin:
+                        $ref: '#/components/schemas/Admin'
+        400:
+          description: Invalid verification code
+
+  /admin/create:
+    post:
+      tags:
+        - Admin Management
+      security:
+        - AdminAuth: [ ]
+      summary: Create a new admin
+      description: Creates a new admin (requires super admin privileges)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAdminRequest'
+      responses:
+        201:
+          description: New admin created successfully
+          content:
+            multipart/form-data:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: New admin created successfully
+                  data:
+                    $ref: '#/components/schemas/Admin'
+        400:
+          description: Admin with this email already exists
+        403:
+          description: Only super admin can create new admins
+
+  /admin/admins:
+    get:
+      tags:
+        - Admin Management
+      security:
+        - AdminAuth: [ ]
+      summary: Get all admins
+      description: Retrieves a list of all admins
+      responses:
+        200:
+          description: Admins retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Admins retrieved successfully
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Admin'
+
+  /admin/delete:
+    delete:
+      tags:
+        - Admin Management
+      security:
+        - AdminAuth: [ ]
+      summary: Delete an admin
+      description: Deletes an admin by ID (requires super admin privileges)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DeleteAdminRequest'
+      responses:
+        200:
+          description: Admin deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Admin deleted successfully
+        403:
+          description: Only super admin can delete admins
+        404:
+          description: Admin not found
+
+  /admin/block-user:
+    post:
+      tags:
+        - User Management
+      security:
+        - AdminAuth: [ ]
+      summary: Block a user
+      description: Blocks a user and adds entry to block history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserActionRequest'
+      responses:
+        200:
+          description: User blocked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: User blocked successfully
+        400:
+          description: User is already blocked or user ID is required
+        404:
+          description: User not found
+
+  /admin/unblock-user:
+    post:
+      tags:
+        - User Management
+      security:
+        - AdminAuth: [ ]
+      summary: Unblock a user
+      description: Unblocks a user and adds entry to unblock history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserActionRequest'
+      responses:
+        200:
+          description: User unblocked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: User unblocked successfully
+        400:
+          description: User is not blocked or user ID is required
+        404:
+          description: User not found
+
+  /admin/deactivate-user:
+    post:
+      tags:
+        - User Management
+      security:
+        - AdminAuth: [ ]
+      summary: Deactivate a user
+      description: Deactivates a user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+              required:
+                - userId
+      responses:
+        200:
+          description: User deactivated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: User deactivated successfully
+        400:
+          description: User is already deactivated or user ID is required
+        404:
+          description: User not found
+
+  /admin/activate-user:
+    post:
+      tags:
+        - User Management
+      security:
+        - AdminAuth: [ ]
+      summary: Activate a user
+      description: Activates a deactivated user account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+              required:
+                - userId
+      responses:
+        200:
+          description: User activated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: User activated successfully
+        400:
+          description: User is already activated or user ID is required
+        404:
+          description: User not found
+
+  /admin/users:
+    get:
+      tags:
+        - User Management
+      security:
+        - AdminAuth: [ ]
+      summary: Get all users
+      description: Retrieves a list of all users with filtering options
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number for pagination
+        - in: query
+          name: size
+          schema:
+            type: integer
+          description: Number of items per page
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Search query for user name or email
+        - in: query
+          name: isBlocked
+          schema:
+            type: boolean
+          description: Filter by blocked status
+        - in: query
+          name: isDeactivated
+          schema:
+            type: boolean
+          description: Filter by deactivation status
+        - in: query
+          name: userType
+          schema:
+            type: string
+            enum: [ vendor, customer ]
+          description: Filter by user type
+      responses:
+        200:
+          description: Users retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Users retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      users:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/User'
+                      count:
+                        type: integer
+                      totalPages:
+                        type: integer
+
+  /admin/user/{id}:
+    get:
+      tags:
+        - User Management
+      security:
+        - AdminAuth: [ ]
+      summary: Get a single user
+      description: Retrieves details for a specific user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the user to retrieve
+      responses:
+        200:
+          description: User retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: User retrieved successfully
+                  data:
+                    $ref: '#/components/schemas/User'
+        404:
+          description: User not found

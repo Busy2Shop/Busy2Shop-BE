@@ -4,7 +4,7 @@ import { PORT, NODE_ENV } from './utils/constants';
 import { Request } from 'express';
 import fs from 'fs';
 
-// Determine the API patterns to include based on environment
+// Determine the API patterns to include based on the environment
 const getApiPatterns = () => {
     // In production, compiled JS files are used
     if (NODE_ENV === 'production') {
