@@ -252,7 +252,7 @@ export default class AuthController {
 
         const password = await user.$get('password');
         if (!password) {
-            // if email is verified and not activated, create the new password for user
+            // if the email is verified and not activated, create the new password for the user
             if (!user.status.activated) {
                 if (!user.status.emailVerified) {
                     await user.update({ status: { ...user.status, emailVerified: true } });
@@ -408,7 +408,7 @@ export default class AuthController {
         const { firstName, lastName, otherName, displayImage, location, gender, isDeactivated } = req.body;
 
         // eslint-disable-next-line no-undef
-        const file = req.file as Express.Multer.File | undefined;
+        const file = req.file;
         let url;
         if (file) {
             const result = await CloudinaryClientConfig.uploadtoCloudinary({
@@ -487,7 +487,7 @@ export default class AuthController {
                 user: user,
             });
             
-            // Redirect to frontend with tokens
+            // Redirect to the frontend with tokens
             return res.redirect(
                 `${WEBSITE_URL}/auth/social-callback?accessToken=${accessToken}&refreshToken=${refreshToken}`
             );
