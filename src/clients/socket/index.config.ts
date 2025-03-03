@@ -18,7 +18,7 @@ import { DecodedTokenData } from '../../utils/interface';
 import http from 'http';
 
 export default class SocketConfig {
-    private io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
+    private readonly io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
 
     constructor(server: http.Server) {
         this.io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, {
@@ -177,21 +177,21 @@ export default class SocketConfig {
                 logger.info(`User ${socket.data.user.id} left chat for order ${orderId}`);
             });
 
-            // Handle new message
+            // Handle the new message
             socket.on('send-message', async (data) => {
                 try {
                     const { orderId, message, imageUrl } = data;
                     const user = socket.data.user;
                     const roomName = `order:${orderId}`;
 
-                    // Check if chat is active
+                    // Check if the chat is active
                     const isChatActive = await ChatService.isChatActive(orderId);
                     if (!isChatActive) {
                         socket.emit('error', { message: 'Chat is not active for this order' });
                         return;
                     }
 
-                    // Save message to database
+                    // Save message to the database
                     const savedMessage = await ChatService.saveMessage({
                         orderId,
                         senderId: user.id,
