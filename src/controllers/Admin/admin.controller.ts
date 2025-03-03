@@ -85,7 +85,7 @@ export default class AdminController {
     static async createAdmin(req: AdminAuthenticatedRequest, res: Response) {
         const { name, email, isSuperAdmin } = req.body;
 
-        if (req.isSuperAdmin === false) {
+        if (!req.isSuperAdmin) {
             throw new ForbiddenError('Only super admin can create new admins');
         }
 
@@ -136,7 +136,7 @@ export default class AdminController {
 
         const user = await UserService.viewSingleUser(userId);
         
-        // Check if user is already blocked
+        // Check if the user is already blocked
         if (user.settings.isBlocked) {
             throw new BadRequestError('User is already blocked');
         }
@@ -168,7 +168,7 @@ export default class AdminController {
 
         const user = await UserService.viewSingleUser(userId);
         
-        // Check if user is already unblocked
+        // Check if the user is already unblocked
         if (!user.settings.isBlocked) {
             throw new BadRequestError('User is not blocked');
         }
@@ -200,7 +200,7 @@ export default class AdminController {
 
         const user = await UserService.viewSingleUser(userId);
         
-        // Check if user is already deactivated
+        // Check if the user is already deactivated
         if (user.settings.isDeactivated) {
             throw new BadRequestError('User is already deactivated');
         }
@@ -223,7 +223,7 @@ export default class AdminController {
 
         const user = await UserService.viewSingleUser(userId);
         
-        // Check if user is already activated
+        // Check if the user is already activated
         if (!user.settings.isDeactivated) {
             throw new BadRequestError('User is already activated');
         }
@@ -260,7 +260,7 @@ export default class AdminController {
             queryParams.userType = userType;
         }
 
-        // Add search query if provided
+        // Add the search query if provided
         if (q) {
             queryParams.q = q as string;
         }
