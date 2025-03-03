@@ -5,7 +5,7 @@ import { redisClient, redisPubClient, redisSubClient } from './utils/redis';
 import http from 'http';
 import SocketConfig from './clients/socket/index.config';
 
-// Create HTTP server
+// Create the HTTP server
 const server = http.createServer(app);
 
 // Asynchronous function to start the server
