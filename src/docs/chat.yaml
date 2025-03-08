@@ -1,0 +1,266 @@
+openapi: 3.0.0
+info:
+  title: Chat API
+  description: Real-time chat management endpoints for Busy2Shop e-commerce platform
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: ${protocol}://${host}/api/v0
+    description: Development server
+
+components:
+  schemas:
+    ChatMessage:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the chat message
+        orderId:
+          type: string
+          format: uuid
+          description: ID of the order this message belongs to
+        senderId:
+          type: string
+          format: uuid
+          description: ID of the user who sent the message
+        senderType:
+          type: string
+          enum: [ vendor, customer, admin ]
+          description: Type of user who sent the message
+        message:
+          type: string
+          description: The message content
+        imageUrl:
+          type: string
+          nullable: true
+          description: URL of an image attached to the message (if any)
+        isRead:
+          type: boolean
+          description: Whether the message has been read
+        createdAt:
+          type: string
+          format: date-time
+          description: When the message was sent
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the message was last updated
+
+    ChatActivation:
+      type: object
+      properties:
+        orderId:
+          type: string
+          format: uuid
+          description: ID of the order for which chat is activated
+        activatedBy:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: ID of the user who activated the chat
+            type:
+              type: string
+              enum: [ vendor, customer, admin ]
+              description: Type of user who activated the chat
+            name:
+              type: string
+              description: Name of the user who activated the chat
+
+    ChatMessagesResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Chat messages retrieved successfully
+        data:
+          type: object
+          properties:
+            messages:
+              type: array
+              items:
+                $ref: '#/components/schemas/ChatMessage'
+
+    ChatActivationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Chat activated successfully
+        data:
+          $ref: '#/components/schemas/ChatActivation'
+
+    ChatActiveStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        isActive:
+          type: boolean
+          description: Whether chat is active for the order
+        data:
+          nullable: true
+
+    ChatImageUploadResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Chat image uploaded successfully
+        data:
+          type: object
+          properties:
+            imageUrl:
+              type: string
+              description: URL of the uploaded image
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /chat/orders/{orderId}/messages:
+    get:
+      tags:
+        - Chat
+      security:
+        - BearerAuth: [ ]
+      summary: Get chat messages for an order
+      description: Retrieves all chat messages for a specific order
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the order
+      responses:
+        200:
+          description: Chat messages retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessagesResponse'
+        400:
+          description: Order ID is required
+        401:
+          description: Unauthorized - User not authenticated
+        403:
+          description: Forbidden - User does not have access to this order chat
+        404:
+          description: Order not found
+
+  /chat/orders/{orderId}/activate:
+    post:
+      tags:
+        - Chat
+      security:
+        - BearerAuth: [ ]
+      summary: Activate chat for an order
+      description: Activates chat for a specific order
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the order
+      responses:
+        200:
+          description: Chat activated successfully or already active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatActivationResponse'
+        400:
+          description: Order ID is required
+        401:
+          description: Unauthorized - User not authenticated
+        403:
+          description: Forbidden - User does not have access to this order chat
+        404:
+          description: Order not found
+        500:
+          description: Failed to activate chat
+
+  /chat/orders/{orderId}/active:
+    get:
+      tags:
+        - Chat
+      security:
+        - BearerAuth: [ ]
+      summary: Check if chat is active for an order
+      description: Checks whether chat is active for a specific order
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the order
+      responses:
+        200:
+          description: Chat status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatActiveStatusResponse'
+        401:
+          description: Unauthorized - User not authenticated
+        404:
+          description: Order not found
+
+  /chat/upload-image:
+    post:
+      tags:
+        - Chat
+      security:
+        - BearerAuth: [ ]
+      summary: Upload an image for chat
+      description: Uploads an image file to be used in chat messages
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Image file to upload
+      responses:
+        200:
+          description: Image uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatImageUploadResponse'
+        400:
+          description: No image file provided or invalid file format
+        401:
+          description: Unauthorized - User not authenticated
+        500:
+          description: Failed to upload image

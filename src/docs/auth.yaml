@@ -9,8 +9,249 @@ info:
   license:
     name: proprietary
 servers:
-  - url: http://localhost:8000/api/v0
+  - url: ${protocol}://${host}/api/v0
     description: Development server
+components:
+  schemas:
+    UserLogin:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        password:
+          type: string
+          format: password
+          example: "Password123!"
+
+    UserSignup:
+      type: object
+      required:
+        - email
+        - firstName
+        - lastName
+        - password
+        - dob
+        - userType
+        - gender
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        password:
+          type: string
+          format: password
+          example: "Password123!"
+        firstName:
+          type: string
+          example: "John"
+        lastName:
+          type: string
+          example: "Doe"
+        otherName:
+          type: string
+          example: "Smith"
+        gender:
+          type: string
+          example: "male"
+        displayImage:
+          type: string
+          format: uri
+          example: "https://example.com/image.jpg"
+        userType:
+          type: string
+          enum: [ customer, vendor ]
+          example: "customer"
+        location:
+          type: object
+          properties:
+            country:
+              type: string
+              example: "United States"
+            city:
+              type: string
+              example: "New York"
+            address:
+              type: string
+              example: "123 Main St"
+        phone:
+          type: object
+          properties:
+            countryCode:
+              type: string
+              example: "+1"
+            number:
+              type: string
+              example: "2345678900"
+        dob:
+          type: string
+          format: date
+          example: "1990-01-01"
+
+    VerifyEmail:
+      type: object
+      required:
+        - otpCode
+        - email
+      properties:
+        otpCode:
+          type: string
+          example: "123456"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+
+    ForgotPassword:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        redirectUrl:
+          type: string
+          format: uri
+          example: "https://example.com/reset-password"
+
+    ResetPassword:
+      type: object
+      required:
+        - resetToken
+        - email
+        - newPassword
+      properties:
+        resetToken:
+          type: string
+          example: "abc123def456"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        newPassword:
+          type: string
+          format: password
+          example: "NewPassword123!"
+
+    ChangePassword:
+      type: object
+      required:
+        - oldPassword
+        - newPassword
+      properties:
+        oldPassword:
+          type: string
+          format: password
+          example: "OldPassword123!"
+        newPassword:
+          type: string
+          format: password
+          example: "NewPassword123!"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        firstName:
+          type: string
+        lastName:
+          type: string
+        otherName:
+          type: string
+        fullName:
+          type: string
+        gender:
+          type: string
+        displayImage:
+          type: string
+        location:
+          type: object
+          properties:
+            country:
+              type: string
+            city:
+              type: string
+            address:
+              type: string
+        phone:
+          type: object
+          properties:
+            countryCode:
+              type: string
+            number:
+              type: string
+        status:
+          type: object
+          properties:
+            activated:
+              type: boolean
+            emailVerified:
+              type: boolean
+            userType:
+              type: string
+        dob:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpdateProfile:
+      type: object
+      properties:
+        firstName:
+          type: string
+          example: "John"
+        lastName:
+          type: string
+          example: "Doe"
+        otherName:
+          type: string
+          example: "Smith"
+        displayImage:
+          type: string
+          example: "https://example.com/image.jpg"
+        gender:
+          type: string
+          example: "male"
+        location:
+          type: object
+          properties:
+            country:
+              type: string
+              example: "United States"
+            city:
+              type: string
+              example: "New York"
+            address:
+              type: string
+              example: "123 Main St"
+        isDeactivated:
+          type: string
+          enum: [ "true", "false" ]
+          example: "false"
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
 paths:
   /auth/signup:
     post:
@@ -22,80 +263,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - email
-                - firstName
-                - lastName
-                - password
-                - dob
-                - userType
-                - gender
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: "user@example.com"
-                password:
-                  type: string
-                  format: password
-                  example: "Password123!"
-                nin:
-                  type: string
-                  description: National Identification Number (required for vendors)
-                  example: "12345678901"
-                images:
-                  type: array
-                  description: "Additional images for vendor verification"
-                  items:
-                    type: string
-                    format: uri
-                  example: [ "https://example.com/image1.jpg" ]
-                userType:
-                  type: string
-                  enum: [ user, vendor ]
-                  example: "user"
-                firstName:
-                  type: string
-                  example: "John"
-                lastName:
-                  type: string
-                  example: "Doe"
-                otherName:
-                  type: string
-                  example: "Smith"
-                gender:
-                  type: string
-                  example: "male"
-                displayImage:
-                  type: string
-                  format: uri
-                  example: "https://example.com/image.jpg"
-                location:
-                  type: object
-                  properties:
-                    country:
-                      type: string
-                      example: "United States"
-                    city:
-                      type: string
-                      example: "New York"
-                    address:
-                      type: string
-                      example: "123 Main St"
-                phone:
-                  type: object
-                  properties:
-                    countryCode:
-                      type: string
-                      example: "+1"
-                    number:
-                      type: string
-                      example: "2345678900"
-                dob:
-                  type: string
-                  format: date
-                  example: "1990-01-01"
+              $ref: '#/components/schemas/UserSignup'
       responses:
         201:
           description: User created successfully
@@ -114,63 +282,9 @@ paths:
                     type: object
                     properties:
                       user:
-                        type: object
-                        properties:
-                          id:
-                            type: string
-                            format: uuid
-                          email:
-                            type: string
-                            format: email
-                          firstName:
-                            type: string
-                          lastName:
-                            type: string
-                          otherName:
-                            type: string
-                          fullName:
-                            type: string
-                          gender:
-                            type: string
-                          displayImage:
-                            type: string
-                          location:
-                            type: object
-                            properties:
-                              country:
-                                type: string
-                              city:
-                                type: string
-                              address:
-                                type: string
-                          phone:
-                            type: object
-                            properties:
-                              countryCode:
-                                type: string
-                              number:
-                                type: string
-                          status:
-                            type: object
-                            properties:
-                              activated:
-                                type: boolean
-                              emailVerified:
-                                type: boolean
-                              userType:
-                                type: string
-                          dob:
-                            type: string
-                            format: date
-                          createdAt:
-                            type: string
-                            format: date-time
-                          updatedAt:
-                            type: string
-                            format: date-time
+                        $ref: '#/components/schemas/User'
         409:
           description: Email already exists
-
 
   /auth/verifyemail:
     post:
@@ -182,17 +296,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - otpCode
-                - email
-              properties:
-                otpCode:
-                  type: string
-                  example: "123456"
-                email:
-                  type: string
-                  format: email
+              $ref: '#/components/schemas/VerifyEmail'
       responses:
         200:
           description: Email verified successfully
@@ -203,18 +307,21 @@ paths:
                 properties:
                   status:
                     type: string
+                    example: "success"
                   message:
                     type: string
+                    example: "Email verified successfully"
                   data:
                     type: object
                     properties:
                       user:
-                        type: object
+                        $ref: '#/components/schemas/User'
                       accessToken:
                         type: string
                       refreshToken:
                         type: string
-
+        400:
+          description: Invalid OTP code or email already verified
 
   /auth/resendverifyemail:
     get:
@@ -228,10 +335,55 @@ paths:
             type: string
             format: email
           required: true
+          description: User email address
       responses:
         200:
           description: Verification email resent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Email verification code resent successfully"
+                  data:
+                    type: object
+        400:
+          description: Email already verified
 
+  /auth/forgotpassword:
+    post:
+      tags:
+        - Authentication
+      summary: Send password reset instructions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPassword'
+      responses:
+        200:
+          description: Reset instructions sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Reset password instructions sent successfully"
+                  data:
+                    type: string
+        400:
+          description: User not found
 
   /auth/login:
     post:
@@ -243,17 +395,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - email
-                - password
-              properties:
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-                  format: password
+              $ref: '#/components/schemas/UserLogin'
       responses:
         200:
           description: Login successful
@@ -264,17 +406,51 @@ paths:
                 properties:
                   status:
                     type: string
+                    example: "success"
                   message:
                     type: string
+                    example: "Login successful"
                   data:
                     type: object
                     properties:
                       user:
-                        type: object
+                        $ref: '#/components/schemas/User'
                       accessToken:
                         type: string
                       refreshToken:
                         type: string
+        400:
+          description: Invalid credentials or email not verified
+
+  /auth/resetpassword:
+    post:
+      tags:
+        - Authentication
+      summary: Reset user password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPassword'
+      responses:
+        200:
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Password reset successfully. Please login with your new password"
+                  data:
+                    type: string
+        400:
+          description: Invalid reset token or password format
 
   /auth/changepassword:
     post:
@@ -282,39 +458,55 @@ paths:
         - Authentication
       security:
         - BearerAuth: [ ]
-      summary: Change password
+      summary: Change user password
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - oldPassword
-                - newPassword
-              properties:
-                oldPassword:
-                  type: string
-                newPassword:
-                  type: string
+              $ref: '#/components/schemas/ChangePassword'
       responses:
         200:
           description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Password changed successfully"
+                  data:
+                    type: string
+        400:
+          description: Invalid old password or new password format
 
   /auth/logout:
     get:
       tags:
         - Authentication
       security:
-        - BearerAuth: [ ] ## Paste only the access token
-            ## in the authorized field in the
-            ## swagger documentation on the browser
-            ## without the word "Bearer".
-          ## ONLY PASTE IN THE TOKEN.
+        - BearerAuth: [ ]
       summary: Logout user
       responses:
         200:
           description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Logout successful"
+                  data:
+                    type: string
 
   /auth/loggeduser:
     get:
@@ -326,4 +518,122 @@ paths:
       responses:
         200:
           description: User data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "user data retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
 
+  /auth/update-profile:
+    patch:
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: [ ]
+      summary: Update user profile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                otherName:
+                  type: string
+                displayImage:
+                  type: string
+                file:
+                  type: string
+                  format: binary
+                gender:
+                  type: string
+                location:
+                  type: object
+                  properties:
+                    country:
+                      type: string
+                    city:
+                      type: string
+                    address:
+                      type: string
+                isDeactivated:
+                  type: string
+                  enum: [ "true", "false" ]
+      responses:
+        200:
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "User updated successfully"
+                  data:
+                    $ref: '#/components/schemas/User'
+        400:
+          description: No new data to update
+
+  /auth/authtoken:
+    get:
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: [ ]
+      summary: Refresh access token using refresh token
+      responses:
+        200:
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Refresh successful"
+                  data:
+                    type: object
+                    properties:
+                      accessToken:
+                        type: string
+
+  /auth/google:
+    get:
+      tags:
+        - Authentication
+      summary: Initiate Google OAuth authentication
+      responses:
+        302:
+          description: Redirect to Google OAuth consent screen
+
+  /auth/google/callback:
+    get:
+      tags:
+        - Authentication
+      summary: Google OAuth callback endpoint
+      responses:
+        302:
+          description: Redirect to frontend with authentication tokens on success
