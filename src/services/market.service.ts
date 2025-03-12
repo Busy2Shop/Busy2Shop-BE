@@ -104,8 +104,8 @@ export default class MarketService {
         // Handle pagination
         if (page && size && page > 0 && size > 0) {
             const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
-            queryOptions.limit = limit || 0;
-            queryOptions.offset = offset || 0;
+            queryOptions.limit = limit ?? 0;
+            queryOptions.offset = offset ?? 0;
         }
 
         // TODO: Add location-based filtering with PostGIS or Sequelize's geospatial operators

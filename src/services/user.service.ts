@@ -124,8 +124,8 @@ export default class UserService {
 
         if (page && size && page > 0 && size > 0) {
             const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
-            queryOptions.limit = limit || 0;
-            queryOptions.offset = offset || 0;
+            queryOptions.limit = limit ?? 0;
+            queryOptions.offset = offset ?? 0;
         }
 
         const { rows: users, count } = await User.findAndCountAll(queryOptions);
@@ -225,7 +225,7 @@ export default class UserService {
             if (!user.googleId) {
                 await user.update({
                     googleId: profileData.googleId,
-                    displayImage: profileData.displayImage || user.displayImage,
+                    displayImage: profileData.displayImage ?? user.displayImage,
                 });
             }
             

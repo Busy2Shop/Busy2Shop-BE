@@ -88,8 +88,8 @@ export default class ProductService {
         // Handle pagination
         if (page && size && page > 0 && size > 0) {
             const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
-            queryOptions.limit = limit || 0;
-            queryOptions.offset = offset || 0;
+            queryOptions.limit = limit ?? 0;
+            queryOptions.offset = offset ?? 0;
         }
 
         const { rows: products, count } = await Product.findAndCountAll(queryOptions);
