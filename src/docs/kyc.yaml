@@ -30,7 +30,7 @@ components:
           properties:
             userType:
               type: string
-              enum: [vendor, customer]
+              enum: [agent, customer]
             emailVerified:
               type: boolean
         settings:
@@ -39,7 +39,7 @@ components:
             isKycVerified:
               type: boolean
               description: Whether the user's KYC verification is complete
-        vendorMeta:
+        agentMeta:
           type: object
           properties:
             nin:
@@ -67,7 +67,7 @@ components:
       properties:
         isVerified:
           type: boolean
-          description: Whether the vendor is verified
+          description: Whether the agent is verified
         documents:
           type: object
           properties:
@@ -87,7 +87,7 @@ components:
 paths:
   /kyc/nin:
     post:
-      summary: Upload NIN document for vendor verification
+      summary: Upload NIN document for agent verification
       tags:
         - KYC
       security:
@@ -122,11 +122,11 @@ paths:
         '401':
           description: Unauthorized - Authentication required
         '403':
-          description: Forbidden - Only vendors can upload NIN or email not verified
+          description: Forbidden - Only agents can upload NIN or email not verified
 
   /kyc/images:
     post:
-      summary: Upload verification images for vendor
+      summary: Upload verification images for agent
       tags:
         - KYC
       security:
@@ -168,11 +168,11 @@ paths:
         '401':
           description: Unauthorized - Authentication required
         '403':
-          description: Forbidden - Only vendors can upload verification images or email not verified
+          description: Forbidden - Only agents can upload verification images or email not verified
 
   /kyc/status:
     get:
-      summary: Get vendor verification status
+      summary: Get agent verification status
       tags:
         - KYC
       security:
@@ -196,4 +196,4 @@ paths:
         '401':
           description: Unauthorized - Authentication required
         '403':
-          description: Forbidden - Only vendors can check verification status or email not verified
+          description: Forbidden - Only agents can check verification status or email not verified
