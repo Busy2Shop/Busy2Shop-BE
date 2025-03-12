@@ -42,8 +42,8 @@ export default class AuthController {
         }
 
         // Validate user type
-        if (!userType || !['customer', 'vendor'].includes(userType)) {
-            throw new BadRequestError('User type must be either "customer" or "vendor"');
+        if (!userType || !['customer', 'agent'].includes(userType)) {
+            throw new BadRequestError('User type must be either "customer" or "agent"');
         }
 
         // Validate email format
@@ -67,8 +67,8 @@ export default class AuthController {
             displayImage,
             dob,
             gender,
-            // Vendor metadata is now handled separately
-            // vendorMeta: userType === 'vendor' ? {
+            // Agent metadata is now handled separately
+            // agentMeta: userType === 'agent' ? {
             //     nin,
             //     images,
             // } : undefined,

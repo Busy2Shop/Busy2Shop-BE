@@ -65,7 +65,7 @@ components:
           example: "https://example.com/image.jpg"
         userType:
           type: string
-          enum: [ customer, vendor ]
+          enum: [ customer, agent ]
           example: "customer"
         location:
           type: object
