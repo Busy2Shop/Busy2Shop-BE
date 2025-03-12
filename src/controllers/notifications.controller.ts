@@ -12,7 +12,7 @@ export default class NotificationController {
         const profile = req.user;
         const { read, page, size } = req.query;
 
-        // Check if profile exists
+        // Check if the profile exists
         if (!profile) {
             throw new BadRequestError('Please complete your profile');
         }
@@ -24,7 +24,7 @@ export default class NotificationController {
 
         // Determine the read status or leave it undefined if not specified
         await Database.transaction(async (transaction: Transaction) => {
-            let paginationQuery: { q?: string | undefined, page?: number, size?: number } = {
+            let paginationQuery: { q?: string, page?: number, size?: number } = {
                 ...(read && { q: read }),
             };
             let paginate = false;
@@ -35,7 +35,7 @@ export default class NotificationController {
                     page: Number(page),
                     size: Number(size),
                 };
-                paginate = paginationQuery.page && paginationQuery.size && paginationQuery.page > 0 && paginationQuery.size > 0 ? true : false;
+                paginate = !!(paginationQuery.page && paginationQuery.size && paginationQuery.page > 0 && paginationQuery.size > 0);
             }
 
             console.log('paginate', paginate);

@@ -65,9 +65,9 @@ export default class Password extends Model<Password | IPassword> {
         return bcrypt.compareSync(transactionPin, this.transactionPin);
     }
 
-    // remove password from json response
+    // remove password from the JSON response
     toJSON() {
-        const values = Object.assign({}, this.get());
+        const values = { ...this.get() };
         delete values.password;
         return values;
     }
