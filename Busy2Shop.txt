@@ -1,4 +1,4 @@
-vendor auth login.
+agent auth login.
 {
   "email": "ghostofvendor@yopmail.com",
   "password": "P@ssword123!"
