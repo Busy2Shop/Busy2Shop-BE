@@ -7,6 +7,31 @@ import OrderService from '../services/order.service';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
 
 export default class ChatController {
+
+    /**
+     * Validates if a user has permission to access an order's chat
+     *
+     * @param order - Order object containing agent and customer identifiers
+     * @param userId - ID of the user attempting to access the chat
+     * @param userType - Type of user ('agent' or 'customer')
+     * @throws {BadRequestError} - When user doesn't have permission to access the chat
+     *
+     * For agents: Access is granted only if the order's agentId matches the userId
+     * For customers: Access is granted only if the order's customerId matches the userId
+     */
+    private static verifyOrderAccess(
+        order: { agentId?: string; customerId?: string },
+        userId: string,
+        userType: string): void {
+        // Refactored to avoid duplicate BadRequestError
+        const hasAccess = (userType === 'agent' && order.agentId === userId) ||
+                        (userType === 'customer' && order.customerId === userId);
+
+        if (!hasAccess) {
+            throw new BadRequestError('You do not have access to this order chat');
+        }
+    }
+
     static async getOrderMessages(req: AuthenticatedRequest, res: Response) {
         const { orderId } = req.params;
         const userId = req.user.id;
@@ -15,17 +40,14 @@ export default class ChatController {
             throw new BadRequestError('Order ID is required');
         }
 
-        // Verify the order exists and user has access to it
+        // Verify the order exists and the user has access to it
         const order = await OrderService.getOrder(orderId);
 
-        // Check if user is authorized to access this order's chat
-        if (req.user.status.userType === 'vendor' && order.vendorId !== userId) {
-            throw new BadRequestError('You do not have access to this order chat');
-        } else if (req.user.status.userType === 'customer' && order.customerId !== userId) {
-            throw new BadRequestError('You do not have access to this order chat');
-        }
+        // Check if the user is authorized to access this order's chat
+        ChatController.verifyOrderAccess(order, userId, req.user.status.userType);
 
-        // Check if chat is active
+
+        // Check if the chat is active
         const isChatActive = await ChatService.isChatActive(orderId);
         if (!isChatActive) {
             throw new BadRequestError('Chat is not active for this order');
@@ -93,17 +115,13 @@ export default class ChatController {
             throw new BadRequestError('Order ID is required');
         }
 
-        // Verify the order exists and user has access to it
+        // Verify the order exists and the user has access to it
         const order = await OrderService.getOrder(orderId);
 
-        // Check if user is authorized to access this order's chat
-        if (userType === 'vendor' && order.vendorId !== userId) {
-            throw new BadRequestError('You do not have access to this order chat');
-        } else if (userType === 'customer' && order.customerId !== userId) {
-            throw new BadRequestError('You do not have access to this order chat');
-        }
+        // Check if the user is authorized to access this order's chat
+        ChatController.verifyOrderAccess(order, userId, userType);
 
-        // Check if chat is already active
+        // Check if the chat is already active
         const isChatActive = await ChatService.isChatActive(orderId);
         if (isChatActive) {
             const activationData = await ChatService.getChatActivationData(orderId);
@@ -120,7 +138,7 @@ export default class ChatController {
             orderId,
             activatedBy: {
                 id: userId,
-                type: userType as 'vendor' | 'customer' | 'admin',
+                type: userType as 'agent' | 'customer' | 'admin',
                 name: userName,
             },
         };
@@ -165,9 +183,9 @@ export default class ChatController {
     static async uploadChatImage(req: AuthenticatedRequest, res: Response) {
         const userId = req.user.id;
 
-        // Check if file exists in the request
+        // Check if the file exists in the request
         // eslint-disable-next-line no-undef
-        const file = req.file as Express.Multer.File | undefined;
+        const file = req.file;
 
         if (!file) {
             throw new BadRequestError('No image file provided');
@@ -181,7 +199,7 @@ export default class ChatController {
             type: 'chat_image',
         });
 
-        if (!result || !result.url) {
+        if (!result?.url) {
             throw new BadRequestError('Image upload failed');
         }
 

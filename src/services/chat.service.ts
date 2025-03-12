@@ -1,9 +1,8 @@
-import { Op } from 'sequelize';
+import { Op,  Transaction  } from 'sequelize';
 import { Database } from '../models';
 import ChatMessage, { SenderType } from '../models/chatMessage.model';
 import User from '../models/user.model';
 import { redisClient } from '../utils/redis';
-import { Transaction } from 'sequelize';
 import { ChatMessageType } from 'clients/socket/types';
 
 export interface ChatActivationType {
@@ -34,7 +33,7 @@ export class ChatService {
                 senderId,
                 senderType,
                 message,
-                imageUrl: imageUrl || null,
+                imageUrl: imageUrl ?? null,
                 isRead: false,
             } as ChatMessage, { transaction });
 
@@ -51,7 +50,7 @@ export class ChatService {
                 senderId: newMessage.senderId,
                 senderType: newMessage.senderType,
                 message: newMessage.message,
-                imageUrl: newMessage.imageUrl || undefined,
+                imageUrl: newMessage.imageUrl ?? undefined,
                 isRead: newMessage.isRead,
                 createdAt: newMessage.createdAt,
                 updatedAt: newMessage.updatedAt,
@@ -81,7 +80,7 @@ export class ChatService {
             senderId: message.senderId,
             senderType: message.senderType,
             message: message.message,
-            imageUrl: message.imageUrl || undefined,
+            imageUrl: message.imageUrl ?? undefined,
             isRead: message.isRead,
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
