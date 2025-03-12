@@ -41,7 +41,7 @@ components:
         actualPrice:
           type: number
           format: decimal
-          description: Actual price of the item (added by vendor)
+          description: Actual price of the item (added by agent)
         productId:
           type: string
           format: uuid
@@ -75,10 +75,10 @@ components:
           type: string
           format: uuid
           description: ID of the market for this shopping list
-        vendorId:
+        agentId:
           type: string
           format: uuid
-          description: ID of the vendor assigned to this list
+          description: ID of the agent assigned to this list
         items:
           type: array
           items:
@@ -227,11 +227,11 @@ paths:
         '401':
           description: Unauthorized
 
-  /shopping-list/vendor:
+  /shopping-list/agent:
     get:
       tags:
         - Shopping List
-      summary: Get vendor's assigned shopping lists
+      summary: Get agent's assigned shopping lists
       security:
         - BearerAuth: [ ]
       parameters:
@@ -279,7 +279,7 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden - Not a vendor
+          description: Forbidden - Not an agent
 
   /shopping-list/{id}:
     get:
@@ -701,7 +701,7 @@ paths:
     post:
       tags:
         - Shopping List Status Management
-      summary: Accept a shopping list (vendor only)
+      summary: Accept a shopping list (agent only)
       security:
         - BearerAuth: [ ]
       parameters:
@@ -733,7 +733,7 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden - Not a vendor
+          description: Forbidden - Not an agent
         '404':
           description: Shopping list not found
 
@@ -741,7 +741,7 @@ paths:
     post:
       tags:
         - Shopping List Status Management
-      summary: Assign vendor to shopping list
+      summary: Assign agent to shopping list
       security:
         - BearerAuth: [ ]
       parameters:
@@ -759,15 +759,15 @@ paths:
             schema:
               type: object
               properties:
-                vendorId:
+                agentId:
                   type: string
                   format: uuid
-                  description: ID of the vendor to assign
+                  description: ID of the agent to assign
               required:
-                - vendorId
+                - agentId
       responses:
         '200':
-          description: Vendor assigned to shopping list successfully
+          description: Agent assigned to shopping list successfully
           content:
             application/json:
               schema:
@@ -778,7 +778,7 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: Vendor assigned to shopping list successfully
+                    example: Agent assigned to shopping list successfully
                   data:
                     $ref: '#/components/schemas/ShoppingList'
         '400':
@@ -786,15 +786,15 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden - Not authorized to assign vendors
+          description: Forbidden - Not authorized to assign agents
         '404':
-          description: Shopping list or vendor not found
+          description: Shopping list or agent not found
 
   /shopping-list/{id}/prices:
     post:
       tags:
         - Shopping List Status Management
-      summary: Update actual prices (vendor only)
+      summary: Update actual prices (agent only)
       security:
         - BearerAuth: [ ]
       parameters:
@@ -849,6 +849,6 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden - Not the assigned vendor
+          description: Forbidden - Not the assigned agent
         '404':
           description: Shopping list not found

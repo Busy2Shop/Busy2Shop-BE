@@ -9,7 +9,7 @@ router.use( basicAuth('access'));
 
 router.post('/', AuthenticatedController(ShoppingListController.createShoppingList));
 router.get('/', AuthenticatedController(ShoppingListController.getUserShoppingLists));
-router.get('/vendor', AuthenticatedController(ShoppingListController.getVendorAssignedLists));
+router.get('/agent', AuthenticatedController(ShoppingListController.getAgentAssignedLists));
 router.get('/:id', AuthenticatedController(ShoppingListController.getShoppingList));
 router.put('/:id', AuthenticatedController(ShoppingListController.updateShoppingList));
 router.delete('/:id', AuthenticatedController(ShoppingListController.deleteShoppingList));
@@ -23,7 +23,7 @@ router.delete('/:listId/items/:itemId', AuthenticatedController(ShoppingListCont
 router.post('/:id/submit', AuthenticatedController(ShoppingListController.submitShoppingList));
 router.patch('/:id/status',AuthenticatedController( ShoppingListController.updateListStatus));
 router.post('/:id/accept', AuthenticatedController(ShoppingListController.acceptShoppingList));
-router.post('/:id/assign', AuthenticatedController(ShoppingListController.assignVendorToList));
+router.post('/:id/assign', AuthenticatedController(ShoppingListController.assignAgentToList));
 router.post('/:id/prices', AuthenticatedController(ShoppingListController.updateActualPrices));
 
 export default router;

@@ -17,6 +17,38 @@ export interface IViewShoppingListsQuery {
 }
 
 export default class ShoppingListService {
+    
+    /**
+     * Executes a paginated query for shopping lists and formats the results
+     *
+     * @param queryOptions - The query configuration for finding shopping lists
+     * @param queryData - Pagination parameters
+     * @returns Formatted query results with pagination metadata if applicable
+     */
+    private static async executePaginatedListQuery(
+        queryOptions: FindAndCountOptions<ShoppingList>,
+        queryData?: IViewShoppingListsQuery
+    ): Promise<{ lists: ShoppingList[], count: number, totalPages?: number }> {
+        const { page, size } = queryData || {};
+
+        // Handle pagination
+        if (page && size && page > 0 && size > 0) {
+            const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
+            queryOptions.limit = limit ?? 0;
+            queryOptions.offset = offset ?? 0;
+        }
+
+        const { rows: lists, count } = await ShoppingList.findAndCountAll(queryOptions);
+    
+        // Calculate pagination metadata if applicable
+        if (page && size && lists.length > 0) {
+            const totalPages = Pagination.estimateTotalPage({ count, limit: size } as IPaging);
+            return { lists, count, ...totalPages };
+        } else {
+            return { lists, count };
+        }
+    }
+    
     static async createShoppingList(listData: IShoppingList, items: IShoppingListItem[] = []): Promise<ShoppingList> {
         // Validate required fields
         if (!listData.name || !listData.customerId) {
@@ -52,7 +84,7 @@ export default class ShoppingListService {
     }
 
     static async viewUserShoppingLists(customerId: string, queryData?: IViewShoppingListsQuery): Promise<{ lists: ShoppingList[], count: number, totalPages?: number }> {
-        const { page, size, status, marketId } = queryData || {};
+        const { status, marketId } = queryData || {};
 
         const where: Record<string, unknown> = { customerId };
 
@@ -81,7 +113,7 @@ export default class ShoppingListService {
                 },
                 {
                     model: User,
-                    as: 'vendor',
+                    as: 'agent',
                     attributes: ['id', 'firstName', 'lastName', 'email'],
                     required: false,
                 },
@@ -90,28 +122,15 @@ export default class ShoppingListService {
         };
 
         // Handle pagination
-        if (page && size && page > 0 && size > 0) {
-            const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
-            queryOptions.limit = limit || 0;
-            queryOptions.offset = offset || 0;
-        }
+        return this.executePaginatedListQuery(queryOptions, queryData);
 
-        const { rows: lists, count } = await ShoppingList.findAndCountAll(queryOptions);
-
-        // Calculate pagination metadata if applicable
-        if (page && size && lists.length > 0) {
-            const totalPages = Pagination.estimateTotalPage({ count, limit: size } as IPaging);
-            return { lists, count, ...totalPages };
-        } else {
-            return { lists, count };
-        }
     }
 
-    static async viewVendorAssignedLists(vendorId: string, queryData?: IViewShoppingListsQuery): Promise<{ lists: ShoppingList[], count: number, totalPages?: number }> {
-        const { page, size, status } = queryData || {};
+    static async viewAgentAssignedLists(agentId: string, queryData?: IViewShoppingListsQuery): Promise<{ lists: ShoppingList[], count: number, totalPages?: number }> {
+        const { status } = queryData || {};
 
         const where: Record<string, unknown> = {
-            vendorId,
+            agentId,
             status: {
                 [Op.ne]: 'draft', // Exclude lists in draft status
             },
@@ -145,21 +164,7 @@ export default class ShoppingListService {
         };
 
         // Handle pagination
-        if (page && size && page > 0 && size > 0) {
-            const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
-            queryOptions.limit = limit || 0;
-            queryOptions.offset = offset || 0;
-        }
-
-        const { rows: lists, count } = await ShoppingList.findAndCountAll(queryOptions);
-
-        // Calculate pagination metadata if applicable
-        if (page && size && lists.length > 0) {
-            const totalPages = Pagination.estimateTotalPage({ count, limit: size } as IPaging);
-            return { lists, count, ...totalPages };
-        } else {
-            return { lists, count };
-        }
+        return this.executePaginatedListQuery(queryOptions, queryData);
     }
 
     static async getShoppingList(id: string): Promise<ShoppingList> {
@@ -181,7 +186,7 @@ export default class ShoppingListService {
                 },
                 {
                     model: User,
-                    as: 'vendor',
+                    as: 'agent',
                     attributes: ['id', 'firstName', 'lastName', 'email'],
                     required: false,
                 },
@@ -198,12 +203,12 @@ export default class ShoppingListService {
     static async updateShoppingList(id: string, customerId: string, updateData: Partial<IShoppingList>): Promise<ShoppingList> {
         const list = await this.getShoppingList(id);
 
-        // Check if user is the owner of the list
+        // Check if the user is the owner of the list
         if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to update this shopping list');
         }
 
-        // Cannot update certain properties if list is no longer in draft status
+        // Cannot update certain properties if the list is no longer in draft status
         if (list.status !== 'draft' && (updateData.marketId || updateData.name)) {
             throw new BadRequestError('Cannot modify market or name of a submitted shopping list');
         }
@@ -216,7 +221,7 @@ export default class ShoppingListService {
     static async deleteShoppingList(id: string, customerId: string): Promise<void> {
         const list = await this.getShoppingList(id);
 
-        // Check if user is the owner of the list
+        // Check if the user is the owner of the list
         if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to delete this shopping list');
         }
@@ -241,23 +246,23 @@ export default class ShoppingListService {
     static async addItemToList(listId: string, customerId: string, itemData: IShoppingListItem): Promise<ShoppingListItem> {
         const list = await this.getShoppingList(listId);
 
-        // Check if user is the owner of the list
+        // Check if the user is the owner of the list
         if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to modify this shopping list');
         }
 
-        // Can only add items if list is in draft status
+        // Can only add items if the list is in draft status
         if (list.status !== 'draft') {
             throw new BadRequestError('Cannot add items to a submitted shopping list');
         }
 
-        // If product ID is provided, get its info
+        // If product ID is provided, get its information
         if (itemData.productId) {
             const product = await Product.findByPk(itemData.productId);
             if (!product) {
                 throw new NotFoundError('Product not found');
             }
-            // Use product info for the item
+            // Use product information for the item
             itemData.name = product.name;
             itemData.estimatedPrice = product.price;
         }
@@ -267,7 +272,7 @@ export default class ShoppingListService {
             shoppingListId: listId,
         });
 
-        // Update estimated total of the shopping list
+        // Update estimated total of the shopping lists
         await this.updateShoppingListTotal(listId);
 
         return newItem;
@@ -276,12 +281,12 @@ export default class ShoppingListService {
     static async updateListItem(listId: string, itemId: string, customerId: string, updateData: Partial<IShoppingListItem>): Promise<ShoppingListItem> {
         const list = await this.getShoppingList(listId);
 
-        // Check if user is the owner of the list
+        // Check if the user is the owner of the list
         if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to modify this shopping list');
         }
 
-        // Can only update items if list is in draft status
+        // Can only update items if the list is in draft status
         if (list.status !== 'draft') {
             throw new BadRequestError('Cannot update items in a submitted shopping list');
         }
@@ -299,7 +304,7 @@ export default class ShoppingListService {
 
         await item.update(updateData);
 
-        // Update estimated total of the shopping list
+        // Update estimated total of the shopping lists
         await this.updateShoppingListTotal(listId);
 
         return item;
@@ -308,12 +313,12 @@ export default class ShoppingListService {
     static async removeItemFromList(listId: string, itemId: string, customerId: string): Promise<void> {
         const list = await this.getShoppingList(listId);
 
-        // Check if user is the owner of the list
+        // Check if the user is the owner of the list
         if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to modify this shopping list');
         }
 
-        // Can only remove items if list is in draft status
+        // Can only remove items if the list is in draft status
         if (list.status !== 'draft') {
             throw new BadRequestError('Cannot remove items from a submitted shopping list');
         }
@@ -331,7 +336,7 @@ export default class ShoppingListService {
 
         await item.destroy();
 
-        // Update estimated total of the shopping list
+        // Update estimated total of the shopping lists
         await this.updateShoppingListTotal(listId);
     }
 
@@ -358,7 +363,7 @@ export default class ShoppingListService {
     static async submitShoppingList(id: string, customerId: string): Promise<ShoppingList> {
         const list = await this.getShoppingList(id);
 
-        // Check if user is the owner of the list
+        // Check if the user is the owner of the list
         if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to submit this shopping list');
         }
@@ -391,7 +396,7 @@ export default class ShoppingListService {
     static async createOrderFromShoppingList(listId: string, customerId: string, orderData: Partial<IOrder>): Promise<Order> {
         const list = await this.getShoppingList(listId);
 
-        // Check if user is the owner of the list
+        // Check if the user is the owner of the list
         if (list.customerId !== customerId) {
             throw new ForbiddenError('You are not authorized to create an order from this shopping list');
         }
@@ -415,28 +420,28 @@ export default class ShoppingListService {
         return order;
     }
 
-    static async assignVendorToList(listId: string, vendorId: string): Promise<ShoppingList> {
+    static async assignAgentToList(listId: string, agentId: string): Promise<ShoppingList> {
         const list = await this.getShoppingList(listId);
 
-        // Can only assign vendors to pending lists
+        // Can only assign agents to pending lists
         if (list.status !== 'pending') {
-            throw new BadRequestError('Can only assign vendors to pending shopping lists');
+            throw new BadRequestError('Can only assign agents to pending shopping lists');
         }
 
-        // Make sure the vendor exists
-        const vendor = await User.findByPk(vendorId);
-        if (!vendor) {
-            throw new NotFoundError('Vendor not found');
+        // Make sure the agent exists
+        const agent = await User.findByPk(agentId);
+        if (!agent) {
+            throw new NotFoundError('Agent not found');
         }
 
-        // Make sure the vendor is actually a vendor
-        if (vendor.status.userType !== 'vendor') {
-            throw new BadRequestError('Selected user is not a vendor');
+        // Make sure the agent is actually an agent
+        if (agent.status.userType !== 'agent') {
+            throw new BadRequestError('Selected user is not a agent');
         }
 
-        // Update the vendor and status
+        // Update the agent and status
         await list.update({
-            vendorId,
+            agentId: agentId,
             status: 'accepted',
         });
 
@@ -457,15 +462,15 @@ export default class ShoppingListService {
             throw new NotFoundError('User not found');
         }
 
-        if (user.status.userType === 'vendor') {
-            // Vendors can only update lists assigned to them
-            if (list.vendorId !== customerId) {
+        if (user.status.userType === 'agent') {
+            // Agents can only update lists assigned to them
+            if (list.agentId !== customerId) {
                 throw new ForbiddenError('You are not assigned to this shopping list');
             }
 
-            // Vendors can only set certain statuses
+            // Agents can only set certain statuses
             if (!['processing', 'completed'].includes(status)) {
-                throw new ForbiddenError('Vendors can only update to processing or completed status');
+                throw new ForbiddenError('Agents can only update to processing or completed status');
             }
         } else if (list.customerId === customerId) {
             // List owners can cancel or modify their own lists
@@ -473,7 +478,7 @@ export default class ShoppingListService {
                 throw new ForbiddenError('You can only cancel or revert to draft your shopping lists');
             }
 
-            // Can't revert to draft if already accepted by a vendor
+            // Can't revert to draft if already accepted by an agent
             if (status === 'draft' && ['accepted', 'processing', 'completed'].includes(list.status)) {
                 throw new BadRequestError('Cannot revert to draft a list that has been accepted or processed');
             }
@@ -500,15 +505,15 @@ export default class ShoppingListService {
         return validTransitions[currentStatus]?.includes(newStatus) || false;
     }
 
-    static async updateActualPrices(listId: string, vendorId: string, items: { itemId: string, actualPrice: number }[]): Promise<ShoppingList> {
+    static async updateActualPrices(listId: string, agentId: string, items: { itemId: string, actualPrice: number }[]): Promise<ShoppingList> {
         const list = await this.getShoppingList(listId);
 
-        // Check if vendor is assigned to this list
-        if (list.vendorId !== vendorId) {
+        // Check if the agent is assigned to this list
+        if (list.agentId !== agentId) {
             throw new ForbiddenError('You are not assigned to this shopping list');
         }
 
-        // Can only update prices if list is in accepted or processing status
+        // Can only update prices if the list is in accepted or processing status
         if (!['accepted', 'processing'].includes(list.status)) {
             throw new BadRequestError('Cannot update prices in the current list status');
         }

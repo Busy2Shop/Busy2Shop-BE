@@ -47,7 +47,7 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
 
     @Column({
         type: DataType.DECIMAL(10, 2),
-        allowNull: true, // Actual price added by vendor when purchased
+        allowNull: true, // Actual price added by agent when purchased
     })
         actualPrice: number;
 

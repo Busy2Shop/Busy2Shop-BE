@@ -49,7 +49,7 @@ export default class ShoppingList extends Model<ShoppingList | IShoppingList> {
     @IsUUID(4)
     @ForeignKey(() => Market)
     @Column({
-        allowNull: true, // Can be null if user hasn't selected a market yet
+        allowNull: true, // Can be null if the user hasn't selected a market yet
     })
         marketId: string;
 
@@ -59,12 +59,12 @@ export default class ShoppingList extends Model<ShoppingList | IShoppingList> {
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column({
-        allowNull: true, // Null until a vendor accepts the order
+        allowNull: true, // Null until an agent accepts the order
     })
-        vendorId: string;
+        agentId: string;
 
-    @BelongsTo(() => User, 'vendorId')
-        vendor: User;
+    @BelongsTo(() => User, 'agentId')
+        agent: User;
 
     // Relationships
     @HasMany(() => ShoppingListItem)
@@ -79,6 +79,6 @@ export interface IShoppingList {
     status?: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled';
     customerId: string;
     marketId?: string;
-    vendorId?: string;
+    agentId?: string;
 }
 
