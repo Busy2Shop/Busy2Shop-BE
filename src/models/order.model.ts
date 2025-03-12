@@ -60,7 +60,7 @@ export default class Order extends Model<Order | IOrder> {
         type: DataType.TEXT,
         allowNull: true,
     })
-        vendorNotes: string;
+        agentNotes: string;
 
     @Column({
         type: DataType.DATE,
@@ -85,12 +85,12 @@ export default class Order extends Model<Order | IOrder> {
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column({
-        allowNull: true, // Null until a vendor accepts the order
+        allowNull: true, // Null until an agent accepts the order
     })
-        vendorId: string;
+        agentId: string;
 
-    @BelongsTo(() => User, 'vendorId')
-        vendor: User;
+    @BelongsTo(() => User, 'agentId')
+        agent: User;
 
     @IsUUID(4)
     @ForeignKey(() => ShoppingList)
@@ -117,10 +117,10 @@ export interface IOrder {
         additionalDirections?: string;
     };
     customerNotes?: string;
-    vendorNotes?: string;
+    agentNotes?: string;
     acceptedAt?: Date;
     completedAt?: Date;
     customerId: string;
-    vendorId?: string;
+    agentId?: string;
     shoppingListId: string;
 }

@@ -1,10 +1,45 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import OrderService from '../services/order.service';
 import ShoppingListService from '../services/shoppingList.service';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 
 export default class OrderController {
+
+    /**
+     * Extracts and processes standard query parameters from request query object
+     *
+     * @param query - The Express request query object
+     * @returns A record containing processed query parameters
+     *
+     * @remarks
+     * - Converts pagination parameters (page, size) to numbers
+     * - Passes through status parameter as is
+     * - Processes date range parameters (startDate, endDate) as strings
+     *
+     * @example
+     * // From a request with query ?page=2&size=10&status=pending
+     * const queryParams = this.extractOrderQueryParams(req.query);
+     * // Returns: { page: 2, size: 10, status: 'pending' }
+     */
+    private static extractOrderQueryParams(query: Request['query']): Record<string, unknown> {
+        const { page, size, status, startDate, endDate } = query;
+
+        const queryParams: Record<string, unknown> = {};
+
+        if (page && size) {
+            queryParams.page = Number(page);
+            queryParams.size = Number(size);
+        }
+
+        if (status) queryParams.status = status;
+        if (startDate) queryParams.startDate = startDate as string;
+        if (endDate) queryParams.endDate = endDate as string;
+
+        return queryParams;
+    }
+
+
     static async createOrder(req: AuthenticatedRequest, res: Response) {
         const { shoppingListId, deliveryAddress, customerNotes } = req.body;
 
@@ -26,7 +61,7 @@ export default class OrderController {
         const order = await OrderService.createOrder({
             shoppingListId,
             customerId: req.user.id,
-            vendorId: shoppingList.vendorId,
+            agentId: shoppingList.agentId,
             totalAmount,
             serviceFee,
             deliveryFee,
@@ -42,18 +77,7 @@ export default class OrderController {
     }
 
     static async getUserOrders(req: AuthenticatedRequest, res: Response) {
-        const { page, size, status, startDate, endDate } = req.query;
-
-        const queryParams: Record<string, unknown> = {};
-
-        if (page && size) {
-            queryParams.page = Number(page);
-            queryParams.size = Number(size);
-        }
-
-        if (status) queryParams.status = status;
-        if (startDate) queryParams.startDate = startDate as string;
-        if (endDate) queryParams.endDate = endDate as string;
+        const queryParams = this.extractOrderQueryParams(req.query);
 
         const orders = await OrderService.getUserOrders(req.user.id, queryParams);
 
@@ -64,30 +88,19 @@ export default class OrderController {
         });
     }
 
-    static async getVendorOrders(req: AuthenticatedRequest, res: Response) {
-        // Check if user is a vendor
-        if (req.user.status.userType !== 'vendor') {
-            throw new ForbiddenError('Only vendors can access their assigned orders');
+    static async getAgentOrders(req: AuthenticatedRequest, res: Response) {
+        // Check if the user is an agent
+        if (req.user.status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can access their assigned orders');
         }
 
-        const { page, size, status, startDate, endDate } = req.query;
+        const queryParams = this.extractOrderQueryParams(req.query);
 
-        const queryParams: Record<string, unknown> = {};
-
-        if (page && size) {
-            queryParams.page = Number(page);
-            queryParams.size = Number(size);
-        }
-
-        if (status) queryParams.status = status;
-        if (startDate) queryParams.startDate = startDate as string;
-        if (endDate) queryParams.endDate = endDate as string;
-
-        const orders = await OrderService.getVendorOrders(req.user.id, queryParams);
+        const orders = await OrderService.getAgentOrders(req.user.id, queryParams);
 
         res.status(200).json({
             status: 'success',
-            message: 'Vendor orders retrieved successfully',
+            message: 'Agent orders retrieved successfully',
             data: { ...orders },
         });
     }
@@ -97,9 +110,10 @@ export default class OrderController {
 
         const order = await OrderService.getOrder(id);
 
-        // Check if user is authorized to view this order
-        // if (order.customerId !== req.user.id && order.vendorId !== req.user.id && req.user.status.userType !== 'admin') {
-        //     throw new ForbiddenError('You are not authorized to view this order');
+        // Check if the user is authorized to view this order
+        // if
+        // (order.customerId !== req.user.id && order.agentId !== req.user.id && req.user.status.userType !== 'admin') {
+        //     throw new ForbiddenError('Not authorized to view this order');
         // }
 
         res.status(200).json({
@@ -126,10 +140,10 @@ export default class OrderController {
         });
     }
 
-    static async addVendorNotes(req: AuthenticatedRequest, res: Response) {
-        // Only vendors can add vendor notes
-        if (req.user.status.userType !== 'vendor') {
-            throw new ForbiddenError('Only vendors can add vendor notes');
+    static async addAgentNotes(req: AuthenticatedRequest, res: Response) {
+        // Only agents can add agent notes
+        if (req.user.status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can add agent notes');
         }
 
         const { id } = req.params;
@@ -139,11 +153,11 @@ export default class OrderController {
             throw new BadRequestError('Notes are required');
         }
 
-        const updatedOrder = await OrderService.addVendorNotes(id, req.user.id, notes);
+        const updatedOrder = await OrderService.addAgentNotes(id, req.user.id, notes);
 
         res.status(200).json({
             status: 'success',
-            message: 'Vendor notes added successfully',
+            message: 'Agent notes added successfully',
             data: updatedOrder,
         });
     }
