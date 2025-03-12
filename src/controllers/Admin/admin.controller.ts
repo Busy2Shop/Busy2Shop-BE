@@ -255,8 +255,8 @@ export default class AdminController {
             queryParams.isDeactivated = isDeactivated === 'true';
         }
 
-        // Add filter for user type (vendor, user)
-        if (userType && ['vendor', 'customer'].includes(userType as string)) {
+        // Add filter for user type (agent, user)
+        if (userType && ['agent', 'customer'].includes(userType as string)) {
             queryParams.userType = userType;
         }
 

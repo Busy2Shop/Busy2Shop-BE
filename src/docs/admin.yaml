@@ -485,7 +485,7 @@ paths:
           name: userType
           schema:
             type: string
-            enum: [ vendor, customer ]
+            enum: [ agent, customer ]
           description: Filter by user type
       responses:
         200:
