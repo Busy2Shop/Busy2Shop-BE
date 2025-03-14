@@ -31,7 +31,7 @@ components:
           description: ID of the user who sent the message
         senderType:
           type: string
-          enum: [ vendor, customer, admin ]
+          enum: [ agent, customer, admin ]
           description: Type of user who sent the message
         message:
           type: string
@@ -68,7 +68,7 @@ components:
               description: ID of the user who activated the chat
             type:
               type: string
-              enum: [ vendor, customer, admin ]
+              enum: [ agent, customer, admin ]
               description: Type of user who activated the chat
             name:
               type: string

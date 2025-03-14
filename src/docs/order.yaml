@@ -92,13 +92,13 @@ components:
         customerNotes:
           type: string
           description: Notes from the customer
-        vendorNotes:
+        agentNotes:
           type: string
-          description: Notes from the vendor
+          description: Notes from the agent
         acceptedAt:
           type: string
           format: date-time
-          description: When the order was accepted by a vendor
+          description: When the order was accepted by a agent
         completedAt:
           type: string
           format: date-time
@@ -107,10 +107,10 @@ components:
           type: string
           format: uuid
           description: ID of the customer who placed the order
-        vendorId:
+        agentId:
           type: string
           format: uuid
-          description: ID of the vendor assigned to the order
+          description: ID of the agent assigned to the order
         shoppingListId:
           type: string
           format: uuid
@@ -246,9 +246,9 @@ paths:
                         type: integer
                         description: Total number of pages
 
-  /order/vendor:
+  /order/agent:
     get:
-      summary: Get all orders assigned to the authenticated vendor
+      summary: Get all orders assigned to the authenticated agent
       tags:
         - Order
       security:
@@ -284,7 +284,7 @@ paths:
           description: Filter orders created on or before this date (YYYY-MM-DD)
       responses:
         '200':
-          description: Vendor orders retrieved successfully
+          description: Agent orders retrieved successfully
           content:
             application/json:
               schema:
@@ -295,7 +295,7 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: Vendor orders retrieved successfully
+                    example: Agent orders retrieved successfully
                   data:
                     type: object
                     properties:
@@ -310,7 +310,7 @@ paths:
                         type: integer
                         description: Total number of pages
         '403':
-          description: Forbidden - Only vendors can access their assigned orders
+          description: Forbidden - Only agents can access their assigned orders
 
   /order/{id}:
     get:
@@ -390,9 +390,9 @@ paths:
         '404':
           description: Order not found
 
-  /order/{id}/vendor-notes:
+  /order/{id}/agent-notes:
     patch:
-      summary: Add vendor notes to an order
+      summary: Add agent notes to an order
       tags:
         - Order
       security:
@@ -404,7 +404,7 @@ paths:
           schema:
             type: string
             format: uuid
-          description: ID of the order to add vendor notes to
+          description: ID of the order to add agent notes to
       requestBody:
         required: true
         content:
@@ -413,7 +413,7 @@ paths:
               $ref: '#/components/schemas/OrderNotesRequest'
       responses:
         '200':
-          description: Vendor notes added successfully
+          description: Agent notes added successfully
           content:
             application/json:
               schema:
@@ -424,13 +424,13 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: Vendor notes added successfully
+                    example: Agent notes added successfully
                   data:
                     $ref: '#/components/schemas/OrderResponse'
         '400':
           description: Bad request - Notes are required
         '403':
-          description: Forbidden - Only vendors can add vendor notes or not assigned to this order
+          description: Forbidden - Only agents can add agent notes or not assigned to this order
         '404':
           description: Order not found
 

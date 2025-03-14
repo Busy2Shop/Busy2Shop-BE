@@ -34,7 +34,7 @@ export default class ChatMessage extends Model<ChatMessage> {
         sender: User;
 
     @Column({
-        type: DataType.ENUM('vendor', 'customer', 'admin'),
+        type: DataType.ENUM('agent', 'customer', 'admin'),
         allowNull: false,
     })
         senderType: SenderType;

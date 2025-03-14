@@ -17,86 +17,65 @@ export interface IViewOrdersQuery {
 }
 
 export default class OrderService {
-    static async createOrder(orderData: IOrder): Promise<Order> {
-        return await Database.transaction(async (transaction: Transaction) => {
-            // Check if the shopping list exists and is in a valid state
-            const shoppingList = await ShoppingList.findByPk(orderData.shoppingListId, { transaction });
+    /**
+     * Helper Functions for the Order Service
+     */
 
-            if (!shoppingList) {
-                throw new NotFoundError('Shopping list not found');
-            }
-
-            if (shoppingList.status !== 'accepted') {
-                throw new BadRequestError('Can only create orders from accepted shopping lists');
-            }
-
-            // Create the order
-            const newOrder = await Order.create({
-                ...orderData,
-                status: 'pending',
-            }, { transaction });
-
-            // Update the shopping list status
-            await shoppingList.update({ status: 'processing' }, { transaction });
-
-            return newOrder;
-        });
-    }
-
-    static async getUserOrders(userId: string, queryData?: IViewOrdersQuery): Promise<{ orders: Order[], count: number, totalPages?: number }> {
-        const { page, size, status, startDate, endDate } = queryData || {};
-
-        const where: Record<string, any> = { customerId: userId };
+    /**
+     * Applies common order filtering criteria to a where clause
+     *
+     * @param whereClause - The existing where conditions object to modify
+     * @param queryData - Query parameters containing filtering options
+     * @returns The updated where clause with applied filters
+     */
+    private static applyOrderFilters(
+        whereClause: Record<string, any>,
+        queryData?: IViewOrdersQuery
+    ): Record<string, any> {
+        const { status, startDate, endDate } = queryData || {};
 
         // Filter by status if provided
         if (status) {
-            where.status = status;
+            whereClause.status = status;
         }
 
         // Filter by date range if provided
         if (startDate && endDate) {
-            where.createdAt = {
+            whereClause.createdAt = {
                 [Op.between]: [new Date(startDate), new Date(endDate)],
             };
         } else if (startDate) {
-            where.createdAt = {
+            whereClause.createdAt = {
                 [Op.gte]: new Date(startDate),
             };
         } else if (endDate) {
-            where.createdAt = {
+            whereClause.createdAt = {
                 [Op.lte]: new Date(endDate),
             };
         }
 
-        // Basic query options
-        const queryOptions: FindAndCountOptions<Order> = {
-            where,
-            include: [
-                {
-                    model: ShoppingList,
-                    as: 'shoppingList',
-                    include: [
-                        {
-                            model: ShoppingListItem,
-                            as: 'items',
-                        },
-                    ],
-                },
-                {
-                    model: User,
-                    as: 'vendor',
-                    attributes: ['id', 'firstName', 'lastName', 'email'],
-                    required: false,
-                },
-            ],
-            order: [['createdAt', 'DESC']],
-        };
+        return whereClause;
+    }
+
+
+    /**
+     * Executes a paginated query for orders and formats the results
+     *
+     * @param queryOptions - The query configuration for finding orders
+     * @param queryData - Pagination parameters
+     * @returns Formatted query results with pagination metadata if applicable
+     */
+    private static async executeOrderQuery(
+        queryOptions: FindAndCountOptions<Order>,
+        queryData?: IViewOrdersQuery
+    ): Promise<{ orders: Order[], count: number, totalPages?: number }> {
+        const { page, size } = queryData || {};
 
         // Handle pagination
         if (page && size && page > 0 && size > 0) {
             const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
-            queryOptions.limit = limit || 0;
-            queryOptions.offset = offset || 0;
+            queryOptions.limit = limit ?? 0;
+            queryOptions.offset = offset ?? 0;
         }
 
         const { rows: orders, count } = await Order.findAndCountAll(queryOptions);
@@ -110,129 +89,31 @@ export default class OrderService {
         }
     }
 
-    static async getVendorOrders(vendorId: string, queryData?: IViewOrdersQuery): Promise<{ orders: Order[], count: number, totalPages?: number }> {
-        const { page, size, status, startDate, endDate } = queryData || {};
 
-        const where: Record<string, any> = { vendorId };
-
-        // Filter by status if provided
-        if (status) {
-            where.status = status;
-        }
-
-        // Filter by date range if provided
-        if (startDate && endDate) {
-            where.createdAt = {
-                [Op.between]: [new Date(startDate), new Date(endDate)],
-            };
-        } else if (startDate) {
-            where.createdAt = {
-                [Op.gte]: new Date(startDate),
-            };
-        } else if (endDate) {
-            where.createdAt = {
-                [Op.lte]: new Date(endDate),
-            };
-        }
-
-        // Basic query options
-        const queryOptions: FindAndCountOptions<Order> = {
-            where,
-            include: [
-                {
-                    model: ShoppingList,
-                    as: 'shoppingList',
-                    include: [
-                        {
-                            model: ShoppingListItem,
-                            as: 'items',
-                        },
-                    ],
-                },
-                {
-                    model: User,
-                    as: 'customer',
-                    attributes: ['id', 'firstName', 'lastName', 'email'],
-                },
-            ],
-            order: [['createdAt', 'DESC']],
-        };
-
-        // Handle pagination
-        if (page && size && page > 0 && size > 0) {
-            const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
-            queryOptions.limit = limit || 0;
-            queryOptions.offset = offset || 0;
-        }
-
-        const { rows: orders, count } = await Order.findAndCountAll(queryOptions);
-
-        // Calculate pagination metadata if applicable
-        if (page && size && orders.length > 0) {
-            const totalPages = Pagination.estimateTotalPage({ count, limit: size } as IPaging);
-            return { orders, count, ...totalPages };
-        } else {
-            return { orders, count };
-        }
-    }
-
-    static async getOrder(id: string): Promise<Order> {
-        const order = await Order.findByPk(id, {
-            include: [
-                {
-                    model: ShoppingList,
-                    as: 'shoppingList',
-                    include: [
-                        {
-                            model: ShoppingListItem,
-                            as: 'items',
-                        },
-                    ],
-                },
-                {
-                    model: User,
-                    as: 'customer',
-                    attributes: ['id', 'firstName', 'lastName', 'email'],
-                },
-                {
-                    model: User,
-                    as: 'vendor',
-                    attributes: ['id', 'firstName', 'lastName', 'email'],
-                    required: false,
-                },
-            ],
-        });
-
-        if (!order) {
-            throw new NotFoundError('Order not found');
-        }
-
-        return order;
-    }
-
-    static async updateOrderStatus(id: string, userId: string, status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled'): Promise<Order> {
-        const order = await this.getOrder(id);
-
-        // Validate the status transition
-        if (!this.isValidStatusTransition(order.status, status)) {
-            throw new BadRequestError(`Cannot change status from ${order.status} to ${status}`);
-        }
-
-        // Check permissions based on the user role
-        const user = await User.findByPk(userId);
-        if (!user) {
-            throw new NotFoundError('User not found');
-        }
-
-        if (user.status.userType === 'vendor') {
-            // Vendors can only update orders assigned to them
-            if (order.vendorId !== userId) {
+    /**
+     * Validates if a user has permission to change an order to the requested status
+     *
+     * @param order - The order being updated
+     * @param user - User attempting to update the order
+     * @param userId - ID of the user attempting the update
+     * @param status - The requested new status
+     * @throws {ForbiddenError|BadRequestError} - When user lacks permission for the requested change
+     */
+    private static validateOrderStatusPermissions(
+        order: Order,
+        user: User,
+        userId: string,
+        status: string
+    ): void {
+        if (user.status.userType === 'agent') {
+            // Agents can only update orders assigned to them
+            if (order.agentId !== userId) {
                 throw new ForbiddenError('You are not assigned to this order');
             }
 
-            // Vendors can only set certain statuses
+            // Agents can only set certain statuses
             if (!['accepted', 'in_progress', 'completed'].includes(status)) {
-                throw new ForbiddenError('Vendors can only accept, start or complete orders');
+                throw new ForbiddenError('Agents can only accept, start or complete orders');
             }
         } else if (order.customerId === userId) {
             // Customers can only cancel their own orders
@@ -244,13 +125,24 @@ export default class OrderService {
             if (order.status === 'completed') {
                 throw new BadRequestError('Cannot cancel a completed order');
             }
-        // } else if (user.status.userType === 'admin') {
+            // } else if (user.status.userType === 'admin') {
             // Admins can update to any status
         } else {
             throw new ForbiddenError('You are not authorized to update this order');
         }
+    }
 
-        // Special handling for certain status changes
+    /**
+     * Applies status change to an order and performs necessary side effects
+     *
+     * @param order - The order to update
+     * @param status - The new status to apply
+     * @returns The updated order
+     */
+    private static async applyStatusChange(
+        order: Order,
+        status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled'
+    ): Promise<Order> {
         if (status === 'accepted' && !order.acceptedAt) {
             await order.update({
                 status,
@@ -279,9 +171,26 @@ export default class OrderService {
             await order.update({ status });
         }
 
-        return await this.getOrder(id);
+        return await this.getOrder(order.id);
     }
 
+
+    /**
+     * Validates if a transition between order statuses is allowed
+     *
+     * @param currentStatus - The current status of the order
+     * @param newStatus - The requested target status
+     * @returns `true` if the transition is valid, `false` otherwise
+     *
+     * @example
+     * // Valid transitions:
+     * isValidStatusTransition('pending', 'accepted') // true
+     * isValidStatusTransition('accepted', 'in_progress') // true
+     *
+     * // Invalid transitions:
+     * isValidStatusTransition('pending', 'completed') // false
+     * isValidStatusTransition('completed', 'in_progress') // false
+     */
     private static isValidStatusTransition(currentStatus: string, newStatus: string): boolean {
         const validTransitions: Record<string, string[]> = {
             'pending': ['accepted', 'cancelled'],
@@ -294,15 +203,165 @@ export default class OrderService {
         return validTransitions[currentStatus]?.includes(newStatus) || false;
     }
 
-    static async addVendorNotes(id: string, vendorId: string, notes: string): Promise<Order> {
+
+    static async createOrder(orderData: IOrder): Promise<Order> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            // Check if the shopping list exists and is in a valid state
+            const shoppingList = await ShoppingList.findByPk(orderData.shoppingListId, { transaction });
+
+            if (!shoppingList) {
+                throw new NotFoundError('Shopping list not found');
+            }
+
+            if (shoppingList.status !== 'accepted') {
+                throw new BadRequestError('Can only create orders from accepted shopping lists');
+            }
+
+            // Create the order
+            const newOrder = await Order.create({
+                ...orderData,
+                status: 'pending',
+            }, { transaction });
+
+            // Update the shopping list status
+            await shoppingList.update({ status: 'processing' }, { transaction });
+
+            return newOrder;
+        });
+    }
+
+    static async getUserOrders(userId: string, queryData?: IViewOrdersQuery): Promise<{ orders: Order[], count: number, totalPages?: number }> {
+
+        // Filter by status if provided
+        let where: Record<string, any> = { customerId: userId };
+        where = this.applyOrderFilters(where, queryData);
+
+
+        // Basic query options
+        const queryOptions: FindAndCountOptions<Order> = {
+            where,
+            include: [
+                {
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    include: [
+                        {
+                            model: ShoppingListItem,
+                            as: 'items',
+                        },
+                    ],
+                },
+                {
+                    model: User,
+                    as: 'agent',
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
+                    required: false,
+                },
+            ],
+            order: [['createdAt', 'DESC']],
+        };
+
+        // Handle pagination
+        return this.executeOrderQuery(queryOptions, queryData);
+    }
+
+    static async getAgentOrders(agentId: string, queryData?: IViewOrdersQuery): Promise<{ orders: Order[], count: number, totalPages?: number }> {
+        let where: Record<string, any> = { agentId };
+        where = this.applyOrderFilters(where, queryData);
+
+        // Basic query options
+        const queryOptions: FindAndCountOptions<Order> = {
+            where,
+            include: [
+                {
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    include: [
+                        {
+                            model: ShoppingListItem,
+                            as: 'items',
+                        },
+                    ],
+                },
+                {
+                    model: User,
+                    as: 'customer',
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
+                },
+            ],
+            order: [['createdAt', 'DESC']],
+        };
+
+        // Handle pagination
+        return this.executeOrderQuery(queryOptions, queryData);
+    }
+
+    static async getOrder(id: string): Promise<Order> {
+        const order = await Order.findByPk(id, {
+            include: [
+                {
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    include: [
+                        {
+                            model: ShoppingListItem,
+                            as: 'items',
+                        },
+                    ],
+                },
+                {
+                    model: User,
+                    as: 'customer',
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
+                },
+                {
+                    model: User,
+                    as: 'agent',
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
+                    required: false,
+                },
+            ],
+        });
+
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
+
+        return order;
+    }
+
+    static async updateOrderStatus(id: string, userId: string, status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled'): Promise<Order> {
         const order = await this.getOrder(id);
 
-        // Check if vendor is assigned to this order
-        if (order.vendorId !== vendorId) {
+        // Validate the status transition
+        if (!this.isValidStatusTransition(order.status, status)) {
+            throw new BadRequestError(`Cannot change status from ${order.status} to ${status}`);
+        }
+
+        // Check permissions based on the user role
+        const user = await User.findByPk(userId);
+        if (!user) {
+            throw new NotFoundError('User not found');
+        }
+
+        // Validate user permissions
+        this.validateOrderStatusPermissions(order, user, userId, status);
+
+        // Apply status change and any side effects
+        return await this.applyStatusChange(order, status);
+    }
+
+
+
+    static async addAgentNotes(id: string, agentId: string, notes: string): Promise<Order> {
+        const order = await this.getOrder(id);
+
+        // Check if an agent is assigned to this order
+        if (order.agentId !== agentId) {
             throw new ForbiddenError('You are not assigned to this order');
         }
 
-        await order.update({ vendorNotes: notes });
+        await order.update({ agentNotes: notes });
 
         return await this.getOrder(id);
     }
@@ -310,7 +369,7 @@ export default class OrderService {
     static async addCustomerNotes(id: string, customerId: string, notes: string): Promise<Order> {
         const order = await this.getOrder(id);
 
-        // Check if user is the customer for this order
+        // Check if the user is the customer for this order
         if (order.customerId !== customerId) {
             throw new ForbiddenError('You are not the customer for this order');
         }

@@ -77,11 +77,11 @@ export interface IUserSettings {
     isBlocked?: boolean;
     isDeactivated?: boolean;
     isKycVerified?: boolean;
-    vendorMetaData?: IVendorMeta | null;
+    agentMetaData?: IAgentMeta | null;
     meta?: IBlockMeta | null;
 }
 
-export interface IVendorMeta {
+export interface IAgentMeta {
     nin: string;
     images: string[];
 }

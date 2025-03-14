@@ -1,8 +1,8 @@
 openapi: 3.0.0
 info:
-  title: Vendor API
+  title: Agent API
   version: 1.0.0
-  description: API for managing vendors and vendor-related operations
+  description: API for managing agents and agent-related operations
   contact:
     name: API Support
     email: support@busy2shop.com
@@ -14,15 +14,15 @@ servers:
 
 components:
   schemas:
-    VendorSettings:
+    AgentSettings:
       type: object
       properties:
         isBlocked:
           type: boolean
-          description: Whether the vendor is blocked
+          description: Whether the agent is blocked
         isDeactivated:
           type: boolean
-          description: Whether the vendor account is deactivated
+          description: Whether the agent account is deactivated
 
     Market:
       type: object
@@ -40,31 +40,31 @@ components:
         ownerId:
           type: string
           format: uuid
-          description: ID of the vendor who owns the market
+          description: ID of the agent who owns the market
 
-    VendorResponse:
+    AgentResponse:
       type: object
       properties:
         id:
           type: string
           format: uuid
-          description: Unique identifier for the vendor
+          description: Unique identifier for the agent
         firstName:
           type: string
-          description: Vendor's first name
+          description: Agent's first name
         lastName:
           type: string
-          description: Vendor's last name
+          description: Agent's last name
         email:
           type: string
           format: email
-          description: Vendor's email address
+          description: Agent's email address
         status:
           type: object
           properties:
             userType:
               type: string
-              enum: [vendor]
+              enum: [agent]
               description: Type of user
             activated:
               type: boolean
@@ -73,49 +73,49 @@ components:
               type: boolean
               description: Whether the email is verified
         settings:
-          $ref: '#/components/schemas/VendorSettings'
+          $ref: '#/components/schemas/AgentSettings'
         ownedMarkets:
           type: array
           items:
             $ref: '#/components/schemas/Market'
-          description: Markets owned by the vendor
+          description: Markets owned by the agent
         createdAt:
           type: string
           format: date-time
-          description: When the vendor account was created
+          description: When the agent account was created
         updatedAt:
           type: string
           format: date-time
-          description: When the vendor account was last updated
+          description: When the agent account was last updated
 
-    VendorStatsResponse:
+    AgentStatsResponse:
       type: object
       properties:
         totalOrders:
           type: integer
-          description: Total number of orders handled by the vendor
+          description: Total number of orders handled by the agent
         completedOrders:
           type: integer
-          description: Number of orders completed by the vendor
+          description: Number of orders completed by the agent
         cancelledOrders:
           type: integer
-          description: Number of orders cancelled by the vendor
+          description: Number of orders cancelled by the agent
         pendingOrders:
           type: integer
           description: Number of orders currently pending or in progress
         totalMarkets:
           type: integer
-          description: Number of markets owned by the vendor
+          description: Number of markets owned by the agent
 
     AssignOrderRequest:
       type: object
       properties:
-        vendorId:
+        agentId:
           type: string
           format: uuid
-          description: ID of the vendor to assign the order to
+          description: ID of the agent to assign the order to
       required:
-        - vendorId
+        - agentId
 
   securitySchemes:
     BearerAuth:
@@ -124,11 +124,11 @@ components:
       bearerFormat: JWT
 
 paths:
-  /vendor:
+  /agent:
     get:
-      summary: Get all vendors
+      summary: Get all agents
       tags:
-        - Vendor
+        - Agent
       parameters:
         - in: query
           name: page
@@ -144,12 +144,12 @@ paths:
           name: q
           schema:
             type: string
-          description: Search query for vendor name or email
+          description: Search query for agent name or email
         - in: query
           name: isActive
           schema:
             type: boolean
-          description: Filter by vendor active status
+          description: Filter by agent active status
         - in: query
           name: lat
           schema:
@@ -170,7 +170,7 @@ paths:
           description: Search radius in kilometers (defaults to 5km)
       responses:
         '200':
-          description: Vendors retrieved successfully
+          description: Agents retrieved successfully
           content:
             application/json:
               schema:
@@ -181,26 +181,26 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: Vendors retrieved successfully
+                    example: Agents retrieved successfully
                   data:
                     type: object
                     properties:
-                      vendors:
+                      agents:
                         type: array
                         items:
-                          $ref: '#/components/schemas/VendorResponse'
+                          $ref: '#/components/schemas/AgentResponse'
                       count:
                         type: integer
-                        description: Total count of vendors
+                        description: Total count of agents
                       totalPages:
                         type: integer
                         description: Total number of pages
 
-  /vendor/{id}:
+  /agent/{id}:
     get:
-      summary: Get a specific vendor's profile
+      summary: Get a specific agent's profile
       tags:
-        - Vendor
+        - Agent
       parameters:
         - in: path
           name: id
@@ -208,10 +208,10 @@ paths:
           schema:
             type: string
             format: uuid
-          description: ID of the vendor to retrieve
+          description: ID of the agent to retrieve
       responses:
         '200':
-          description: Vendor profile retrieved successfully
+          description: Agent profile retrieved successfully
           content:
             application/json:
               schema:
@@ -222,17 +222,17 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: Vendor profile retrieved successfully
+                    example: Agent profile retrieved successfully
                   data:
-                    $ref: '#/components/schemas/VendorResponse'
+                    $ref: '#/components/schemas/AgentResponse'
         '404':
-          description: Vendor not found
+          description: Agent not found
 
-  /vendor/{id}/stats:
+  /agent/{id}/stats:
     get:
-      summary: Get statistics for a vendor
+      summary: Get statistics for an agent
       tags:
-        - Vendor
+        - Agent
       security:
         - BearerAuth: []
       parameters:
@@ -242,10 +242,10 @@ paths:
           schema:
             type: string
             format: uuid
-          description: ID of the vendor to get statistics for (uses authenticated user ID if not provided)
+          description: ID of the agent to get statistics for (uses authenticated user ID if not provided)
       responses:
         '200':
-          description: Vendor statistics retrieved successfully
+          description: Agent statistics retrieved successfully
           content:
             application/json:
               schema:
@@ -256,19 +256,19 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: Vendor stats retrieved successfully
+                    example: Agent stats retrieved successfully
                   data:
-                    $ref: '#/components/schemas/VendorStatsResponse'
+                    $ref: '#/components/schemas/AgentStatsResponse'
         '403':
-          description: Forbidden - Not authorized to view this vendor's statistics
+          description: Forbidden - Not authorized to view this agent's statistics
         '404':
-          description: Vendor not found
+          description: Agent not found
 
-  /vendor/available/{shoppingListId}:
+  /agent/available/{shoppingListId}:
     get:
-      summary: Get available vendors for an order
+      summary: Get available agents for an order
       tags:
-        - Vendor
+        - Agent
       security:
         - BearerAuth: []
       parameters:
@@ -278,10 +278,10 @@ paths:
           schema:
             type: string
             format: uuid
-          description: ID of the shopping list to find available vendors for
+          description: ID of the shopping list to find available agents for
       responses:
         '200':
-          description: Available vendors retrieved successfully
+          description: Available agents retrieved successfully
           content:
             application/json:
               schema:
@@ -292,23 +292,23 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: Available vendors retrieved successfully
+                    example: Available agents retrieved successfully
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/VendorResponse'
+                      $ref: '#/components/schemas/AgentResponse'
         '400':
           description: Bad request - Shopping list ID is required
         '403':
-          description: Forbidden - Not authorized to view available vendors
+          description: Forbidden - Not authorized to view available agents
         '404':
           description: Shopping list not found
 
-  /vendor/assign/{orderId}:
+  /agent/assign/{orderId}:
     post:
-      summary: Assign an order to a vendor
+      summary: Assign an order to an agent
       tags:
-        - Vendor
+        - Agent
       security:
         - BearerAuth: []
       parameters:
@@ -327,7 +327,7 @@ paths:
               $ref: '#/components/schemas/AssignOrderRequest'
       responses:
         '200':
-          description: Order assigned to vendor successfully
+          description: Order assigned to agent successfully
           content:
             application/json:
               schema:
@@ -338,12 +338,12 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: Order assigned to vendor successfully
+                    example: Order assigned to agent successfully
                   data:
-                    $ref: '#/components/schemas/VendorResponse'
+                    $ref: '#/components/schemas/AgentResponse'
         '400':
-          description: Bad request - Vendor ID is required or order is not in pending status
+          description: Bad request - Agent ID is required or order is not in pending status
         '403':
           description: Forbidden - Not authorized to assign orders
         '404':
-          description: Order or vendor not found
+          description: Order or agent not found

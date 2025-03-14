@@ -55,10 +55,10 @@ export default class ShoppingListController {
         });
     }
 
-    static async getVendorAssignedLists(req: AuthenticatedRequest, res: Response) {
-        // Check if user is a vendor
-        if (req.user.status.userType !== 'vendor') {
-            throw new ForbiddenError('Only vendors can access assigned shopping lists');
+    static async getAgentAssignedLists(req: AuthenticatedRequest, res: Response) {
+        // Check if the user is an agent
+        if (req.user.status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can access assigned shopping lists');
         }
 
         const { page, size, status } = req.query;
@@ -72,7 +72,7 @@ export default class ShoppingListController {
 
         if (status) queryParams.status = status;
 
-        const shoppingLists = await ShoppingListService.viewVendorAssignedLists(
+        const shoppingLists = await ShoppingListService.viewAgentAssignedLists(
             req.user.id,
             queryParams
         );
@@ -89,8 +89,8 @@ export default class ShoppingListController {
 
         const shoppingList = await ShoppingListService.getShoppingList(id);
 
-        // Check if user is authorized to view this list
-        if (shoppingList.customerId !== req.user.id && shoppingList.vendorId !== req.user.id) {
+        // Check if the user is authorized to view this list
+        if (shoppingList.customerId !== req.user.id && shoppingList.agentId !== req.user.id) {
             throw new ForbiddenError('You are not authorized to view this shopping list');
         }
 
@@ -233,32 +233,32 @@ export default class ShoppingListController {
     }
 
     // Admin only
-    static async assignVendorToList(req: AuthenticatedRequest, res: Response) {
-        // Only admins can manually assign vendors
+    static async assignAgentToList(req: AuthenticatedRequest, res: Response) {
+        // Only admins can manually assign agents
         // if (req.user.status.userType !== 'admin') {
-        //     throw new ForbiddenError('Only admins can manually assign vendors');
+        //     throw new ForbiddenError('Only admins can manually assign agents');
         // }
 
         const { id } = req.params;
-        const { vendorId } = req.body;
+        const { agentId } = req.body;
 
-        if (!vendorId) {
-            throw new BadRequestError('Vendor ID is required');
+        if (!agentId) {
+            throw new BadRequestError('Agent ID is required');
         }
 
-        const updatedList = await ShoppingListService.assignVendorToList(id, vendorId);
+        const updatedList = await ShoppingListService.assignAgentToList(id, agentId);
 
         res.status(200).json({
             status: 'success',
-            message: 'Vendor assigned to shopping list successfully',
+            message: 'Agent assigned to shopping list successfully',
             data: updatedList,
         });
     }
 
     static async acceptShoppingList(req: AuthenticatedRequest, res: Response) {
-        // Only vendors can accept shopping lists
-        if (req.user.status.userType !== 'vendor') {
-            throw new ForbiddenError('Only vendors can accept shopping lists');
+        // Only agents can accept shopping lists
+        if (req.user.status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can accept shopping lists');
         }
 
         const { id } = req.params;
@@ -266,13 +266,13 @@ export default class ShoppingListController {
         // Get the shopping list
         const list = await ShoppingListService.getShoppingList(id);
 
-        // Check if list is pending
+        // Check if the list is pending
         if (list.status !== 'pending') {
             throw new BadRequestError('Can only accept pending shopping lists');
         }
 
-        // Assign the vendor to the list
-        const updatedList = await ShoppingListService.assignVendorToList(id, req.user.id);
+        // Assign the agent to the list
+        const updatedList = await ShoppingListService.assignAgentToList(id, req.user.id);
 
         res.status(200).json({
             status: 'success',
@@ -282,9 +282,9 @@ export default class ShoppingListController {
     }
 
     static async updateActualPrices(req: AuthenticatedRequest, res: Response) {
-        // Only vendors can update actual prices
-        if (req.user.status.userType !== 'vendor') {
-            throw new ForbiddenError('Only vendors can update actual prices');
+        // Only agents can update actual prices
+        if (req.user.status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can update actual prices');
         }
 
         const { id } = req.params;

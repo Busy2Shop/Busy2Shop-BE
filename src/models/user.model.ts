@@ -4,12 +4,16 @@ import {
     HasMany,
 } from 'sequelize-typescript';
 import Password from './password.model';
-import UserSettings, { IVendorMeta }  from './userSettings.model';
+import UserSettings, { IAgentMeta }  from './userSettings.model';
 import { FindOptions } from 'sequelize';
 import Market from './market.model';
 import Review from './review.model';
 import ShoppingList from './shoppingList.model';
-export type userTypeValues = 'vendor' | 'customer';
+
+
+export type userTypeValues = 'agent' | 'customer';
+
+
 @Scopes(() => ({
     withSettings: {
         include: [
@@ -92,10 +96,10 @@ export default class User extends Model<User | IUser > {
         type: DataType.JSONB,
         allowNull: true,
         validate: {
-            isValidVendorMeta(this: User, value: IVendorMeta | null) {
-                if (this.status?.userType === 'vendor') {
+            isValidAgentMeta(this: User, value: IAgentMeta | null) {
+                if (this.status?.userType === 'agent') {
                     if (!value?.nin) {
-                        throw new Error('NIN is required for vendors');
+                        throw new Error('NIN is required for agents');
                     }
                     if (!/^\d{11}$/.test(value.nin)) {
                         throw new Error('Invalid NIN format. Must be 11 digits');
@@ -104,7 +108,7 @@ export default class User extends Model<User | IUser > {
             },
         },
     })
-        vendorMeta: IVendorMeta;
+        agentMeta: IAgentMeta;
 
     @Column({ type: DataType.JSONB })
         location: {
@@ -197,8 +201,8 @@ export default class User extends Model<User | IUser > {
     @HasMany(() => ShoppingList)
         shoppingLists: ShoppingList[];
 
-    // Shopping lists assigned to the user as a vendor
-    @HasMany(() => ShoppingList, 'vendorId')
+    // Shopping lists assigned to the user as an agent
+    @HasMany(() => ShoppingList, 'agentId')
         assignedOrders: ShoppingList[];
 
     // Reviews written by the user
@@ -234,7 +238,7 @@ export interface IUser {
     };
     dob?: Date;
     gender?: string;
-    vendorMeta?: IVendorMeta;
+    agentMeta?: IAgentMeta;
     ownedMarkets?: Market[];
     shoppingLists?: ShoppingList[];
     assignedOrders?: ShoppingList[];

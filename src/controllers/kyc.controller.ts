@@ -2,12 +2,12 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
-import VendorService from '../services/vendor.service';
+import AgentService from '../services/agent.service';
 import UserService from '../services/user.service';
 
 export default class KycController {
     /**
-     * Upload NIN document for vendor verification
+     * Upload NIN document for agent verification
      * @param req AuthenticatedRequest
      * @param res Response
      */
@@ -15,9 +15,9 @@ export default class KycController {
         const { nin } = req.body;
         const { id, status } = req.user;
 
-        // Ensure the user is a vendor
-        if (status.userType !== 'vendor') {
-            throw new ForbiddenError('Only vendors can upload NIN documents');
+        // Ensure the user is an agent
+        if (status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can upload NIN documents');
         }
 
         // Check if the email is verified
@@ -30,8 +30,8 @@ export default class KycController {
             throw new BadRequestError('Invalid NIN format. Must be 11 digits');
         }
 
-        // Update vendor metadata with NIN
-        const updatedUser = await VendorService.updateVendorDocuments(id, { nin });
+        // Update agent metadata with NIN
+        const updatedUser = await AgentService.updateAgentDocuments(id, { nin });
 
         res.status(200).json({
             status: 'success',
@@ -43,16 +43,16 @@ export default class KycController {
     }
 
     /**
-     * Upload verification images for vendor
+     * Upload verification images for agent
      * @param req AuthenticatedRequest
      * @param res Response
      */
     static async uploadVerificationImages(req: AuthenticatedRequest, res: Response) {
         const { id, status } = req.user;
 
-        // Ensure the user is a vendor
-        if (status.userType !== 'vendor') {
-            throw new ForbiddenError('Only vendors can upload verification images');
+        // Ensure the user is an agent
+        if (status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can upload verification images');
         }
 
         // Check if the email is verified
@@ -87,8 +87,8 @@ export default class KycController {
             throw new BadRequestError('Failed to upload images');
         }
 
-        // Update vendor metadata with images
-        const updatedUser = await VendorService.updateVendorDocuments(id, { images: imageUrls });
+        // Update agent metadata with images
+        const updatedUser = await AgentService.updateAgentDocuments(id, { images: imageUrls });
 
         res.status(200).json({
             status: 'success',
@@ -100,16 +100,16 @@ export default class KycController {
     }
 
     /**
-     * Get vendor verification status
+     * Get agent verification status
      * @param req AuthenticatedRequest
      * @param res Response
      */
     static async getVerificationStatus(req: AuthenticatedRequest, res: Response) {
         const { id, status } = req.user;
 
-        // Ensure the user is a vendor
-        if (status.userType !== 'vendor') {
-            throw new ForbiddenError('Only vendors can check verification status');
+        // Ensure the user is an agent
+        if (status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can check verification status');
         }
 
         // Check if the email is verified
@@ -118,7 +118,7 @@ export default class KycController {
         }
 
         const user = await UserService.viewSingleUser(id);
-        const vendorMeta = user.vendorMeta || {};
+        const agentMeta = user.agentMeta || {};
 
         res.status(200).json({
             status: 'success',
@@ -126,8 +126,8 @@ export default class KycController {
             data: {
                 isVerified: user.settings?.isKycVerified || false,
                 documents: {
-                    nin: vendorMeta.nin ? true : false,
-                    images: vendorMeta.images && vendorMeta.images.length > 0 ? true : false,
+                    nin: !!agentMeta.nin,
+                    images: agentMeta.images && agentMeta.images.length > 0,
                 },
             },
         });

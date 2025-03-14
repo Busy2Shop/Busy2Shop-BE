@@ -1,6 +1,6 @@
 # Busy2Shop Chat Feature
 
-This document provides an overview of the real-time chat feature implemented for Busy2Shop, which allows vendors and customers to communicate during an ongoing order.
+This document provides an overview of the real-time chat feature implemented for Busy2Shop, which allows agents and customers to communicate during an ongoing order.
 
 ## Features
 
@@ -118,6 +118,6 @@ A standalone chat page is available at `/chat.html?orderId={orderId}&userId={use
 
 - Media sharing (images, documents)
 - Message reactions
-- Group chats for orders with multiple vendors
+- Group chats for orders with multiple agents
 - Push notifications for new messages
 - Message search functionality

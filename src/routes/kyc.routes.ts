@@ -1,4 +1,4 @@
-// src/routes/vendorDocument.routes.ts
+// src/routes/agentDocument.routes.ts
 import { Router } from 'express';
 import KycController from '../controllers/kyc.controller';
 import { AuthenticatedController, basicAuth } from '../middlewares/authMiddleware';
