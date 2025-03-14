@@ -12,7 +12,7 @@ export interface IPaginationQuery {
 }
 
 export default class Pagination {
-    static getPagination = ({ page, size }: IPaging): { limit: number | null; offset: number | null } => {
+    static readonly getPagination = ({ page, size }: IPaging): { limit: number | null; offset: number | null } => {
         const limit = size ?? null;
         let offset = null;
 
@@ -23,7 +23,7 @@ export default class Pagination {
         return { limit, offset };
     };
 
-    static estimateTotalPage = ({ count, limit }: IPaging): { totalPages: number } => {
+    static readonly estimateTotalPage = ({ count, limit }: IPaging): { totalPages: number } => {
         const pageCount = count as number;
         const totalPages = limit ? Math.ceil(pageCount / limit) : 1;
         return { totalPages };

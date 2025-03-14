@@ -1,9 +1,10 @@
 import Notification, { INotification } from '../models/notification.model';
-import { Op, Sequelize, Transaction, col, fn } from 'sequelize';
+import { col, fn, Op, Sequelize, Transaction } from 'sequelize';
 import { BadRequestError } from '../utils/customErrors';
 import Pagination, { IPaginationQuery, IPaging } from '../utils/pagination';
 import NotificationUtil from '../clients/oneSignal.config';
 import { logger } from '../utils/logger';
+
 interface IGroupedNotification extends INotification {
     count: number;
     latest_id: string;
@@ -58,7 +59,7 @@ export default class NotificationService {
             transaction,
         });
 
-        // Create map of existing notifications
+        // Create the map of existing notifications
         const existingNotificationMap = new Map<string, Notification>();
         existingNotifications.forEach(notification => {
             const key = `${notification.title}-${notification.userId}-${notification.resource}-${notification.message}`;
@@ -168,7 +169,7 @@ export default class NotificationService {
             },
             order: [['createdAt', 'DESC']],
             transaction,
-        }) as Notification[];
+        });
         // Step 3: Map the notifications to include the count and ensure only the most recent notification is included
         const groupedNotificationsMap: { [key: string]: IGroupedNotification } = latestNotifications.reduce((acc, notification) => {
             const key = `${notification.title}-${notification.resource}`;
@@ -187,16 +188,12 @@ export default class NotificationService {
         }, {} as { [key: string]: IGroupedNotification });
 
         // Convert the map to an array
-        const groupedNotificationsPlain = Object.values(groupedNotificationsMap) as IGroupedNotification[];
-
-        return groupedNotificationsPlain;
+        return Object.values(groupedNotificationsMap);
     }
 
     static async viewNotificationByEntityId(entityId: string, page?: number, limit?: number): Promise<Notification[]> {
         const query = page && limit ? { where: { entityId }, limit, offset: (page - 1) * limit } : { where: { entityId } };
-        const notifications = await Notification.findAll(query);
-
-        return notifications;
+        return await Notification.findAll(query);
     }
 
     static async viewSingleNotificationById(id: string): Promise<Notification> {
@@ -212,8 +209,7 @@ export default class NotificationService {
 
         await notification.update(data);
 
-        const updatedNotification = await this.viewSingleNotificationById(id);
-        return updatedNotification;
+        return await this.viewSingleNotificationById(id);
     }
 
     static async markAllNotificationsAsRead(userId: string): Promise<number> {
@@ -225,8 +221,7 @@ export default class NotificationService {
     }
 
     static async getUnreadNotifications(userId: string): Promise<Notification[]> {
-        const notifications = await Notification.findAll({ where: { userId, read: false } });
-        return notifications;
+        return await Notification.findAll({ where:{ userId, read: false } });
     }
 
     static async getNotificationStats(userId: string, transaction?: Transaction): Promise<{ total: number, read: number, unread: number }> {

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 export default class HelperUtils {
-    static generateRandomString = (length: number): string => {
+    static readonly generateRandomString = (length: number): string => {
         const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
         let randomString = '';
 

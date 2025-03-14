@@ -22,7 +22,7 @@ export const DB_CONFIG = {
     USER: process.env.PG_USERNAME as string,
     PASS: process.env.PG_PASSWORD as string,
     PORT: parseInt(process.env.PG_PORT as string),
-    DIALECT: (process.env.PG_DIALECT || 'postgres' ) as 'postgres',
+    DIALECT: (process.env.PG_DIALECT ?? 'postgres' ) as 'postgres',
     HOST: process.env.PG_HOST as string,
     URL: process.env.PG_URL as string,
 };

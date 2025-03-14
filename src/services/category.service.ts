@@ -1,7 +1,7 @@
-import { Transaction, Op, FindAndCountOptions } from 'sequelize';
+import { FindAndCountOptions, Op, Transaction } from 'sequelize';
 import Category, { ICategory } from '../models/category.model';
 import Market from '../models/market.model';
-import { NotFoundError, BadRequestError } from '../utils/customErrors';
+import { BadRequestError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 
 export interface IViewCategoriesQuery {
@@ -22,8 +22,7 @@ export default class CategoryService {
             throw new BadRequestError(`Category with name '${categoryData.name}' already exists`);
         }
 
-        const newCategory = await Category.create({ ...categoryData });
-        return newCategory;
+        return await Category.create({ ...categoryData });
     }
 
     static async viewCategories(queryData?: IViewCategoriesQuery): Promise<{ categories: Category[], count: number, totalPages?: number }> {
@@ -60,8 +59,8 @@ export default class CategoryService {
         // Handle pagination
         if (page && size && page > 0 && size > 0) {
             const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
-            queryOptions.limit = limit || 0;
-            queryOptions.offset = offset || 0;
+            queryOptions.limit = limit ?? 0;
+            queryOptions.offset = offset ?? 0;
         }
 
         const { rows: categories, count } = await Category.findAndCountAll(queryOptions);
@@ -96,7 +95,7 @@ export default class CategoryService {
     static async updateCategory(id: string, dataToUpdate: Partial<ICategory>): Promise<Category> {
         const category = await this.viewSingleCategory(id);
 
-        // If name is being updated, make sure it's unique
+        // If the name is being updated, make sure it's unique
         if (dataToUpdate.name && dataToUpdate.name !== category.name) {
             const existing = await Category.findOne({
                 where: { name: dataToUpdate.name },
@@ -141,20 +140,20 @@ export default class CategoryService {
         };
 
         // Handle pagination
-        if (pagination && pagination.page && pagination.size) {
+        if (pagination?.page && pagination?.size) {
             const { limit, offset } = Pagination.getPagination({
                 page: pagination.page,
                 size: pagination.size,
             } as IPaging);
 
-            queryOptions.limit = limit || 0;
-            queryOptions.offset = offset || 0;
+            queryOptions.limit = limit ?? 0;
+            queryOptions.offset = offset ?? 0;
         }
 
         const { rows: markets, count } = await Market.findAndCountAll(queryOptions);
 
         // Calculate pagination metadata if applicable
-        if (pagination && pagination.page && pagination.size && markets.length > 0) {
+        if (pagination?.page && pagination?.size && markets.length > 0) {
             const totalPages = Pagination.estimateTotalPage({
                 count,
                 limit: pagination.size,
