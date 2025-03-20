@@ -1,6 +1,12 @@
 
 import { Table, Column, Model, DataType, IsUUID, PrimaryKey, Default, IsEmail, Unique } from 'sequelize-typescript';
 
+export enum AdminType {
+    SUPER_ADMIN = 'superAdmin',
+    ADMIN = 'admin',
+    VENDOR = 'vendor'
+}
+
 @Table
 export default class Admin extends Model<Admin | IAdmin> {
     @IsUUID(4)
@@ -17,12 +23,19 @@ export default class Admin extends Model<Admin | IAdmin> {
     @Column({ type: DataType.STRING, allowNull: false })
         email: string;
 
-    @Column({ type: DataType.BOOLEAN, defaultValue: false })
-        isSuperAdmin: boolean;
+    @Column({
+        type: DataType.ENUM(...Object.values(AdminType)),
+        defaultValue: AdminType.ADMIN,
+    })
+        adminType: AdminType;
+
+    @Column({ type: DataType.STRING, allowNull: true })
+        supermarketId: string;
 }
 
 export interface IAdmin {
     name: string;
     email: string;
-    isSuperAdmin?: boolean;
+    adminType?: AdminType;
+    supermarketId?: string;
 }

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import Admin, { IAdmin } from '../../models/admin.model';
-import { BadRequestError, NotFoundError } from '../../utils/customErrors';
+import Admin, { AdminType, IAdmin } from '../../models/admin.model';
+import { BadRequestError, NotFoundError, ForbiddenError } from '../../utils/customErrors';
 import moment from 'moment';
 import UserSettings, { IBlockMeta } from '../../models/userSettings.model';
 
@@ -28,12 +28,17 @@ export default class AdminService {
             throw new BadRequestError('Admin with this email already exists');
         }
 
-        const newAdmin = await Admin.create(adminData);
-        return newAdmin;
+        // Vendor type requires a supermarketId
+        if (adminData.adminType === AdminType.VENDOR && !adminData.supermarketId) {
+            throw new BadRequestError('Supermarket ID is required for vendor accounts');
+        }
+
+        return await Admin.create(adminData);
     }
 
-    static async getAllAdmins(): Promise<Admin[]> {
-        return Admin.findAll();
+    static async getAllAdmins(adminType?: AdminType): Promise<Admin[]> {
+        const whereClause = adminType ? { adminType } : {};
+        return Admin.findAll({ where: whereClause });
     }
 
     static async getAdminByEmail(email: string): Promise<Admin> {   
@@ -47,11 +52,22 @@ export default class AdminService {
         return admin;
     }
 
-    static async deleteAdmin(adminId: string): Promise<void> {
+    static async deleteAdmin(adminId: string, requestingAdminType: AdminType): Promise<void> {
         const admin = await Admin.findByPk(adminId);
         if (!admin) {
             throw new NotFoundError('Admin not found');
         }
+
+        // Only super admin can delete other admins
+        if (requestingAdminType !== AdminType.SUPER_ADMIN) {
+            throw new ForbiddenError('Only super admins can delete admins');
+        }
+
+        // Super admin cannot be deleted via API for safety
+        if (admin.adminType === AdminType.SUPER_ADMIN) {
+            throw new ForbiddenError('Super admin accounts cannot be deleted via API');
+        }
+
         await admin.destroy();
     }
     
@@ -133,7 +149,9 @@ export default class AdminService {
 
     //     const revenueQuery = (whereClause: any) => UserCourse.findOne({
     //         attributes: [
-    //             [Sequelize.literal('SUM(CAST(COALESCE(CAST(NULLIF("paymentDetails"->>\'price\', \'\') AS FLOAT), 0) AS FLOAT))'), 'total'],
+    //             [Sequelize.literal('SUM( CAST
+    //             (COALESCE (CAST(NULLIF("paymentDetails"->>\'price\', \'\') AS FLOAT), 0) AS FLOAT))'),
+    //             'total'],
     //         ],
     //         where: {
     //             paid: true,
@@ -156,7 +174,7 @@ export default class AdminService {
     //     });
 
     //     const totalRevenueValue = totalRevenue ? parseFloat(totalRevenue.total) : 0;
-    //     const revenueThisMonthValue = revenueThisMonth ? parseFloat(revenueThisMonth.total) : 0;
+    //     const revenueThisMonthValue = revenueThisMonth ? parseFloat(revenueThisMonth.total): 0;
     //     const revenueLastMonthValue = revenueLastMonth ? parseFloat(revenueLastMonth.total) : 0;
 
     //     const calculateIncrease = (current: number, previous: number): number => {
@@ -223,7 +241,7 @@ export default class AdminService {
     // static async getRevenueStats(timeFrame?: string, courseId?: string): Promise<any> {
     //     console.log({ timeFrame, courseId });
     //     const validPeriods = ['month', 'week', 'day'];
-    //     const dateTruncValue = validPeriods.includes(timeFrame as string) ? (timeFrame as string) : 'month';
+    //     const dateTruncValue = validPeriods.includes(timeFrame as string)?(timeFrame as string): 'month';
     //     console.log(`Fetching all-time revenue stats grouped by ${dateTruncValue}`);
     //     const whereClause: any = {
     //         paid: true,

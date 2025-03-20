@@ -7,6 +7,7 @@ import { AuthUtil } from '../../utils/token';
 import { emailService, EmailTemplate } from '../../utils/Email';
 import UserService from '../../services/user.service';
 import { IBlockMeta } from '../../models/userSettings.model';
+import { AdminType } from '../../models/admin.model';
 
 export default class AdminController {
     // static async getUserStats(req: Request, res: Response) {
@@ -23,6 +24,7 @@ export default class AdminController {
 
         let emailToUse = email.toLowerCase().trim();
         let firstName = 'Owner';
+
         if (email !== ADMIN_EMAIL) {
             const checkAdmin = await AdminService.getAdminByEmail(email);
             emailToUse = checkAdmin.email;
@@ -60,11 +62,27 @@ export default class AdminController {
         const { email, otpCode } = req.body;
 
         let emailToUse = email.toLowerCase().trim();
-        let adminData = { email: emailToUse, name: 'Owner', isSuperAdmin: true };
+        let adminData: {
+            email: string;
+            name: string;
+            adminType: AdminType;
+            supermarketId: string | null;
+        } = {
+            email: emailToUse,
+            name: 'Owner',
+            adminType: AdminType.SUPER_ADMIN,
+            supermarketId: null,
+        };
+
         if (email !== ADMIN_EMAIL) {
             const checkAdmin = await AdminService.getAdminByEmail(email);
             emailToUse = checkAdmin.email;
-            adminData = checkAdmin;
+            adminData = {
+                email: checkAdmin.email,
+                name: checkAdmin.name,
+                adminType: checkAdmin.adminType,
+                supermarketId: checkAdmin.supermarketId || null,
+            };
         }
 
         const validCode = await AuthUtil.compareAdminCode({ identifier: emailToUse, tokenType: 'adminlogin', token: otpCode });
@@ -83,9 +101,10 @@ export default class AdminController {
     }
 
     static async createAdmin(req: AdminAuthenticatedRequest, res: Response) {
-        const { name, email, isSuperAdmin } = req.body;
+        const { name, email, adminType, supermarketId } = req.body;
 
-        if (!req.isSuperAdmin) {
+        // Check permissions - only super admins can create new admins
+        if (req.adminType !== AdminType.SUPER_ADMIN) {
             throw new ForbiddenError('Only super admin can create new admins');
         }
 
@@ -93,8 +112,27 @@ export default class AdminController {
             throw new BadRequestError('Admin with this email already exists');
         }
 
-        const newAdmin = await AdminService.createAdmin({ name, email, isSuperAdmin });
+        // Create admin data object
+        const adminData: { 
+            name: string; 
+            email: string; 
+            adminType: AdminType; 
+            supermarketId?: string 
+        } = { 
+            name, 
+            email, 
+            adminType };
 
+        // If creating a vendor, require supermarketId
+        if (adminType === AdminType.VENDOR) {
+            if (!supermarketId) {
+                throw new BadRequestError('Supermarket ID is required for vendor accounts');
+            }
+            adminData.supermarketId = supermarketId;
+        }
+
+        const newAdmin = await AdminService.createAdmin(adminData);
+        
         res.status(201).json({
             status: 'success',
             message: 'New admin created successfully',
@@ -103,6 +141,11 @@ export default class AdminController {
     }
 
     static async getAllAdmins(req: AdminAuthenticatedRequest, res: Response) {
+        // Only super admins and regular admins can view all admins
+        if (req.adminType === AdminType.VENDOR) {
+            throw new ForbiddenError('Vendors cannot access admin list');
+        }
+
         const admins = await AdminService.getAllAdmins();
         
         res.status(200).json({
@@ -115,11 +158,11 @@ export default class AdminController {
     static async deleteAdmin(req: AdminAuthenticatedRequest, res: Response) {
         const { adminId } = req.body;
 
-        if (!req.isSuperAdmin) {
+        if (req.adminType !== AdminType.SUPER_ADMIN) {
             throw new ForbiddenError('Only super admin can delete admins');
         }
 
-        await AdminService.deleteAdmin(adminId);
+        await AdminService.deleteAdmin(adminId, req.adminType);
 
         res.status(200).json({
             status: 'success',
@@ -129,6 +172,11 @@ export default class AdminController {
 
     static async blockUser(req: AdminAuthenticatedRequest, res: Response) {
         const { userId, reason } = req.body;
+
+        // Add a permission check
+        if (req.adminType === AdminType.VENDOR) {
+            throw new ForbiddenError('Vendors cannot manage user accounts');
+        }
 
         if (!userId) {
             throw new BadRequestError('User ID is required');
@@ -162,6 +210,11 @@ export default class AdminController {
     static async unblockUser(req: AdminAuthenticatedRequest, res: Response) {
         const { userId, reason } = req.body;
 
+        // Add a permission check
+        if (req.adminType === AdminType.VENDOR) {
+            throw new ForbiddenError('Vendors cannot manage user accounts');
+        }
+
         if (!userId) {
             throw new BadRequestError('User ID is required');
         }
@@ -194,6 +247,11 @@ export default class AdminController {
     static async deactivateUser(req: AdminAuthenticatedRequest, res: Response) {
         const { userId } = req.body;
 
+        // Add a permission check
+        if (req.adminType === AdminType.VENDOR) {
+            throw new ForbiddenError('Vendors cannot manage user accounts');
+        }
+
         if (!userId) {
             throw new BadRequestError('User ID is required');
         }
@@ -216,6 +274,11 @@ export default class AdminController {
 
     static async activateUser(req: AdminAuthenticatedRequest, res: Response) {
         const { userId } = req.body;
+
+        // Add a permission check
+        if (req.adminType === AdminType.VENDOR) {
+            throw new ForbiddenError('Vendors cannot manage user accounts');
+        }
 
         if (!userId) {
             throw new BadRequestError('User ID is required');
@@ -240,6 +303,11 @@ export default class AdminController {
     static async getAllUsers(req: AdminAuthenticatedRequest, res: Response) {
         const { page, size, q, isBlocked, isDeactivated, userType } = req.query;
         const queryParams: Record<string, unknown> = {};
+
+        // Add a permission check
+        if (req.adminType === AdminType.VENDOR) {
+            throw new ForbiddenError('Vendors cannot manage user accounts');
+        }
 
         if (page && size) {
             queryParams.page = Number(page);
@@ -275,6 +343,11 @@ export default class AdminController {
 
     static async getUser(req: AdminAuthenticatedRequest, res: Response) {
         const { id } = req.params;
+
+        // Add a permission check
+        if (req.adminType === AdminType.VENDOR) {
+            throw new ForbiddenError('Vendors cannot manage user accounts');
+        }
 
         if (!id) {
             throw new BadRequestError('User ID is required');
