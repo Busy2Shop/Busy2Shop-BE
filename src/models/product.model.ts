@@ -74,6 +74,12 @@ export default class Product extends Model<Product | IProduct> {
     })
         isAvailable: boolean;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+        createdBy: string;
+
     @IsUUID(4)
     @ForeignKey(() => Market)
     @Column
@@ -98,6 +104,7 @@ export interface IProduct {
     stockQuantity?: number;
     attributes?: object;
     isAvailable?: boolean;
+    createdBy?: string;
     marketId: string;
     market?: Market;
     reviews?: Review[];
