@@ -9,7 +9,7 @@ export interface SaveTokenToCache {
 
 export type AuthToken = 'access' | 'refresh' | 'passwordreset' | 'emailverification' | 'setpassword' | 'adminlogin' | 'admin';
 
-export type ENCRYPTEDTOKEN = AuthToken | 'admin'
+export type ENCRYPTEDTOKEN = AuthToken | 'superAdmin' | 'admin' | 'vendor'
 
 export interface GenerateTokenData {
     type: AuthToken,

@@ -13,6 +13,12 @@ servers:
     description: Development server
 
 components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     Admin:
       type: object
@@ -23,78 +29,117 @@ components:
           description: Unique identifier for the admin
         name:
           type: string
-          description: Admin's full name
+          description: Full name of the admin
         email:
           type: string
           format: email
-          description: Admin's email address
-        isSuperAdmin:
-          type: boolean
-          description: Whether the admin has super admin privileges
+          description: Email address of the admin
+        adminType:
+          type: string
+          enum: [ superAdmin, admin, vendor ]
+          description: Type of admin permissions
+        supermarketId:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID of the supermarket for vendor admins
 
     AdminLoginRequest:
       type: object
+      required:
+        - email
       properties:
         email:
           type: string
           format: email
-          description: Admin's email address
-      required:
-        - email
+          description: Admin email address
+      example:
+        email: admin@example.com
 
     AdminVerifyRequest:
       type: object
-      properties:
-        email:
-          type: string
-          format: email
-          description: Admin's email address
-        otpCode:
-          type: string
-          description: OTP code sent to admin's email
       required:
         - email
         - otpCode
-
-    CreateAdminRequest:
-      type: object
       properties:
-        name:
-          type: string
-          description: Admin's full name
         email:
           type: string
           format: email
-          description: Admin's email address
-        isSuperAdmin:
-          type: boolean
-          description: Whether the admin has super admin privileges
+          description: Admin email address
+        otpCode:
+          type: string
+          description: One-time verification code
+      example:
+        email: admin@example.com
+        otpCode: "123456"
+
+    AdminCreateRequest:
+      type: object
       required:
         - name
         - email
+        - adminType
+      properties:
+        name:
+          type: string
+          description: Full name of the admin
+        email:
+          type: string
+          format: email
+          description: Email address of the admin
+        adminType:
+          type: string
+          enum: [ admin, vendor ]
+          description: Type of admin permissions
+        supermarketId:
+          type: string
+          format: uuid
+          description: ID of the supermarket (required for vendor admins)
+      example:
+        name: John Doe
+        email: john@example.com
+        adminType: vendor
+        supermarketId: 123e4567-e89b-12d3-a456-426614174000
 
-    DeleteAdminRequest:
+    AdminDeleteRequest:
       type: object
+      required:
+        - adminId
       properties:
         adminId:
           type: string
           format: uuid
           description: ID of the admin to delete
-      required:
-        - adminId
+      example:
+        adminId: 123e4567-e89b-12d3-a456-426614174000
 
-    UserActionRequest:
+    UserBlockRequest:
       type: object
+      required:
+        - userId
       properties:
         userId:
           type: string
           format: uuid
-          description: ID of the user to perform action on
+          description: ID of the user to block
         reason:
           type: string
-          description: Reason for the action (required for block/unblock)
+          description: Reason for blocking the user
+      example:
+        userId: 123e4567-e89b-12d3-a456-426614174000
+        reason: Violation of terms of service
+
+    UserRequest:
+      type: object
       required:
         - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+          description: ID of the user
+      example:
+        userId: 123e4567-e89b-12d3-a456-426614174000
 
     User:
       type: object
@@ -102,13 +147,13 @@ components:
         id:
           type: string
           format: uuid
-        firstName:
-          type: string
-        lastName:
+        name:
           type: string
         email:
           type: string
           format: email
+        phone:
+          type: string
         settings:
           type: object
           properties:
@@ -118,41 +163,56 @@ components:
               type: boolean
             meta:
               type: object
-              properties:
-                blockHistory:
-                  type: array
-                  items:
-                    type: object
-                unblockHistory:
-                  type: array
-                  items:
-                    type: object
 
-  securitySchemes:
-    AdminAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    SuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+
+    PaginatedUsers:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Users retrieved successfully
+        data:
+          type: object
+          properties:
+            users:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+            count:
+              type: integer
+            totalPages:
+              type: integer
 
 paths:
   /admin/login:
     post:
+      summary: Admin login
+      description: Initiates the login process by sending an OTP to the admin's email
       tags:
         - Admin Authentication
-      summary: Login as admin
-      description: Sends a verification code to the admin's email
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AdminLoginRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AdminLoginRequest'
       responses:
-        200:
-          description: Verification code sent successfully
+        '200':
+          description: OTP sent successfully
           content:
             application/json:
               schema:
@@ -164,29 +224,22 @@ paths:
                   message:
                     type: string
                     example: Verification code sent to admin email
-        400:
-          description: Invalid request - Bad email format
-        404:
-          description: Admin not found
 
   /admin/verify:
     post:
+      summary: Verify admin login
+      description: Verifies the OTP and completes the login process
       tags:
         - Admin Authentication
-      summary: Verify admin login
-      description: Verifies the OTP code and generates an admin token
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/AdminVerifyRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AdminVerifyRequest'
       responses:
-        200:
-          description: Admin login successful
+        '200':
+          description: Login successful
           content:
             application/json:
               schema:
@@ -205,28 +258,28 @@ paths:
                         type: string
                       admin:
                         $ref: '#/components/schemas/Admin'
-        400:
+        '400':
           description: Invalid verification code
 
   /admin/create:
     post:
+      summary: Create a new admin
+      description: Creates a new admin with specified permissions (Super Admin only)
       tags:
         - Admin Management
       security:
-        - AdminAuth: [ ]
-      summary: Create a new admin
-      description: Creates a new admin (requires super admin privileges)
+        - BearerAuth: [ ]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateAdminRequest'
+              $ref: '#/components/schemas/AdminCreateRequest'
       responses:
-        201:
-          description: New admin created successfully
+        '201':
+          description: Admin created successfully
           content:
-            multipart/form-data:
+            application/json:
               schema:
                 type: object
                 properties:
@@ -238,21 +291,54 @@ paths:
                     example: New admin created successfully
                   data:
                     $ref: '#/components/schemas/Admin'
-        400:
-          description: Admin with this email already exists
-        403:
-          description: Only super admin can create new admins
+        '400':
+          description: Bad request
+        '403':
+          description: Forbidden - Only super admin can create new admins
 
-  /admin/admins:
-    get:
+  /admin/delete:
+    delete:
+      summary: Delete an admin
+      description: Deletes an existing admin (Super Admin only)
       tags:
         - Admin Management
       security:
-        - AdminAuth: [ ]
-      summary: Get all admins
-      description: Retrieves a list of all admins
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminDeleteRequest'
       responses:
-        200:
+        '200':
+          description: Admin deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Admin deleted successfully
+        '403':
+          description: Forbidden - Only super admin can delete admins
+        '404':
+          description: Admin not found
+
+  /admin/admins:
+    get:
+      summary: Get all admins
+      description: Retrieves a list of all admins (Only Admin and Super Admin can use)
+      tags:
+        - Admin Management
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
           description: Admins retrieved successfully
           content:
             application/json:
@@ -269,218 +355,155 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Admin'
-
-  /admin/delete:
-    delete:
-      tags:
-        - Admin Management
-      security:
-        - AdminAuth: [ ]
-      summary: Delete an admin
-      description: Deletes an admin by ID (requires super admin privileges)
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/DeleteAdminRequest'
-      responses:
-        200:
-          description: Admin deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Admin deleted successfully
-        403:
-          description: Only super admin can delete admins
-        404:
-          description: Admin not found
+        '403':
+          description: Forbidden - Vendors cannot access admin list
 
   /admin/block-user:
     post:
+      summary: Block a user
+      description: Blocks a user from accessing the platform (Admin and Super Admin only)
       tags:
         - User Management
       security:
-        - AdminAuth: [ ]
-      summary: Block a user
-      description: Blocks a user and adds entry to block history
+        - BearerAuth: [ ]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserActionRequest'
+              $ref: '#/components/schemas/UserBlockRequest'
       responses:
-        200:
+        '200':
           description: User blocked successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: User blocked successfully
-        400:
-          description: User is already blocked or user ID is required
-        404:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request - User is already blocked
+        '403':
+          description: Forbidden - Vendors cannot manage user accounts
+        '404':
           description: User not found
 
   /admin/unblock-user:
     post:
+      summary: Unblock a user
+      description: Unblocks a previously blocked user (Admin and Super Admin only)
       tags:
         - User Management
       security:
-        - AdminAuth: [ ]
-      summary: Unblock a user
-      description: Unblocks a user and adds entry to unblock history
+        - BearerAuth: [ ]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserActionRequest'
+              $ref: '#/components/schemas/UserBlockRequest'
       responses:
-        200:
+        '200':
           description: User unblocked successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: User unblocked successfully
-        400:
-          description: User is not blocked or user ID is required
-        404:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request - User is not blocked
+        '403':
+          description: Forbidden - Vendors cannot manage user accounts
+        '404':
           description: User not found
 
   /admin/deactivate-user:
     post:
+      summary: Deactivate a user
+      description: Deactivates a user account (Admin and Super Admin only)
       tags:
         - User Management
       security:
-        - AdminAuth: [ ]
-      summary: Deactivate a user
-      description: Deactivates a user account
+        - BearerAuth: [ ]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                userId:
-                  type: string
-                  format: uuid
-              required:
-                - userId
+              $ref: '#/components/schemas/UserRequest'
       responses:
-        200:
+        '200':
           description: User deactivated successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: User deactivated successfully
-        400:
-          description: User is already deactivated or user ID is required
-        404:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request - User is already deactivated
+        '403':
+          description: Forbidden - Vendors cannot manage user accounts
+        '404':
           description: User not found
 
   /admin/activate-user:
     post:
+      summary: Activate a user
+      description: Activates a previously deactivated user account (Admin and Super Admin only)
       tags:
         - User Management
       security:
-        - AdminAuth: [ ]
-      summary: Activate a user
-      description: Activates a deactivated user account
+        - BearerAuth: [ ]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                userId:
-                  type: string
-                  format: uuid
-              required:
-                - userId
+              $ref: '#/components/schemas/UserRequest'
       responses:
-        200:
+        '200':
           description: User activated successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: User activated successfully
-        400:
-          description: User is already activated or user ID is required
-        404:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request - User is already activated
+        '403':
+          description: Forbidden - Vendors cannot manage user accounts
+        '404':
           description: User not found
 
   /admin/users:
     get:
+      summary: Get all users
+      description: Retrieves a paginated list of all users with optional filters (Admin and Super Admin only)
       tags:
         - User Management
       security:
-        - AdminAuth: [ ]
-      summary: Get all users
-      description: Retrieves a list of all users with filtering options
+        - BearerAuth: [ ]
       parameters:
         - in: query
           name: page
           schema:
             type: integer
-          description: Page number for pagination
+          description: Page number
         - in: query
           name: size
           schema:
             type: integer
-          description: Number of items per page
+          description: Items per page
         - in: query
           name: q
           schema:
             type: string
-          description: Search query for user name or email
+          description: Search query for username or email
         - in: query
           name: isBlocked
           schema:
             type: boolean
-          description: Filter by blocked status
+          description: Filter blocked users
         - in: query
           name: isDeactivated
           schema:
             type: boolean
-          description: Filter by deactivation status
+          description: Filter deactivated users
         - in: query
           name: userType
           schema:
@@ -488,39 +511,23 @@ paths:
             enum: [ agent, customer ]
           description: Filter by user type
       responses:
-        200:
+        '200':
           description: Users retrieved successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: success
-                  message:
-                    type: string
-                    example: Users retrieved successfully
-                  data:
-                    type: object
-                    properties:
-                      users:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/User'
-                      count:
-                        type: integer
-                      totalPages:
-                        type: integer
+                $ref: '#/components/schemas/PaginatedUsers'
+        '403':
+          description: Forbidden - Vendors cannot manage user accounts
 
   /admin/user/{id}:
     get:
+      summary: Get a user by ID
+      description: Retrieves a specific user by their ID (Admin and Super Admin only)
       tags:
         - User Management
       security:
-        - AdminAuth: [ ]
-      summary: Get a single user
-      description: Retrieves details for a specific user
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -528,9 +535,9 @@ paths:
           schema:
             type: string
             format: uuid
-          description: ID of the user to retrieve
+          description: User ID
       responses:
-        200:
+        '200':
           description: User retrieved successfully
           content:
             application/json:
@@ -545,5 +552,7 @@ paths:
                     example: User retrieved successfully
                   data:
                     $ref: '#/components/schemas/User'
-        404:
+        '403':
+          description: Forbidden - Vendors cannot manage user accounts
+        '404':
           description: User not found

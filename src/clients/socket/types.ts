@@ -1,4 +1,5 @@
 /* eslint-disable no-unused-vars */
+import { AdminType } from 'models/admin.model';
 import { SenderType } from '../../models/chatMessage.model';
 import { Socket } from 'socket.io';
 
@@ -27,7 +28,8 @@ export interface SocketUser {
     id: string;
     type: SenderType;
     name: string;
-    isSuperAdmin?: boolean;
+    adminType?: AdminType;
+    supermarketId?: string | null;
 }
 
 export interface SocketData {

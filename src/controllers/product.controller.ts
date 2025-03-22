@@ -1,14 +1,18 @@
 /* eslint-disable no-undef */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Request, Response } from 'express';
-import { AuthenticatedRequest } from '../middlewares/authMiddleware';
+import { AdminAuthenticatedRequest, AuthenticatedRequest } from '../middlewares/authMiddleware';
 import ProductService from '../services/product.service';
 import MarketService from '../services/market.service';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
 
 export default class ProductController {
-    static async createProduct(req: AuthenticatedRequest, res: Response) {
+    static async createProduct(req: Request, res: Response) {
+        // Determine if this is a regular user or admin request
+        const isAdminRequest = 'adminType' in req;
+        const userId = isAdminRequest ? (req as AdminAuthenticatedRequest).adminId : (req as AuthenticatedRequest).user.id;
+    
         const {
             name,
             description,
@@ -20,34 +24,46 @@ export default class ProductController {
             stockQuantity,
             attributes,
         } = req.body;
-
+    
         if (!name || !price || !marketId) {
             throw new BadRequestError('Product name, price, and market ID are required');
         }
-
-        // Verify the user owns the market
-        const market = await MarketService.viewSingleMarket(marketId);
-        if (market.ownerId !== req.user.id) {
-            throw new ForbiddenError('You do not have permission to add products to this market');
+    
+        // Check permission for the market
+        if (isAdminRequest && (req as AdminAuthenticatedRequest).adminType === 'vendor') {
+            // Vendor admin check - must match their assigned supermarket
+            if ((req as AdminAuthenticatedRequest).supermarketId !== marketId) {
+                throw new ForbiddenError('You do not have permission to add products to this market');
+            }
+        } else {
+            // Regular user check - must own the market
+            const market = await MarketService.viewSingleMarket(marketId);
+            if (market.ownerId !== userId) {
+                throw new ForbiddenError('You do not have permission to add products to this market');
+            }
         }
-
+    
         // Handle product images upload
         const files = req.files as Express.Multer.File[] | undefined;
         const imageUrls: string[] = [];
-
+    
+        if (!userId) {
+            throw new BadRequestError('User ID is required');
+        }
+    
         if (files && files.length > 0) {
             // Upload each image to Cloudinary
             for (const file of files) {
                 const result = await CloudinaryClientConfig.uploadtoCloudinary({
                     fileBuffer: file.buffer,
-                    id: req.user.id,
+                    id: userId,
                     name: file.originalname,
                     type: 'product',
                 });
                 imageUrls.push(result.url as string);
             }
         }
-
+    
         // Create the product
         const newProduct = await ProductService.addProduct({
             name,
@@ -61,8 +77,9 @@ export default class ProductController {
             attributes,
             images: imageUrls,
             isAvailable: true,
+            createdBy: userId, // Track who created it
         });
-
+    
         res.status(201).json({
             status: 'success',
             message: 'Product created successfully',
@@ -148,7 +165,11 @@ export default class ProductController {
         });
     }
 
-    static async updateProduct(req: AuthenticatedRequest, res: Response) {
+    static async updateProduct(req: Request, res: Response) {
+        // Determine if this is a regular user or admin request
+        const isAdminRequest = 'adminType' in req;
+        const userId = isAdminRequest ? (req as AdminAuthenticatedRequest).adminId : (req as AuthenticatedRequest).user.id;
+    
         const { id } = req.params;
         const {
             name,
@@ -161,24 +182,44 @@ export default class ProductController {
             attributes,
             isAvailable,
         } = req.body;
-
+    
+        // Get the product to check permission
+        const product = await ProductService.getProduct(id);
+        
+        // Check permission for the product's market
+        if (isAdminRequest && (req as AdminAuthenticatedRequest).adminType === 'vendor') {
+            // Vendor admin check - must match their assigned supermarket
+            if ((req as AdminAuthenticatedRequest).supermarketId !== product.marketId) {
+                throw new ForbiddenError('You do not have permission to update products in this market');
+            }
+        } else {
+            // Regular user check - must own the market
+            const market = await MarketService.viewSingleMarket(product.marketId);
+            if (market.ownerId !== userId) {
+                throw new ForbiddenError('You do not have permission to update products in this market');
+            }
+        }
+    
         // Handle product images upload
         const files = req.files as Express.Multer.File[] | undefined;
         const imageUrls: string[] = [];
-
+    
         if (files && files.length > 0) {
             // Upload each new image to Cloudinary
             for (const file of files) {
+                if (!userId) {
+                    throw new BadRequestError('User ID is required');
+                }
                 const result = await CloudinaryClientConfig.uploadtoCloudinary({
                     fileBuffer: file.buffer,
-                    id: req.user.id,
+                    id: userId, // Use the determined userId
                     name: file.originalname,
                     type: 'product',
                 });
                 imageUrls.push(result.url as string);
             }
         }
-
+    
         // Prepare update data
         const updateData: Record<string, any> = {};
         if (name) updateData.name = name;
@@ -193,21 +234,25 @@ export default class ProductController {
         if (attributes !== undefined) updateData.attributes = attributes;
         if (isAvailable !== undefined) updateData.isAvailable = isAvailable === 'true';
 
+        if (!userId) {
+            throw new BadRequestError('User ID is required');
+        }
+    
         // Only update images if new ones were uploaded
         if (imageUrls.length > 0) {
             // Check if we should append or replace images
             const appendImages = req.body.appendImages === 'true';
-
+    
             if (appendImages) {
-                const product = await ProductService.getProduct(id);
                 updateData.images = [...(product.images || []), ...imageUrls];
             } else {
                 updateData.images = imageUrls;
             }
         }
-
-        const updatedProduct = await ProductService.updateProduct(id, req.user.id, updateData);
-
+    
+        // Use a single service method that can handle both user types
+        const updatedProduct = await ProductService.updateProduct(id, userId, updateData);
+    
         res.status(200).json({
             status: 'success',
             message: 'Product updated successfully',
@@ -215,11 +260,37 @@ export default class ProductController {
         });
     }
 
-    static async deleteProduct(req: AuthenticatedRequest, res: Response) {
+    static async deleteProduct(req: Request, res: Response) {
+        // Determine if this is a regular user or admin request
+        const isAdminRequest = 'adminType' in req;
+        const userId = isAdminRequest ? (req as AdminAuthenticatedRequest).adminId : (req as AuthenticatedRequest).user.id;
+        
         const { id } = req.params;
-
-        await ProductService.deleteProduct(id, req.user.id);
-
+        
+        // Get the product to check market permission
+        const product = await ProductService.getProduct(id);
+        
+        // Check permission for the product's market
+        if (isAdminRequest && (req as AdminAuthenticatedRequest).adminType === 'vendor') {
+            // Vendor admin check - must match their assigned supermarket
+            if ((req as AdminAuthenticatedRequest).supermarketId !== product.marketId) {
+                throw new ForbiddenError('You do not have permission to delete products in this market');
+            }
+        } else {
+            // Regular user check - must own the market
+            const market = await MarketService.viewSingleMarket(product.marketId);
+            if (market.ownerId !== userId) {
+                throw new ForbiddenError('You do not have permission to delete products in this market');
+            }
+        }
+        
+        if (!userId) {
+            throw new BadRequestError('User ID is required');
+        }
+    
+        // Use the same service method with the determined userId
+        await ProductService.deleteProduct(id, userId);
+    
         res.status(200).json({
             status: 'success',
             message: 'Product deleted successfully',
@@ -227,34 +298,86 @@ export default class ProductController {
         });
     }
 
-    static async toggleProductAvailability(req: AuthenticatedRequest, res: Response) {
+    static async toggleProductAvailability(req: Request, res: Response) {
+        // Determine if this is a regular user or admin request
+        const isAdminRequest = 'adminType' in req;
+        const userId = isAdminRequest ? (req as AdminAuthenticatedRequest).adminId : (req as AuthenticatedRequest).user.id;
+        
         const { id } = req.params;
-
-        const product = await ProductService.toggleProductAvailability(id, req.user.id);
-
+        
+        // Get the product to check market permission
+        const product = await ProductService.getProduct(id);
+        
+        // Check permission for the product's market
+        if (isAdminRequest && (req as AdminAuthenticatedRequest).adminType === 'vendor') {
+            // Vendor admin check - must match their assigned supermarket
+            if ((req as AdminAuthenticatedRequest).supermarketId !== product.marketId) {
+                throw new ForbiddenError('You do not have permission to modify products in this market');
+            }
+        } else {
+            // Regular user check - must own the market
+            const market = await MarketService.viewSingleMarket(product.marketId);
+            if (market.ownerId !== userId) {
+                throw new ForbiddenError('You do not have permission to modify products in this market');
+            }
+        }
+        
+        if (!userId) {
+            throw new BadRequestError('User ID is required');
+        }
+    
+        // Use the same service method with the determined userId
+        const updatedProduct = await ProductService.toggleProductAvailability(id, userId);
+    
         res.status(200).json({
             status: 'success',
-            message: `Product ${product.isAvailable ? 'enabled' : 'disabled'} successfully`,
-            data: product,
+            message: `Product ${updatedProduct.isAvailable ? 'enabled' : 'disabled'} successfully`,
+            data: updatedProduct,
         });
     }
 
-    static async bulkCreateProducts(req: AuthenticatedRequest, res: Response) {
+    static async bulkCreateProducts(req: Request, res: Response) {
+        // Determine if this is a regular user or admin request
+        const isAdminRequest = 'adminType' in req;
+        const userId = isAdminRequest ? (req as AdminAuthenticatedRequest).adminId : (req as AuthenticatedRequest).user.id;
+        
         const { products } = req.body;
-
+    
         if (!products || !Array.isArray(products) || products.length === 0) {
             throw new BadRequestError('Please provide an array of products');
         }
-
-        // Validate required fields for each product
+    
+        // Validate required fields and market permissions for each product
         for (const product of products) {
             if (!product.name || !product.price || !product.marketId) {
                 throw new BadRequestError('Product name, price, and market ID are required for all products');
             }
+            
+            // Check permission for the market
+            if (isAdminRequest && (req as AdminAuthenticatedRequest).adminType === 'vendor') {
+                // Vendor admin check - must match their assigned supermarket
+                if ((req as AdminAuthenticatedRequest).supermarketId !== product.marketId) {
+                    throw new ForbiddenError(`You do not have permission to add products to market ${product.marketId}`);
+                }
+            } else {
+                // Regular user check - must own the market
+                const market = await MarketService.viewSingleMarket(product.marketId);
+                if (market.ownerId !== userId) {
+                    throw new ForbiddenError(`You do not have permission to add products to market ${product.marketId}`);
+                }
+            }
+            
+            // Set the creator for this product
+            product.createdBy = userId;
         }
-
-        const createdProducts = await ProductService.bulkAddProducts(products, req.user.id);
-
+        
+        if (!userId) {
+            throw new BadRequestError('User ID is required');
+        }
+    
+        // Use the same service method with the determined userId
+        const createdProducts = await ProductService.bulkAddProducts(products, userId);
+    
         res.status(201).json({
             status: 'success',
             message: `${createdProducts.length} products created successfully`,

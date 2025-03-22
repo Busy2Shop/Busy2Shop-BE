@@ -1,0 +1,398 @@
+openapi: 3.0.0
+info:
+  title: Vendor Admin API
+  description: Vendor-specific endpoints for product management in the Busy2Shop e-commerce platform
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@busy2shop.com
+  license:
+    name: proprietary
+servers:
+  - url: http://localhost:8000/api/v0
+    description: Development server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ProductRequest:
+      type: object
+      required:
+        - name
+        - price
+        - marketId
+      properties:
+        name:
+          type: string
+          description: Product name
+        description:
+          type: string
+          description: Product description
+        price:
+          type: number
+          format: float
+          description: Product price
+        discountPrice:
+          type: number
+          format: float
+          description: Discounted price (if applicable)
+        marketId:
+          type: string
+          format: uuid
+          description: ID of the market the product belongs to
+        barcode:
+          type: string
+          description: Product barcode
+        sku:
+          type: string
+          description: Stock keeping unit
+        stockQuantity:
+          type: integer
+          description: Available stock quantity
+        attributes:
+          type: object
+          description: Additional product attributes
+        isAvailable:
+          type: boolean
+          description: Product availability status
+
+    BulkProductRequest:
+      type: object
+      required:
+        - products
+      properties:
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductRequest'
+
+    ProductResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+          format: float
+        discountPrice:
+          type: number
+          format: float
+          nullable: true
+        images:
+          type: array
+          items:
+            type: string
+        barcode:
+          type: string
+        sku:
+          type: string
+        stockQuantity:
+          type: integer
+        attributes:
+          type: object
+        isAvailable:
+          type: boolean
+        marketId:
+          type: string
+          format: uuid
+        market:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            marketType:
+              type: string
+            address:
+              type: object
+
+    SuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+
+paths:
+  /admin/products:
+    post:
+      summary: Create a product
+      description: Creates a new product (Vendor admin only)
+      tags:
+        - Vendor-Admin Product Management
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Product name
+                description:
+                  type: string
+                  description: Product description
+                price:
+                  type: number
+                  format: float
+                  description: Product price
+                discountPrice:
+                  type: number
+                  format: float
+                  description: Discounted price (if applicable)
+                marketId:
+                  type: string
+                  format: uuid
+                  description: ID of the market the product belongs to
+                barcode:
+                  type: string
+                  description: Product barcode
+                sku:
+                  type: string
+                  description: Stock keeping unit
+                stockQuantity:
+                  type: integer
+                  description: Available stock quantity
+                attributes:
+                  type: object
+                  description: Additional product attributes
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Product images (up to 5)
+      responses:
+        '201':
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Product created successfully
+                  data:
+                    $ref: '#/components/schemas/ProductResponse'
+        '400':
+          description: Bad request
+        '403':
+          description: Forbidden - Vendor cannot add products to this market
+
+  /admin/products/{id}:
+    put:
+      summary: Update a product
+      description: Updates an existing product (Vendor admin only)
+      tags:
+        - Vendor-Admin Product Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Product ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Product name
+                description:
+                  type: string
+                  description: Product description
+                price:
+                  type: number
+                  format: float
+                  description: Product price
+                discountPrice:
+                  type: number
+                  format: float
+                  description: Discounted price (if applicable)
+                barcode:
+                  type: string
+                  description: Product barcode
+                sku:
+                  type: string
+                  description: Stock keeping unit
+                stockQuantity:
+                  type: integer
+                  description: Available stock quantity
+                attributes:
+                  type: object
+                  description: Additional product attributes
+                isAvailable:
+                  type: string
+                  enum: ['true', 'false']
+                  description: Product availability status
+                appendImages:
+                  type: string
+                  enum: ['true', 'false']
+                  description: Whether to append or replace images
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Product images (up to 5)
+      responses:
+        '200':
+          description: Product updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Product updated successfully
+                  data:
+                    $ref: '#/components/schemas/ProductResponse'
+        '403':
+          description: Forbidden - Vendor cannot update products in this market
+        '404':
+          description: Product not found
+
+    delete:
+      summary: Delete a product
+      description: Deletes an existing product (Vendor admin only)
+      tags:
+        - Vendor-Admin Product Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Product ID
+      responses:
+        '200':
+          description: Product deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Product deleted successfully
+                  data:
+                    type: object
+        '403':
+          description: Forbidden - Vendor cannot delete products in this market
+        '404':
+          description: Product not found
+
+  /admin/products/{id}/toggle:
+    patch:
+      summary: Toggle product availability
+      description: Toggles a product's availability status (Vendor admin only)
+      tags:
+        - Vendor-Admin Product Management
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Product ID
+      responses:
+        '200':
+          description: Product availability toggled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Product enabled/disabled successfully
+                  data:
+                    $ref: '#/components/schemas/ProductResponse'
+        '403':
+          description: Forbidden - Vendor cannot modify products in this market
+        '404':
+          description: Product not found
+
+  /admin/products/bulk:
+    post:
+      summary: Bulk create products
+      description: Creates multiple products in a single request (Vendor admin only)
+      tags:
+        - Vendor-Admin Product Management
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkProductRequest'
+      responses:
+        '201':
+          description: Products created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Products created successfully
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProductResponse'
+        '400':
+          description: Bad request
+        '403':
+          description: Forbidden - Vendor cannot add products to some markets

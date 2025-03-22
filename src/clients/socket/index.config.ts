@@ -12,6 +12,7 @@ import {
     SocketData,
     CustomSocket,
 } from './types';
+import { AdminType } from '../../models/admin.model';
 import { ADMIN_EMAIL } from '../../utils/constants';
 import AdminService from '../../services/AdminServices/admin.service';
 import { DecodedTokenData } from '../../utils/interface';
@@ -67,7 +68,6 @@ export default class SocketConfig {
                     }
 
                     let emailToUse = (tokenData.authKey as string).toLowerCase().trim();
-                    let isSuperAdmin = false;
 
                     if (!tokenData.authKey) {
                         return next(new Error('Invalid admin token'));
@@ -76,18 +76,24 @@ export default class SocketConfig {
                     if (tokenData.authKey !== ADMIN_EMAIL) {
                         const admin = await AdminService.getAdminByEmail(tokenData.authKey);
                         emailToUse = admin.email;
-                        isSuperAdmin = admin.isSuperAdmin;
+                        
+                        socket.data.user = {
+                            id: tokenData.authKey,
+                            type: 'admin',
+                            name: emailToUse,
+                            adminType: admin.adminType,
+                            supermarketId: admin.supermarketId || null,
+                        };
                     } else {
-                        isSuperAdmin = true;
+                        // Default admin is SUPER_ADMIN
+                        socket.data.user = {
+                            id: tokenData.authKey,
+                            type: 'admin',
+                            name: emailToUse,
+                            adminType: AdminType.SUPER_ADMIN,
+                            supermarketId: null,
+                        };
                     }
-
-                    // Set admin user data in socket
-                    socket.data.user = {
-                        id: tokenData.authKey,
-                        type: 'admin',
-                        name: emailToUse,
-                        isSuperAdmin,
-                    };
                     socket.data.token = jwtToken;
 
                 } else {

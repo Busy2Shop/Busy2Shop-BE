@@ -5,8 +5,7 @@ import User from '../models/user.model';
 import UserService from '../services/user.service';
 import { logger } from '../utils/logger';
 import { AuthUtil, TokenCacheUtil } from '../utils/token';
-import Admin from '../models/admin.model';
-import AdminService from '../services/AdminServices/admin.service';
+import Admin, { AdminType } from '../models/admin.model';
 import { ADMIN_EMAIL } from '../utils/constants';
 
 
@@ -15,9 +14,10 @@ export interface AuthenticatedRequest extends Request {
 }
 
 export interface AdminAuthenticatedRequest extends Request {
-    email: string;
-    admin?: Admin;
-    isSuperAdmin: boolean;
+    adminId?: string;
+    adminEmail?: string;
+    adminType?: AdminType;
+    supermarketId?: string;
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -101,46 +101,71 @@ export const basicAuth = function (tokenType: AuthToken) {
     };
 };
 
-export const adminAuth = function (tokenType: ENCRYPTEDTOKEN) {
+export const adminAuth = function (requiredType: ENCRYPTEDTOKEN = 'vendor') {
     return async (req: Request, res: Response, next: NextFunction) => {
-        const authHeader = req.headers.authorization;
-        if (!authHeader?.startsWith('Bearer'))
-            return next(new UnauthorizedError('Invalid authorization header'));
+        try {
+            const authHeader = req.headers.authorization;
+            if (!authHeader?.startsWith('Bearer'))
+                return next(new UnauthorizedError('Invalid authorization header'));
 
-        const jwtToken = authHeader.split(' ')[1];
+            const jwtToken = authHeader.split(' ')[1];
 
-        const payload = AuthUtil.verifyAdminToken(jwtToken, tokenType);
+            const payload = AuthUtil.verifyAdminToken(jwtToken, 'admin');
 
-        const tokenData = payload as unknown as Omit<DecodedTokenData, 'user'>;
-        logger.payload('Admin Token data', tokenData);
+            const tokenData = payload as unknown as Omit<DecodedTokenData, 'user'>;
+            logger.payload('Admin Token data', tokenData);
 
-        if (tokenData.tokenType !== 'admin') {
-            return next(new UnauthorizedError('You are not authorized to perform this action'));
+            if (tokenData.tokenType !== 'admin') {
+                return next(new UnauthorizedError('You are not authorized to perform this action'));
+            }
+
+            const key = `admin_token:${tokenData.authKey}`;
+            const token = await TokenCacheUtil.getTokenFromCache(key);
+
+            if (token !== jwtToken) {
+                return next(new UnauthorizedError('You are not authorized to perform this action'));
+            }
+
+            // Get admin details
+            let admin;
+            if (tokenData.authKey !== ADMIN_EMAIL) {
+                admin = await Admin.findOne({ where: { email: tokenData.authKey } });
+                if (!admin) {
+                    return next(new UnauthorizedError('Invalid admin credentials'));
+                }
+            } else {
+                // Default super-admin from environment variable
+                admin = {
+                    email: ADMIN_EMAIL,
+                    adminType: AdminType.SUPER_ADMIN,
+                    id: 'default-super-admin',
+                };
+            }
+
+            // Add the admin information to the request
+            (req as AdminAuthenticatedRequest).adminEmail = admin.email;
+            (req as AdminAuthenticatedRequest).adminId = admin.id;
+            (req as AdminAuthenticatedRequest).adminType = admin.adminType;
+            (req as AdminAuthenticatedRequest).supermarketId = admin.supermarketId;
+
+            // Permission checks based on the admin type
+            if (requiredType === 'superAdmin' && admin.adminType !== AdminType.SUPER_ADMIN) {
+                return next(new ForbiddenError('Super admin privileges required'));
+            }
+
+            if (requiredType === 'admin' &&
+                admin.adminType !== AdminType.ADMIN &&
+                admin.adminType !== AdminType.SUPER_ADMIN) {
+                return next(new ForbiddenError('Admin privileges required'));
+            }
+
+            // No need to check for vendor level - everyone has at least vendor permissions
+
+            logger.authorized('Admin authorized');
+            next();
+        } catch (error) {
+            next(error);
         }
-
-        const key = `${tokenType}_token:${tokenData.authKey}`;
-        const token = await TokenCacheUtil.getTokenFromCache(key);
-
-        if (token !== jwtToken) {
-            return next(new UnauthorizedError('You are not authorized to perform this action'));
-        }
-
-        let emailToUse = (tokenData.authKey as string).toLowerCase().trim();
-        if ((tokenData.authKey as string) !== ADMIN_EMAIL) {
-            const admin = await AdminService.getAdminByEmail(tokenData.authKey as string);
-            emailToUse = admin.email;
-            (req as AdminAuthenticatedRequest).admin = admin;
-            (req as AdminAuthenticatedRequest).isSuperAdmin = admin.isSuperAdmin;
-        } else {
-            (req as AdminAuthenticatedRequest).isSuperAdmin = true;
-        }
-
-        (req as AdminAuthenticatedRequest).email = emailToUse;
-
-
-        logger.authorized('User authorized');
-
-        next();
     };
 };
 

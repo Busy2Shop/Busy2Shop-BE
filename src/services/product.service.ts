@@ -1,7 +1,7 @@
-import { Op, FindAndCountOptions } from 'sequelize';
+import { FindAndCountOptions, Op } from 'sequelize';
 import Product, { IProduct } from '../models/product.model';
 import Market from '../models/market.model';
-import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customErrors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 
 export interface IViewProductsQuery {
@@ -32,8 +32,7 @@ export default class ProductService {
             throw new BadRequestError('Only supermarkets can have products');
         }
 
-        const newProduct = await Product.create({ ...productData });
-        return newProduct;
+        return await Product.create({ ...productData });
     }
 
     static async viewProducts(queryData?: IViewProductsQuery): Promise<{ products: Product[], count: number, totalPages?: number }> {
@@ -110,7 +109,7 @@ export default class ProductService {
             throw new NotFoundError('Market not found');
         }
 
-        // Add marketId to query
+        // Add marketId to the query
         const marketQuery = {
             ...queryData,
             marketId,
@@ -213,7 +212,7 @@ export default class ProductService {
         // Create all products
         const createdProducts = await Product.bulkCreate(products);
 
-        // Return all created products with their markets
+        // Return all created products with their respective markets
         return await Product.findAll({
             where: {
                 id: { [Op.in]: createdProducts.map(p => p.id) },
