@@ -1,14 +1,24 @@
 import jwt from 'jsonwebtoken';
-import { JWT_SECRET, JWT_ACCESS_SECRET, JWT_ADMIN_ACCESS_SECRET, JWT_REFRESH_SECRET } from './constants';
+import { JWT_ACCESS_SECRET, JWT_ADMIN_ACCESS_SECRET, JWT_REFRESH_SECRET, JWT_SECRET } from './constants';
 import { v4 as uuidv4 } from 'uuid';
 import { redisClient } from './redis';
-import { UnauthorizedError, TokenExpiredError, JsonWebTokenError } from './customErrors';
-import { AuthToken, CompareTokenData, CompareAdminTokenData, DecodedTokenData, DeleteToken, ENCRYPTEDTOKEN, GenerateCodeData, GenerateTokenData, SaveTokenToCache, GenerateAdminTokenData } from './interface';
+import { JsonWebTokenError, TokenExpiredError, UnauthorizedError } from './customErrors';
+import {
+    AuthToken,
+    CompareAdminTokenData,
+    CompareTokenData,
+    DecodedTokenData,
+    DeleteToken,
+    ENCRYPTEDTOKEN,
+    GenerateAdminTokenData,
+    GenerateCodeData,
+    GenerateTokenData,
+    SaveTokenToCache,
+} from './interface';
 
 class TokenCacheUtil {
     static saveTokenToCache({ key, token, expiry }: SaveTokenToCache) {
-        const response = expiry ? redisClient.setex(key, expiry, token) : redisClient.set(key, token);
-        return response;
+        return expiry ? redisClient.setex(key, expiry, token) : redisClient.set(key, token);
     }
 
     static async saveTokenToCacheList({ key, token, expiry }: SaveTokenToCache) {
@@ -27,11 +37,9 @@ class TokenCacheUtil {
         const state = 'active'; // You can set the initial state as needed
         const dataToSave = { token, state };
 
-        const response = expiry
-            ? redisClient.setex(key, expiry, JSON.stringify(dataToSave))
-            : redisClient.set(key, token);
-
-        return response;
+        return expiry
+            ? await redisClient.setex(key, expiry, JSON.stringify(dataToSave))
+            : await redisClient.set(key, token);
     }
 
     static async updateTokenState(key: string, newState: string) {
@@ -47,7 +55,7 @@ class TokenCacheUtil {
             throw new UnauthorizedError('Unauthorized token');  
         }
 
-        // Save updated state along with the existing token and remaining TTL
+        // Save the updated state along with the existing token and remaining TTL
         const existingTTL = await redisClient.ttl(key);
         const updatedData = { token, state: newState };
 
