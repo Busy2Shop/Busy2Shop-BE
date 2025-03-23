@@ -10,20 +10,20 @@ user auth login
   "password": "Password123!"
 }
 
-Json model to create a market.
+JSON model to create a market.
 {
   "name": "Home Affairs Supermarket",
-  "address": "24 Diya St, Gbagada, Lagos",
+  "address": "24 Mark St, Ikeja, Lagos",
   "location": {
     "latitude": 6.553191,
     "longitude": 3.391058,
-    "city": "Gbagada",
+    "city": "Ikeja",
     "state": "Lagos",
     "country": "Nigeria"
   },
   "phoneNumber": "08044233345",
   "marketType": "supermarket",
-  "description": "Amazing all in one stop shop. Our staffs are courteous and helpful",
+  "description": "Amazing all in one-stop shop. Our staffs are courteous and helpful",
   "operatingHours": {
     "monday": {
       "open": "09:00 AM",
@@ -56,12 +56,12 @@ Json model to create a market.
   }
 }
 
-Bulk upload Json Data.
+Bulk upload JSON Data.
 {
   "products": [
     {
-      "name": "Chicken-pie",
-      "description": "The best chicken-pie you will ever come across.",
+      "name": "Chicken-pie.",
+      "description": "The best chicken-pie one will ever come across.",
       "price": 950,
       "discountPrice": 0,
       "sku": "25",
@@ -71,8 +71,8 @@ Bulk upload Json Data.
     },
 
     {
-      "name": "Fish-pie",
-      "description": "The best fish-pie you will ever come across.",
+      "name": "Fish-pie.",
+      "description": "The best fish-pie one will ever come across.",
       "price": 1000,
       "discountPrice": 0,
       "sku": "29",
@@ -85,12 +85,3 @@ Bulk upload Json Data.
 
 #TODO
 Add isDeleted column to all database tables.
-
-#TODO
-1] The create endpoint json request is not complete.
-
-#Todo
-1] A vendor can create a shopping list and a shopping item.
-
-#Todo
-1] If i am updating an item in a shopping list, i am meant to update the productId of the item I changed it to.

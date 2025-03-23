@@ -1,6 +1,6 @@
-import { Transaction, Includeable, WhereOptions } from 'sequelize';
+import { Includeable, Transaction, WhereOptions } from 'sequelize';
 import User from '../models/user.model';
-import { NotFoundError, BadRequestError } from '../utils/customErrors';
+import { BadRequestError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import Referral, { IReferral, ReferralStatus } from '../models/referral.model';
 
@@ -15,14 +15,12 @@ export interface IViewReferralsQuery {
 export default class ReferralService {
 
     static async createReferral(referralData: IReferral, transaction?: Transaction): Promise<Referral> {
-        const newReferral = await Referral.create({ ...referralData }, { transaction });
-        return newReferral;
+        return await Referral.create({ ...referralData }, { transaction });
     }
 
     static async updateReferral(referral: Referral, dataToUpdate: Partial<IReferral>): Promise<Referral> {
         await referral.update(dataToUpdate);
-        const updatedReferral = await this.viewReferral(referral.id);
-        return updatedReferral;
+        return await this.viewReferral(referral.id);
     }
 
     static async deleteReferral(referral: Referral, transaction?: Transaction): Promise<void> {
