@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { v2 as cloudinary } from 'cloudinary';
-import { CLOUDINARY_API_SECRET, CLOUDINARY_API_KEY, CLOUDINARY_CLOUD_NAME } from '../utils/constants';
+import { CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_CLOUD_NAME } from '../utils/constants';
+
 export type uploadType = {
     message: string;
     url?: string;
@@ -20,7 +21,7 @@ export default class CloudinaryClientConfig {
                 public_id: name,
             };
 
-            const result: uploadType = await new Promise((resolve, reject) => {
+            return await new Promise((resolve, reject) => {
                 cloudinary.uploader
                     .upload_stream(options, (error, result) => {
                         if (error) {
@@ -33,8 +34,6 @@ export default class CloudinaryClientConfig {
                     })
                     .end(fileBuffer);
             });
-
-            return result;
         } catch (error) {
             console.log(error);
             return { message: 'error', error };

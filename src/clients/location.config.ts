@@ -12,27 +12,25 @@ export class LocationClientConfig {
         try {
             const response = await fetch(url);
             if (!response.ok) {
-                // If response is not okay, return null
+                // If the response is not okay, return null
                 return null;
             }
 
             const data = await response.json();
             console.log('Address details:', data);
-            // Check if city is not equal to state before including it in the response
+            // Check if the city is not equal to the state before including it in the response
             let city: string | undefined;
             if (data.address.city && data.address.city !== data.address.state) {
                 city = data.address.city;
             }
 
             // Extract relevant information and create an instance of AddressDetails
-            const addressDetails: AddressDetails = {
+            return {
                 city: city,
                 state: data.address.state ?? '',
                 country: data.address.country ?? '',
                 countryCode: data.address.country_code ? data.address.country_code.toUpperCase() : '',
             };
-            
-            return addressDetails;
         } catch (error) {
             console.error('Failed to fetch address details:', error);
             return null;

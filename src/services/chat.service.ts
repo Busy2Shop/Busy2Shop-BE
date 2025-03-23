@@ -1,4 +1,4 @@
-import { Op,  Transaction  } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import { Database } from '../models';
 import ChatMessage, { SenderType } from '../models/chatMessage.model';
 import User from '../models/user.model';
@@ -74,7 +74,7 @@ export class ChatService {
         });
 
         // Format messages for response
-        const formattedMessages: ChatMessageType[] = messages.map((message) => ({
+        return messages.map((message) => ({
             id: message.id,
             orderId: message.orderId,
             senderId: message.senderId,
@@ -85,8 +85,6 @@ export class ChatService {
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
         }));
-
-        return formattedMessages;
     }
 
     static async markMessagesAsRead(orderId: string, userId: string): Promise<number> {

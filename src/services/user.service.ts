@@ -1,6 +1,6 @@
-import { Transaction, Op, FindAndCountOptions } from 'sequelize';
+import { FindAndCountOptions, Op, Transaction } from 'sequelize';
 import User, { IUser } from '../models/user.model';
-import { NotFoundError, BadRequestError } from '../utils/customErrors';
+import { BadRequestError, NotFoundError } from '../utils/customErrors';
 import Validator from '../utils/validators';
 import Pagination, { IPaging } from '../utils/pagination';
 import { Sequelize } from '../models';
@@ -46,7 +46,7 @@ export default class UserService {
             attributes: ['email'],
         });
 
-        // Check if any user was found
+        // Verify the user exists with these criteria.
         if (existingUser) {
             if (existingUser.email === email) {
                 throw new BadRequestError('Email already in use');
@@ -61,12 +61,10 @@ export default class UserService {
         if (!validEmail) throw new BadRequestError('Invalid email');
 
         // Find a user with the constructed where condition
-        const existingUser: User | null = await User.findOne({
+        return await User.findOne({
             where: { email },
             attributes: ['email', 'id'],
         });
-
-        return existingUser;
 
     }
 
@@ -105,7 +103,7 @@ export default class UserService {
             settingsWhere.isDeactivated = isDeactivated;
         }
 
-        // Add filter for user type
+        // Add filter for the user type
         if (userType) {
             where['status'] = { [Op.contains]: { userType } };
         }
@@ -183,9 +181,7 @@ export default class UserService {
     static async updateUser(user: User, dataToUpdate: Partial<IUser>): Promise<User> {
         await user.update(dataToUpdate);
 
-        const updatedUser = await this.viewSingleUser(user.id);
-
-        return updatedUser;
+        return await this.viewSingleUser(user.id);
     }
 
     static async updateUserSettings(userId: string, settingsData: Partial<IUserSettings>): Promise<UserSettings> {
@@ -215,7 +211,7 @@ export default class UserService {
             emailVerified: boolean;
         };
     }): Promise<User> {
-        // Check if user with this email already exists
+        // Check if the user with this email already exists
         const user = await User.findOne({
             where: { email: profileData.email },
         });
@@ -257,7 +253,6 @@ export default class UserService {
         };
 
         // Create the user
-        const newUser = await this.addUser(newUserData);
-        return newUser;
+        return await this.addUser(newUserData);
     }
 }
