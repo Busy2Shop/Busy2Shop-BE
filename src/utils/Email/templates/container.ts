@@ -5,7 +5,7 @@ export const container = (content: string) => {
 
 <head>
     <meta content="text/html; charset=utf-8" http-equiv="Content-Type" />
-    <title>Base</title>
+    <title>Busy2Shop</title>
     <meta name="description" content="Email Template Container.">
     <style type="text/css">
         a:hover {
@@ -33,10 +33,10 @@ export const container = (content: string) => {
                     </tr>
                     <tr>
                         <td style="text-align: center; color: #333;">
-                            <p>Thank you for choosing Base</p>
-                            <p>Best regards,<br>The Base Team</p>
+                            <p>Thank you for choosing Busy2Shop</p>
+                            <p>Best regards,<br>The Busy2Shop Team</p>
                             <p style="font-size: 18px; color: #F04950; line-height: 18px; margin: 0 0 0;">&copy;
-                                <strong> Base LTD 2024 </strong>
+                                <strong> Busy2Shop LTD 2025 </strong>
                             </p>
                         </td>
                     </tr>
