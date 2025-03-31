@@ -4,6 +4,7 @@ import { logger } from './utils/logger';
 import { redisClient, redisPubClient, redisSubClient } from './utils/redis';
 import http from 'http';
 import SocketConfig from './clients/socket/index.config';
+import LocationSocket from './clients/socket/location.socket';
 
 // Create the HTTP server
 const server = http.createServer(app);
@@ -14,9 +15,13 @@ async function startServer(): Promise<void> {
         // Initiate a connection to the database
         await initiateDB();
 
-        // Initialize Socket.IO
+        // Initialize Socket.IO for chat
         new SocketConfig(server);
         logger.info('Chat Client initialized');
+
+        // Initialize Socket.IO for location tracking
+        new LocationSocket(server);
+        logger.info('Location tracking initialized');
 
         // Start the server and listen on port 8080
         server.listen(process.env.PORT ?? 8090, () => {

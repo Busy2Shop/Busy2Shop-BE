@@ -10,6 +10,40 @@ user auth login
   "password": "Password123!"
 }
 
+new customer registration details
+{
+  "email": "ghostofuser@yopmail.com",
+  "password": "Password123!",
+  "firstName": "John",
+  "lastName": "Doe",
+  "otherName": "Smith",
+  "gender": "male",
+  "displayImage": "https://images.igdb.com/igdb/image/upload/t_cover_big/co1tmu.jpg'",
+  "userType": "customer",
+  "location": {
+    "country": "Nigeria",
+    "city": "Lagos",
+    "address": "Yetunde Brown St, Ifako, Lagos 105102, Lagos"
+  },
+  "phone": {
+    "countryCode": "+234",
+    "number": "7087652331"
+  },
+  "dob": "1990-10-11"
+}
+
+login details for a user.
+{
+  "email": "ghostofuser@yopmail.com",
+  "password": "Password123!"
+}
+
+login details for an agent.
+{
+  "email": "ghostofagent@yopmail.com",
+  "password": "SecurePass123!"
+}
+
 JSON model to create a market.
 {
   "name": "Home Affairs Supermarket",

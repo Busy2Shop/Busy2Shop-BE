@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { FindAndCountOptions, Op, Transaction } from 'sequelize';
+import { FindAndCountOptions, Op, Transaction, literal } from 'sequelize';
 import User from '../models/user.model';
 import UserSettings, { IAgentMeta } from '../models/userSettings.model';
 import Market from '../models/market.model';
@@ -8,6 +8,8 @@ import Order from '../models/order.model';
 import { BadRequestError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import { Database } from '../models';
+import LocationService from './location.service';
+import UserService from './user.service';
 
 
 export interface IViewAgentsQuery {
@@ -20,6 +22,13 @@ export interface IViewAgentsQuery {
     distance?: number; // Distance in kilometers
 }
 
+export interface IFindAgentsQuery {
+    lat?: number;
+    lng?: number;
+    distance?: number; // in kilometers
+    available?: boolean;
+}
+
 export default class AgentService {
     static async getAgents(queryData?: IViewAgentsQuery): Promise<{ agents: User[], count: number, totalPages?: number }> {
         const { page, size, q: query, isActive } = queryData || {};
@@ -28,7 +37,7 @@ export default class AgentService {
             'status.userType': 'agent',
         };
 
-        // Handle search query
+        // Handle the search query
         if (query) {
             where[Op.or as unknown as string] = [
                 { firstName: { [Op.iLike]: `%${query}%` } },
@@ -134,7 +143,7 @@ export default class AgentService {
             },
         });
 
-        // Replace with the count of unique markets the agent has shopped in
+        // Replace with the count of unique markets, the agent has shopped in
         const uniqueMarkets = await Order.count({
             where: { agentId },
             distinct: true,
@@ -154,14 +163,167 @@ export default class AgentService {
         };
     }
 
-    static async getNearbyAgents(latitude: number, longitude: number, distance: number = 5, queryData?: IViewAgentsQuery): Promise<{ agents: User[], count: number, totalPages?: number }> {
-        // TODO: Implement geospatial search with PostGIS or similar
-        // This is a placeholder implementation. In a real application, you'd use
-        // a geospatial query to find agents within a certain distance.
-        console.log(`Searching for agents near ${latitude}, ${longitude} within ${distance}km`);
 
-        // For now, return all agents
-        return await this.getAgents(queryData);
+    static async getNearbyAgents(
+        latitude: number,
+        longitude: number,
+        distance: number = 5,
+        queryData?: IViewAgentsQuery): Promise<{
+        agents: User[],
+        count: number,
+        totalPages?: number
+    }> {
+        const { page, size, q: query, isActive } = queryData || {};
+
+        const where: any = {
+            'status.userType': 'agent',
+        };
+
+        // Add geographic search with PostGIS
+        const distanceInMeters = distance * 1000; // Convert km to meters
+
+        where[String(literal('ST_DWithin(currentLocation, ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326), :distance)'))] = true;
+
+        // Basic query options
+        const queryOptions: FindAndCountOptions<User> = {
+            where,
+            include: [
+                {
+                    model: UserSettings,
+                    as: 'settings',
+                    attributes: ['joinDate', 'isBlocked', 'isDeactivated', 'lastLogin', 'meta'],
+                },
+            ],
+            attributes: {
+                include: [
+                    [
+                        literal(`ST_Distance(
+                            currentLocation, 
+                            ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)
+                        )`),
+                        'distance',
+                    ],
+                ],
+                exclude: ['password'],
+            },
+            order: [[literal('distance'), 'ASC']],
+            replacements: {
+                latitude,
+                longitude,
+                distance: distanceInMeters,
+            },
+        };
+
+        // Handle the search query
+        if (query) {
+            where[Op.or as unknown as string] = [
+                { firstName: { [Op.iLike]: `%${query}%` } },
+                { lastName: { [Op.iLike]: `%${query}%` } },
+                { email: { [Op.iLike]: `%${query}%` } },
+            ];
+        }
+
+        const settingsWhere: Record<string, unknown> = {};
+
+        // Filter by active status
+        if (isActive !== undefined) {
+            settingsWhere.isDeactivated = !isActive;
+        }
+
+        // Handle pagination
+        if (page && size && page > 0 && size > 0) {
+            const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
+            queryOptions.limit = limit ?? 0;
+            queryOptions.offset = offset ?? 0;
+        }
+
+        const { rows: agents, count } = await User.findAndCountAll(queryOptions);
+
+        // Calculate pagination metadata if applicable
+        if (page && size && agents.length > 0) {
+            const totalPages = Pagination.estimateTotalPage({ count, limit: size } as IPaging);
+            return { agents, count, ...totalPages };
+        } else {
+            return { agents, count };
+        }
+    }
+
+    /**
+     * Find nearby agents that are available for orders
+     */
+    static async findNearbyAgents(queryParams: IFindAgentsQuery): Promise<User[]> {
+        const { lat, lng, distance = 5, available = true } = queryParams;
+
+        if (!lat || !lng) {
+            throw new Error('Latitude and longitude are required');
+        }
+
+        const distanceInMeters = distance * 1000;
+
+        const where: any = {
+            'status.userType': 'agent',
+            'status.activated': true,
+            locationTrackingEnabled: true,
+            [String(literal('ST_DWithin(currentLocation, ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326), :distance)'))]: true,
+        };
+
+        // Add availability check if requested
+        if (available) {
+            // Logic to check if the agent is available (not currently on order)
+            where[String(literal(`NOT EXISTS (
+                SELECT 1 FROM "Orders" 
+                WHERE "Orders"."agentId" = "User"."id" 
+                AND "Orders"."status" IN ('assigned', 'in_progress', 'en_route')
+            )`))] = true;
+        }
+
+        return await User.findAll({
+            where,
+            attributes: {
+                include: [
+                    [
+                        literal(`ST_Distance(
+                            currentLocation, 
+                            ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)
+                        )`),
+                        'distance',
+                    ],
+                ],
+                exclude: ['password'],
+            },
+            order: [[literal('distance'), 'ASC']],
+            replacements: {
+                latitude: lat,
+                longitude: lng,
+                distance: distanceInMeters,
+            },
+        });
+    }
+
+    /**
+     * Update agent's current location
+     */
+    static async updateAgentLocation(
+        agentId: string,
+        latitude: number,
+        longitude: number
+    ): Promise<User> {
+        return await LocationService.updateAgentLocation(agentId, { latitude, longitude });
+    }
+
+    /**
+     * Get the current location and estimated time to destination
+     */
+    static async getAgentLocationAndETA(
+        agentId: string,
+        destinationLat: number,
+        destinationLng: number
+    ) {
+        return await LocationService.getAgentLocationAndETA(
+            agentId,
+            destinationLat,
+            destinationLng
+        );
     }
 
     static async getAvailableAgentsForOrder(shoppingListId: string): Promise<User[]> {
@@ -275,38 +437,36 @@ export default class AgentService {
      * @param documents Document data (NIN or images)
      * @returns Updated agent
      */
-    static async updateAgentDocuments(agentId: string, documents: Partial<IAgentMeta>): Promise<User> {
+    static async updateAgentDocuments(agentId: string, documents: Partial<IAgentMeta>): Promise<UserSettings> {
         return await Database.transaction(async (transaction: Transaction) => {
-            const agent = await User.findOne({
+            const agentUserSettings = await UserSettings.findOne({
                 where: {
-                    id: agentId,
-                    'status.userType': 'agent',
+                    userId: agentId,
                 },
                 transaction,
             });
 
-            if (!agent) {
+            if (!agentUserSettings) {
                 throw new NotFoundError('Agent not found');
             }
 
             // Get current agent metadata or initialize the empty object
-            const currentAgentMeta = agent.agentMeta || {};
+            const currentAgentMeta = agentUserSettings.agentMetaData;
             
             // Update with new document data
-            const updatedAgentMeta = {
-                ...currentAgentMeta,
-                ...(documents.nin && { nin: documents.nin }),
-                ...(documents.images && { 
-                    images: documents.images.length > 0 
-                        ? [...(currentAgentMeta.images || []), ...documents.images]
-                        : currentAgentMeta.images || [],
-                }),
+            const updatedAgentMeta: IAgentMeta = {
+                nin: documents.nin || currentAgentMeta?.nin || '',
+                images: documents.images && documents.images.length > 0 
+                    ? [...(currentAgentMeta?.images || []), ...documents.images]
+                    : currentAgentMeta?.images || [],
             };
 
             // Update agent with new metadata
-            await agent.update({ agentMeta: updatedAgentMeta }, { transaction });
+            await UserService.updateUserSettings(agentId, {
+                agentMetaData: updatedAgentMeta,
+            });
 
-            return agent;
+            return agentUserSettings;
         });
     }
 }

@@ -1,6 +1,7 @@
 import {
     Table, Column, Model, DataType, HasMany, BelongsToMany,
-    IsUUID, PrimaryKey, Default, ForeignKey, BelongsTo,
+    IsUUID, PrimaryKey, Default, ForeignKey, BelongsTo, BeforeCreate,
+    BeforeUpdate,
 } from 'sequelize-typescript';
 import User from './user.model';
 import Category from './category.model';
@@ -26,9 +27,16 @@ export default class Market extends Model<Market | IMarket> {
 
     @Column({
         type: DataType.STRING,
-        allowNull: false, // Location is required for all markets
+        allowNull: false, // Require location for all markets.
     })
         address: string;
+
+    @Column({
+        type: DataType.GEOMETRY('POINT', 4326), // SRID 4326 is standard for GPS coordinates
+        allowNull: false,
+    })
+        geoLocation: { type: string; coordinates: number[] }; // PostGIS geometry point
+
 
     @Column({
         type: DataType.JSONB,
@@ -41,6 +49,21 @@ export default class Market extends Model<Market | IMarket> {
         state: string;
         country: string;
     };
+
+    // Add a hook to sync the geoLocation with location JSONB
+    @BeforeCreate
+    @BeforeUpdate
+    static updateGeoLocation(instance: Market) {
+        if (instance.location?.latitude && instance.location?.longitude) {
+            // Update geoLocation from JSONB location.
+            // Migration handles this for existing records.
+            // Service Layer handles this for new records.
+            instance.geoLocation = {
+                type: 'Point',
+                coordinates: [instance.location.longitude, instance.location.latitude],
+            };
+        }
+    }
 
     @Column({
         type: DataType.STRING,
