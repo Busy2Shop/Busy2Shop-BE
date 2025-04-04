@@ -3,6 +3,10 @@ dotenv.config(); // Load environment variables from .env file
 
 export const PORT = process.env.PORT;
 
+export const LOCATIONIQ_API_KEY = process.env.LOCATIONIQ_API_KEY as string;
+
+export const LOCATIONIQ_API_BASE_URL = process.env.LOCATIONIQ_API_BASE_URL as string;
+
 export const NODE_ENV = process.env.NODE_ENV as 'development' | 'production';
 
 export const REDIS_CONNECTION_URL = process.env.REDIS_CONNECTION_URL as string;

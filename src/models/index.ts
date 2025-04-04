@@ -54,6 +54,16 @@ async function initiateDB(): Promise<void> {
         // Attempt to authenticate the database connection
         await Database.authenticate();
 
+        // Install PostGIS extension
+        try {
+            await Database.query('CREATE EXTENSION IF NOT EXISTS postgis;');
+            logger.info('PostGIS extension installed successfully');
+        } catch (postgisError) {
+            logger.error('Failed to install PostGIS extension:', postgisError);
+            // One might want to throw this error if PostGIS is critical for the app
+            // Otherwise, one can continue with other DB setup
+        }
+
         // add a hook to sort all queries by UpdatedAt to return the latest first
         // Database.addHook('beforeFind', (options) => {
         //     options.order = [['updatedAt', 'DESC']];

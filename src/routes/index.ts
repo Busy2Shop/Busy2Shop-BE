@@ -11,6 +11,7 @@ import agentRoute from './agent.routes';
 import kycRoute from './kyc.routes';
 import AdminRoutes from './admin.routes';
 import chatRoute from './chat.routes';
+import locationRoute from './location.routes';
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use('/review', reviewRoutes);
 router.use('/referral', referralRoute);
 router.use('/admin', AdminRoutes);
 router.use('/chat', chatRoute);
+router.use('/location', locationRoute);
 
 export default router;

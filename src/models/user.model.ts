@@ -20,7 +20,7 @@ export type userTypeValues = 'agent' | 'customer';
             {
                 model: UserSettings,
                 as: 'settings',
-                attributes: ['joinDate', 'isBlocked', 'isDeactivated', 'lastLogin', 'meta'],
+                attributes: ['joinDate', 'isBlocked', 'isDeactivated', 'lastLogin', 'meta', 'agentMetaData'],
             },
         ],
     },
@@ -93,22 +93,17 @@ export default class User extends Model<User | IUser > {
     };
 
     @Column({
-        type: DataType.JSONB,
-        allowNull: true,
-        validate: {
-            isValidAgentMeta(this: User, value: IAgentMeta | null) {
-                if (this.status?.userType === 'agent') {
-                    if (!value?.nin) {
-                        throw new Error('NIN is required for agents');
-                    }
-                    if (!/^\d{11}$/.test(value.nin)) {
-                        throw new Error('Invalid NIN format. Must be 11 digits');
-                    }
-                }
-            },
-        },
+        type: DataType.GEOMETRY('POINT', 4326),
+        allowNull: true, // Only needed for agents
     })
-        agentMeta: IAgentMeta;
+        currentLocation: { type: string; coordinates: number[] }; // PostGIS point for real-time tracking
+
+    @Column({
+        type: DataType.BOOLEAN,
+        defaultValue: false,
+    })
+        locationTrackingEnabled: boolean;
+
 
     @Column({ type: DataType.JSONB })
         location: {
@@ -225,6 +220,7 @@ export interface IUser {
         city: string;
         address: string;
     };
+    locationTrackingEnabled?: boolean;
     status: {
         activated: boolean;
         emailVerified: boolean;
