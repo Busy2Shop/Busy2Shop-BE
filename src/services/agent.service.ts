@@ -383,7 +383,7 @@ export default class AgentService {
          * Update an agent's status
          */
     static async updateAgentStatus(
-        userId: string, 
+        userId: string,
         status: 'available' | 'busy' | 'away' | 'offline',
         isAcceptingOrders: boolean = true,
         transaction?: Transaction
@@ -417,8 +417,8 @@ export default class AgentService {
         agentMetaData.lastStatusUpdate = currentTime;
         agentMetaData.isAcceptingOrders = isAcceptingOrders;
 
-        await user.settings.update({ 
-            agentMetaData, 
+        await user.settings.update({
+            agentMetaData,
         }, { transaction });
 
         return user;
