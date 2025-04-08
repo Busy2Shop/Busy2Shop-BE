@@ -8,6 +8,7 @@ import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customE
 import Pagination, { IPaging } from '../utils/pagination';
 import Order, { IOrder } from '../models/order.model';
 import { Database } from '../models';
+import AgentService from './agent.service';
 
 export interface IViewShoppingListsQuery {
     page?: number;
@@ -17,7 +18,7 @@ export interface IViewShoppingListsQuery {
 }
 
 export default class ShoppingListService {
-    
+
     /**
      * Executes a paginated query for shopping lists and formats the results
      *
@@ -39,7 +40,7 @@ export default class ShoppingListService {
         }
 
         const { rows: lists, count } = await ShoppingList.findAndCountAll(queryOptions);
-    
+
         // Calculate pagination metadata if applicable
         if (page && size && lists.length > 0) {
             const totalPages = Pagination.estimateTotalPage({ count, limit: size } as IPaging);
@@ -48,7 +49,7 @@ export default class ShoppingListService {
             return { lists, count };
         }
     }
-    
+
     static async createShoppingList(listData: IShoppingList, items: IShoppingListItem[] = []): Promise<ShoppingList> {
         // Validate required fields
         if (!listData.name || !listData.customerId) {
@@ -167,7 +168,10 @@ export default class ShoppingListService {
         return this.executePaginatedListQuery(queryOptions, queryData);
     }
 
-    static async getShoppingList(id: string): Promise<ShoppingList> {
+    /**
+     * Get a shopping list by ID
+     */
+    static async getShoppingList(id: string, transaction?: Transaction): Promise<ShoppingList> {
         const list = await ShoppingList.findByPk(id, {
             include: [
                 {
@@ -191,6 +195,7 @@ export default class ShoppingListService {
                     required: false,
                 },
             ],
+            transaction,
         });
 
         if (!list) {
@@ -421,31 +426,36 @@ export default class ShoppingListService {
     }
 
     static async assignAgentToList(listId: string, agentId: string): Promise<ShoppingList> {
-        const list = await this.getShoppingList(listId);
+        return await Database.transaction(async (transaction: Transaction) => {
+            const list = await this.getShoppingList(listId, transaction);
 
-        // Can only assign agents to pending lists
-        if (list.status !== 'pending') {
-            throw new BadRequestError('Can only assign agents to pending shopping lists');
-        }
+            // Can only assign agents to pending lists
+            if (list.status !== 'pending') {
+                throw new BadRequestError('Can only assign agents to pending shopping lists');
+            }
 
-        // Make sure the agent exists
-        const agent = await User.findByPk(agentId);
-        if (!agent) {
-            throw new NotFoundError('Agent not found');
-        }
+            // Make sure the agent exists
+            const agent = await User.findByPk(agentId, { transaction });
+            if (!agent) {
+                throw new NotFoundError('Agent not found');
+            }
 
-        // Make sure the agent is actually an agent
-        if (agent.status.userType !== 'agent') {
-            throw new BadRequestError('Selected user is not a agent');
-        }
+            // Make sure the agent is actually an agent
+            if (agent.status.userType !== 'agent') {
+                throw new BadRequestError('Selected user is not a agent');
+            }
 
-        // Update the agent and status
-        await list.update({
-            agentId: agentId,
-            status: 'accepted',
+            // Update the agent and status
+            await list.update({
+                agentId: agentId,
+                status: 'accepted',
+            }, { transaction });
+
+            // Update agent status to busy
+            await AgentService.setAgentBusy(agentId, listId, transaction);
+
+            return await this.getShoppingList(listId, transaction);
         });
-
-        return await this.getShoppingList(listId);
     }
 
     static async updateListStatus(listId: string, customerId: string, status: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled'): Promise<ShoppingList> {

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Transaction, Op, FindAndCountOptions } from 'sequelize';
+import { Transaction, Op, FindAndCountOptions, Includeable } from 'sequelize';
 import Order, { IOrder } from '../models/order.model';
 import ShoppingList from '../models/shoppingList.model';
 import ShoppingListItem from '../models/shoppingListItem.model';
@@ -7,6 +7,8 @@ import User from '../models/user.model';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import { Database } from '../models';
+import AgentService from './agent.service';
+import Market from '../models/market.model';
 
 export interface IViewOrdersQuery {
     page?: number;
@@ -133,49 +135,6 @@ export default class OrderService {
     }
 
     /**
-     * Applies status change to an order and performs necessary side effects
-     *
-     * @param order - The order to update
-     * @param status - The new status to apply
-     * @returns The updated order
-     */
-    private static async applyStatusChange(
-        order: Order,
-        status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled'
-    ): Promise<Order> {
-        if (status === 'accepted' && !order.acceptedAt) {
-            await order.update({
-                status,
-                acceptedAt: new Date(),
-            });
-        } else if (status === 'completed' && !order.completedAt) {
-            await order.update({
-                status,
-                completedAt: new Date(),
-            });
-
-            // Also update the shopping list status
-            await ShoppingList.update(
-                { status: 'completed' },
-                { where: { id: order.shoppingListId } }
-            );
-        } else if (status === 'cancelled') {
-            await order.update({ status });
-
-            // Also update the shopping list status
-            await ShoppingList.update(
-                { status: 'cancelled' },
-                { where: { id: order.shoppingListId } }
-            );
-        } else {
-            await order.update({ status });
-        }
-
-        return await this.getOrder(order.id);
-    }
-
-
-    /**
      * Validates if a transition between order statuses is allowed
      *
      * @param currentStatus - The current status of the order
@@ -195,7 +154,10 @@ export default class OrderService {
         const validTransitions: Record<string, string[]> = {
             'pending': ['accepted', 'cancelled'],
             'accepted': ['in_progress', 'cancelled'],
-            'in_progress': ['completed', 'cancelled'],
+            'in_progress': ['shopping', 'cancelled'],
+            'shopping': ['shopping_completed', 'cancelled'],
+            'shopping_completed': ['delivery', 'cancelled'],
+            'delivery': ['completed', 'cancelled'],
             'completed': [],
             'cancelled': [],
         };
@@ -204,10 +166,19 @@ export default class OrderService {
     }
 
 
+    /**
+     * Create a new order with automatic agent assignment
+     */
     static async createOrder(orderData: IOrder): Promise<Order> {
         return await Database.transaction(async (transaction: Transaction) => {
             // Check if the shopping list exists and is in a valid state
-            const shoppingList = await ShoppingList.findByPk(orderData.shoppingListId, { transaction });
+            const shoppingList = await ShoppingList.findByPk(orderData.shoppingListId, {
+                include: [{
+                    model: Market,
+                    as: 'market',
+                }],
+                transaction,
+            });
 
             if (!shoppingList) {
                 throw new NotFoundError('Shopping list not found');
@@ -217,111 +188,182 @@ export default class OrderService {
                 throw new BadRequestError('Can only create orders from accepted shopping lists');
             }
 
+            // Get market location for agent assignment
+            const marketLocation = shoppingList.market?.location || { latitude: 0, longitude: 0 };
+
+            // Find available agents at the market first
+            const availableAgents = await AgentService.getAvailableAgentsForOrder(shoppingList.id);
+
+            // If no agents at market, find nearest available agent
+            let assignedAgent: User | undefined = availableAgents[0];
+            if (!assignedAgent) {
+                const nearestAgent = await AgentService.findNearestAgent(
+                    marketLocation.latitude,
+                    marketLocation.longitude
+                );
+                if (nearestAgent) {
+                    assignedAgent = nearestAgent;
+                }
+            }
+
             // Create the order
             const newOrder = await Order.create({
                 ...orderData,
                 status: 'pending',
+                agentId: assignedAgent?.id,
             }, { transaction });
 
             // Update the shopping list status
-            await shoppingList.update({ status: 'processing' }, { transaction });
+            await shoppingList.update({
+                status: 'processing',
+                agentId: assignedAgent?.id,
+            }, { transaction });
+
+            // If an agent was found, update their status to busy
+            if (assignedAgent) {
+                await AgentService.setAgentBusy(assignedAgent.id, newOrder.id, transaction);
+            }
 
             return newOrder;
         });
     }
 
+    /**
+     * Get orders with appropriate filters and includes
+     * @param whereClause Base where clause for filtering orders
+     * @param queryData Optional query parameters for filtering and pagination
+     * @param includeAgent Whether to include agent information
+     * @param includeCustomer Whether to include customer information
+     * @returns Orders with count and pagination info
+     */
+    private static async getOrders(
+        whereClause: Record<string, any>,
+        queryData?: IViewOrdersQuery,
+        includeAgent: boolean = false,
+        includeCustomer: boolean = false
+    ): Promise<{ orders: Order[], count: number, totalPages?: number }> {
+        // Apply common filters
+        whereClause = this.applyOrderFilters(whereClause, queryData);
+
+        // Initialize includes array
+        const includes: Includeable[] = [
+            {
+                model: ShoppingList,
+                as: 'shoppingList',
+                include: [
+                    {
+                        model: ShoppingListItem,
+                        as: 'items',
+                    },
+                ],
+            },
+        ];
+
+        // Add agent include if requested
+        if (includeAgent) {
+            includes.push({
+                model: User,
+                as: 'agent',
+                attributes: ['id', 'firstName', 'lastName', 'email'],
+                required: false,
+            });
+        }
+
+        // Add customer include if requested
+        if (includeCustomer) {
+            includes.push({
+                model: User,
+                as: 'customer',
+                attributes: ['id', 'firstName', 'lastName', 'email'],
+            });
+        }
+
+        // Basic query options
+        const queryOptions: FindAndCountOptions<Order> = {
+            where: whereClause,
+            include: includes,
+            order: [['createdAt', 'DESC']],
+        };
+
+        // Execute the query with pagination
+        return this.executeOrderQuery(queryOptions, queryData);
+    }
+
+    /**
+     * Get orders for a specific customer
+     */
     static async getUserOrders(userId: string, queryData?: IViewOrdersQuery): Promise<{ orders: Order[], count: number, totalPages?: number }> {
-
-        // Filter by status if provided
-        let where: Record<string, any> = { customerId: userId };
-        where = this.applyOrderFilters(where, queryData);
-
-
-        // Basic query options
-        const queryOptions: FindAndCountOptions<Order> = {
-            where,
-            include: [
-                {
-                    model: ShoppingList,
-                    as: 'shoppingList',
-                    include: [
-                        {
-                            model: ShoppingListItem,
-                            as: 'items',
-                        },
-                    ],
-                },
-                {
-                    model: User,
-                    as: 'agent',
-                    attributes: ['id', 'firstName', 'lastName', 'email'],
-                    required: false,
-                },
-            ],
-            order: [['createdAt', 'DESC']],
-        };
-
-        // Handle pagination
-        return this.executeOrderQuery(queryOptions, queryData);
+        return this.getOrders(
+            { customerId: userId },
+            queryData,
+            true, // Include agent info
+            false // Don't include customer info
+        );
     }
 
+    /**
+     * Get orders for a specific agent
+     */
     static async getAgentOrders(agentId: string, queryData?: IViewOrdersQuery): Promise<{ orders: Order[], count: number, totalPages?: number }> {
-        let where: Record<string, any> = { agentId };
-        where = this.applyOrderFilters(where, queryData);
-
-        // Basic query options
-        const queryOptions: FindAndCountOptions<Order> = {
-            where,
-            include: [
-                {
-                    model: ShoppingList,
-                    as: 'shoppingList',
-                    include: [
-                        {
-                            model: ShoppingListItem,
-                            as: 'items',
-                        },
-                    ],
-                },
-                {
-                    model: User,
-                    as: 'customer',
-                    attributes: ['id', 'firstName', 'lastName', 'email'],
-                },
-            ],
-            order: [['createdAt', 'DESC']],
-        };
-
-        // Handle pagination
-        return this.executeOrderQuery(queryOptions, queryData);
+        return this.getOrders(
+            { agentId },
+            queryData,
+            false, // Don't include agent info
+            true // Include customer info
+        );
     }
 
-    static async getOrder(id: string): Promise<Order> {
-        const order = await Order.findByPk(id, {
-            include: [
-                {
-                    model: ShoppingList,
-                    as: 'shoppingList',
-                    include: [
-                        {
-                            model: ShoppingListItem,
-                            as: 'items',
-                        },
-                    ],
-                },
-                {
-                    model: User,
-                    as: 'customer',
-                    attributes: ['id', 'firstName', 'lastName', 'email'],
-                },
-                {
-                    model: User,
-                    as: 'agent',
-                    attributes: ['id', 'firstName', 'lastName', 'email'],
-                    required: false,
-                },
-            ],
-        });
+    /**
+     * Get a single order by ID with appropriate includes
+     * @param id Order ID
+     * @param includeAgent Whether to include agent information
+     * @param includeCustomer Whether to include customer information
+     * @returns Order with requested includes
+     */
+    static async getOrder(
+        id: string,
+        includeAgent: boolean = true,
+        includeCustomer: boolean = true
+    ): Promise<Order> {
+        // Initialize includes array
+        const includes: Includeable[] = [
+            {
+                model: ShoppingList,
+                as: 'shoppingList',
+                include: [
+                    {
+                        model: ShoppingListItem,
+                        as: 'items',
+                    },
+                ],
+            },
+        ];
+
+        // Add agent include if requested
+        if (includeAgent) {
+            includes.push({
+                model: User,
+                as: 'agent',
+                attributes: ['id', 'firstName', 'lastName', 'email'],
+                required: false,
+            });
+        }
+
+        // Add customer include if requested
+        if (includeCustomer) {
+            includes.push({
+                model: User,
+                as: 'customer',
+                attributes: ['id', 'firstName', 'lastName', 'email'],
+            });
+        }
+
+        const queryOptions: FindAndCountOptions<Order> = {
+            where: { id },
+            include: includes,
+        };
+
+        const order = await Order.findOne(queryOptions);
 
         if (!order) {
             throw new NotFoundError('Order not found');
@@ -330,52 +372,107 @@ export default class OrderService {
         return order;
     }
 
-    static async updateOrderStatus(id: string, userId: string, status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled'): Promise<Order> {
+    /**
+     * Update order status with proper validation and side effects
+     */
+    static async updateOrderStatus(
+        id: string,
+        userId: string,
+        status: 'pending' | 'accepted' | 'in_progress' | 'shopping' | 'shopping_completed' | 'delivery' | 'completed' | 'cancelled'
+    ): Promise<Order> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            const order = await this.getOrder(id);
+            const user = await User.findByPk(userId, { transaction });
+
+            if (!user) {
+                throw new NotFoundError('User not found');
+            }
+
+            // Validate permissions
+            this.validateOrderStatusPermissions(order, user, userId, status);
+
+            // Validate status transition
+            if (!this.isValidStatusTransition(order.status, status)) {
+                throw new BadRequestError(`Cannot change status from ${order.status} to ${status}`);
+            }
+
+            // Update order status with appropriate timestamps and side effects
+            const updateData: Partial<IOrder> = { status };
+            const now = new Date();
+
+            switch (status) {
+            case 'accepted':
+                if (!order.acceptedAt) {
+                    updateData.acceptedAt = now;
+                }
+                break;
+            case 'shopping':
+                if (!order.shoppingStartedAt) {
+                    updateData.shoppingStartedAt = now;
+                }
+                break;
+            case 'shopping_completed':
+                if (!order.shoppingCompletedAt) {
+                    updateData.shoppingCompletedAt = now;
+                }
+                break;
+            case 'delivery':
+                if (!order.deliveryStartedAt) {
+                    updateData.deliveryStartedAt = now;
+                }
+                break;
+            case 'completed':
+                if (!order.completedAt) {
+                    updateData.completedAt = now;
+                    // Update shopping list status
+                    await ShoppingList.update(
+                        { status: 'completed' },
+                        { where: { id: order.shoppingListId }, transaction }
+                    );
+                    // Update agent status back to available
+                    if (order.agentId) {
+                        await AgentService.updateAgentStatus(order.agentId, 'available');
+                    }
+                }
+                break;
+            case 'cancelled':
+                updateData.cancelledAt = now;
+                // Update shopping list status
+                await ShoppingList.update(
+                    { status: 'cancelled' },
+                    { where: { id: order.shoppingListId }, transaction }
+                );
+                // Update agent status back to available
+                if (order.agentId) {
+                    await AgentService.updateAgentStatus(order.agentId, 'available');
+                }
+                break;
+            }
+
+            await order.update(updateData, { transaction });
+            return await this.getOrder(order.id);
+        });
+    }
+
+    /**
+     * Add notes to an order (for both agents and customers)
+     */
+    static async addNotes(id: string, userId: string, notes: string, userType: 'agent' | 'customer'): Promise<Order> {
         const order = await this.getOrder(id);
-
-        // Validate the status transition
-        if (!this.isValidStatusTransition(order.status, status)) {
-            throw new BadRequestError(`Cannot change status from ${order.status} to ${status}`);
-        }
-
-        // Check permissions based on the user role
-        const user = await User.findByPk(userId);
-        if (!user) {
-            throw new NotFoundError('User not found');
-        }
 
         // Validate user permissions
-        this.validateOrderStatusPermissions(order, user, userId, status);
-
-        // Apply status change and any side effects
-        return await this.applyStatusChange(order, status);
-    }
-
-
-
-    static async addAgentNotes(id: string, agentId: string, notes: string): Promise<Order> {
-        const order = await this.getOrder(id);
-
-        // Check if an agent is assigned to this order
-        if (order.agentId !== agentId) {
+        if (userType === 'agent' && order.agentId !== userId) {
             throw new ForbiddenError('You are not assigned to this order');
-        }
-
-        await order.update({ agentNotes: notes });
-
-        return await this.getOrder(id);
-    }
-
-    static async addCustomerNotes(id: string, customerId: string, notes: string): Promise<Order> {
-        const order = await this.getOrder(id);
-
-        // Check if the user is the customer for this order
-        if (order.customerId !== customerId) {
+        } else if (userType === 'customer' && order.customerId !== userId) {
             throw new ForbiddenError('You are not the customer for this order');
         }
 
-        await order.update({ customerNotes: notes });
+        // Update the appropriate notes field
+        const updateData = userType === 'agent'
+            ? { agentNotes: notes }
+            : { customerNotes: notes };
 
+        await order.update(updateData);
         return await this.getOrder(id);
     }
 
@@ -415,5 +512,130 @@ export default class OrderService {
             serviceFee,
             deliveryFee,
         };
+    }
+
+    /**
+     * Handle agent rejection of an order and attempt to find a new agent
+     * @param orderId The ID of the order being rejected
+     * @param agentId The ID of the agent rejecting the order
+     * @param reason The reason for rejection
+     * @returns The updated order with new agent assignment if successful
+     * @throws {NotFoundError} If order not found
+     * @throws {ForbiddenError} If agent is not assigned to the order
+     * @throws {BadRequestError} If maximum rejections reached or no agents available
+     */
+    static async handleAgentRejection(
+        orderId: string,
+        agentId: string,
+        reason: string
+    ): Promise<Order> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            const order = await this.getOrder(orderId);
+
+            // Verify the agent is assigned to this order
+            if (order.agentId !== agentId) {
+                throw new ForbiddenError('You are not assigned to this order');
+            }
+
+            // Get the shopping list to access market location
+            const shoppingList = await ShoppingList.findByPk(order.shoppingListId, {
+                include: [{
+                    model: Market,
+                    as: 'market',
+                }],
+                transaction,
+            });
+
+            if (!shoppingList) {
+                throw new NotFoundError('Shopping list not found');
+            }
+
+            // Get market location for agent assignment
+            const marketLocation = shoppingList.market?.location || { latitude: 0, longitude: 0 };
+
+            // Add the rejecting agent to the rejectedAgents array
+            const rejectedAgents = order.rejectedAgents || [];
+            rejectedAgents.push({
+                agentId,
+                reason,
+                rejectedAt: new Date(),
+            });
+
+            // Check if we've reached the maximum number of rejections (5)
+            if (rejectedAgents.length >= 5) {
+                // Update order status to cancelled
+                await order.update({
+                    status: 'cancelled',
+                    cancelledAt: new Date(),
+                    agentId: undefined,
+                    rejectedAgents,
+                }, { transaction });
+
+                // Update shopping list status
+                await shoppingList.update({
+                    status: 'cancelled',
+                }, { transaction });
+
+                throw new BadRequestError('Maximum number of agent rejections reached. Order has been cancelled.');
+            }
+
+            // Find a new agent, excluding previously rejected agents
+            const rejectedAgentIds = rejectedAgents.map(ra => ra.agentId);
+
+            // First try to find available agents at the market
+            const availableAgents = await AgentService.getAvailableAgentsForOrder(
+                shoppingList.id,
+                rejectedAgentIds
+            );
+
+            // If no agents at market, find nearest available agent
+            let newAgent: User | undefined = availableAgents[0];
+            if (!newAgent) {
+                const nearestAgent = await AgentService.findNearestAgent(
+                    marketLocation.latitude,
+                    marketLocation.longitude,
+                    rejectedAgentIds
+                );
+                if (nearestAgent) {
+                    newAgent = nearestAgent;
+                }
+            }
+
+            // If no new agent found, update order status
+            if (!newAgent) {
+                await order.update({
+                    status: 'cancelled',
+                    cancelledAt: new Date(),
+                    agentId: undefined,
+                    rejectedAgents,
+                }, { transaction });
+
+                // Update shopping list status
+                await shoppingList.update({
+                    status: 'cancelled',
+                }, { transaction });
+
+                throw new BadRequestError('No available agents found to handle this order. Order has been cancelled.');
+            }
+
+            // Update the order with the new agent
+            await order.update({
+                agentId: newAgent.id,
+                rejectedAgents,
+            }, { transaction });
+
+            // Update the shopping list with the new agent
+            await shoppingList.update({
+                agentId: newAgent.id,
+            }, { transaction });
+
+            // Update the new agent's status to busy
+            await AgentService.setAgentBusy(newAgent.id, order.id, transaction);
+
+            // Update the previous agent's status back to available
+            await AgentService.updateAgentStatus(agentId, 'available');
+
+            return await this.getOrder(order.id);
+        });
     }
 }

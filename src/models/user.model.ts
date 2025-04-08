@@ -2,9 +2,10 @@ import {
     Table, Column, Model, DataType, HasOne, Default, BeforeFind, Scopes,
     IsEmail, IsUUID, PrimaryKey, Index, BeforeCreate, BeforeUpdate,
     HasMany,
+    BeforeValidate,
 } from 'sequelize-typescript';
 import Password from './password.model';
-import UserSettings, { IAgentMeta }  from './userSettings.model';
+import UserSettings from './userSettings.model';
 import { FindOptions } from 'sequelize';
 import Market from './market.model';
 import Review from './review.model';
@@ -13,6 +14,11 @@ import ShoppingList from './shoppingList.model';
 
 export type userTypeValues = 'agent' | 'customer';
 
+export interface IUserStatus {
+    activated: boolean;
+    emailVerified: boolean;
+    userType: userTypeValues;
+}
 
 @Scopes(() => ({
     withSettings: {
@@ -26,7 +32,7 @@ export type userTypeValues = 'agent' | 'customer';
     },
 }))
 @Table
-export default class User extends Model<User | IUser > {
+export default class User extends Model<User | IUser> {
     @IsUUID(4)
     @PrimaryKey
     @Default(DataType.UUIDV4)
@@ -83,34 +89,16 @@ export default class User extends Model<User | IUser > {
         displayImage: string;
 
     @Column({
-        type: DataType.JSONB, allowNull: false,
-        defaultValue: { activated: false, emailVerified: false, userType: 'customer' },
+        type: DataType.JSONB,
+        defaultValue: {},
+        allowNull: false,
     })
-        status: {
-        activated: boolean;
-        emailVerified: boolean;
-        userType: userTypeValues;
-    };
+        status: IUserStatus;
 
     @Column({
         type: DataType.JSONB,
         allowNull: true,
-        validate: {
-            isValidAgentMeta(this: User, value: IAgentMeta | null) {
-                if (this.status?.userType === 'agent') {
-                    if (!value?.nin) {
-                        throw new Error('NIN is required for agents');
-                    }
-                    if (!/^\d{11}$/.test(value.nin)) {
-                        throw new Error('Invalid NIN format. Must be 11 digits');
-                    }
-                }
-            },
-        },
     })
-        agentMeta: IAgentMeta;
-
-    @Column({ type: DataType.JSONB })
         location: {
         country: string;
         city: string;
@@ -192,6 +180,15 @@ export default class User extends Model<User | IUser > {
         }
     }
 
+    @BeforeValidate
+    static async validateAgentMeta(instance: User) {
+        if (instance.status?.userType === 'agent') {
+            const userSettings = await UserSettings.findOne({ where: { userId: instance.id } });
+            if (!userSettings?.agentMetaData?.nin) {
+                throw new Error('Agent must have NIN information in their settings');
+            }
+        }
+    }
 
     // Markets owned by the user (for vendors/supermarket owners)
     @HasMany(() => Market)
@@ -238,7 +235,6 @@ export interface IUser {
     };
     dob?: Date;
     gender?: string;
-    agentMeta?: IAgentMeta;
     ownedMarkets?: Market[];
     shoppingLists?: ShoppingList[];
     assignedOrders?: ShoppingList[];

@@ -60,6 +60,13 @@ export default class UserSettings extends Model<UserSettings | IUserSettings> {
     })
         meta: IBlockMeta | null;
 
+    @Column({
+        type: DataType.JSONB,
+        defaultValue: null,
+        allowNull: true,
+    })
+        agentMetaData: IAgentMeta | null;
+
     @IsUUID(4)
     @Unique
     @ForeignKey(() => User)
@@ -84,4 +91,7 @@ export interface IUserSettings {
 export interface IAgentMeta {
     nin: string;
     images: string[];
+    currentStatus: 'available' | 'busy' | 'away' | 'offline';
+    lastStatusUpdate: string; // ISO date string
+    isAcceptingOrders: boolean;
 }

@@ -26,11 +26,10 @@ export default class AgentController {
             queryParams.lng = Number(lng);
             queryParams.distance = distance ? Number(distance) : 5; // Default 5km radius
 
-            const agents = await AgentService.getNearbyAgents(
+            const agents = await AgentService.findNearbyAgents(
                 Number(lat),
                 Number(lng),
-                queryParams.distance as number,
-                queryParams
+                queryParams.distance ? Number(queryParams.distance) : undefined
             );
 
             res.status(200).json({
@@ -132,5 +131,88 @@ export default class AgentController {
             message: 'Order assigned to agent successfully',
             data: order,
         });
+    }
+
+    /**
+ * Add a new preferred location for an agent
+ */
+    static async addLocation(req: AuthenticatedRequest, res: Response) {
+        const { latitude, longitude, radius, name, address } = req.body;
+        const location = await AgentService.addAgentLocation(req.user.id, {
+            latitude,
+            longitude,
+            radius,
+            name,
+            address,
+        });
+        res.status(201).json(location);
+    }
+
+    /**
+     * Update an agent's location
+     */
+    static async updateLocation(req: AuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+        const { latitude, longitude, radius, name, address, isActive } = req.body;
+        const location = await AgentService.updateAgentLocation(id, req.user.id, {
+            latitude,
+            longitude,
+            radius,
+            name,
+            address,
+            isActive,
+        });
+        res.json(location);
+    }
+
+    /**
+     * Delete an agent's location
+     */
+    static async deleteLocation(req: AuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+        await AgentService.deleteAgentLocation(id, req.user.id);
+        res.status(204).send();
+    }
+
+    /**
+     * Get all locations for an agent
+     */
+    static async getLocations(req: AuthenticatedRequest, res: Response) {
+        const locations = await AgentService.getAgentLocations(req.user.id);
+        res.json(locations);
+    }
+
+    /**
+     * Update agent's status
+     */
+    static async updateStatus(req: AuthenticatedRequest, res: Response) {
+        const { status, isAcceptingOrders } = req.body;
+        const agent = await AgentService.updateAgentStatus(
+            req.user.id,
+            status,
+            isAcceptingOrders
+        );
+        res.json(agent);
+    }
+
+    /**
+     * Get agent's current status
+     */
+    static async getStatus(req: AuthenticatedRequest, res: Response) {
+        const status = await AgentService.getAgentStatus(req.user.id);
+        res.json(status);
+    }
+
+    /**
+     * Find nearby agents
+     */
+    static async findNearbyAgents(req: Request, res: Response) {
+        const { latitude, longitude, maxRadius } = req.query;
+        const agents = await AgentService.findNearbyAgents(
+            Number(latitude),
+            Number(longitude),
+            maxRadius ? Number(maxRadius) : undefined
+        );
+        res.json(agents);
     }
 }

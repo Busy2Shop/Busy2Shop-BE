@@ -13,10 +13,14 @@ export default class Order extends Model<Order | IOrder> {
         id: string;
 
     @Column({
-        type: DataType.ENUM('pending', 'accepted', 'in_progress', 'completed', 'cancelled'),
+        type: DataType.STRING,
+        allowNull: false,
         defaultValue: 'pending',
+        validate: {
+            isIn: [['pending', 'accepted', 'in_progress', 'shopping', 'shopping_completed', 'delivery', 'completed', 'cancelled']],
+        },
     })
-        status: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
+        status: 'pending' | 'accepted' | 'in_progress' | 'shopping' | 'shopping_completed' | 'delivery' | 'completed' | 'cancelled';
 
     @Column({
         type: DataType.DECIMAL(10, 2),
@@ -72,7 +76,42 @@ export default class Order extends Model<Order | IOrder> {
         type: DataType.DATE,
         allowNull: true,
     })
+        shoppingStartedAt: Date;
+
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
+        shoppingCompletedAt: Date;
+
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
+        deliveryStartedAt: Date;
+
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
         completedAt: Date;
+
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
+        cancelledAt: Date;
+
+    @Column({
+        type: DataType.JSONB,
+        allowNull: true,
+        defaultValue: [],
+    })
+        rejectedAgents: {
+        agentId: string;
+        reason: string;
+        rejectedAt: Date;
+    }[];
 
     @IsUUID(4)
     @ForeignKey(() => User)
@@ -103,7 +142,7 @@ export default class Order extends Model<Order | IOrder> {
 
 export interface IOrder {
     id?: string;
-    status?: 'pending' | 'accepted' | 'in_progress' | 'completed' | 'cancelled';
+    status?: 'pending' | 'accepted' | 'in_progress' | 'shopping' | 'shopping_completed' | 'delivery' | 'completed' | 'cancelled';
     totalAmount: number;
     serviceFee: number;
     deliveryFee: number;
@@ -119,7 +158,16 @@ export interface IOrder {
     customerNotes?: string;
     agentNotes?: string;
     acceptedAt?: Date;
+    shoppingStartedAt?: Date;
+    shoppingCompletedAt?: Date;
+    deliveryStartedAt?: Date;
     completedAt?: Date;
+    cancelledAt?: Date;
+    rejectedAgents?: {
+        agentId: string;
+        reason: string;
+        rejectedAt: Date;
+    }[];
     customerId: string;
     agentId?: string;
     shoppingListId: string;
