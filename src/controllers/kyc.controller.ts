@@ -4,7 +4,7 @@ import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
 import AgentService from '../services/agent.service';
 import UserService from '../services/user.service';
-import { IAgentMeta } from 'models/userSettings.model';
+import { IAgentMeta } from '../models/userSettings.model';
 
 export default class KycController {
     /**
@@ -119,7 +119,13 @@ export default class KycController {
         }
 
         const user = await UserService.viewSingleUser(id);
-        const agentMeta = user.settings.agentMetaData || {} as IAgentMeta;
+        const agentMeta: IAgentMeta = user.settings?.agentMetaData || {
+            nin: '',
+            images: [],
+            currentStatus: 'offline',
+            lastStatusUpdate: new Date().toISOString(),
+            isAcceptingOrders: false
+        };
 
         res.status(200).json({
             status: 'success',

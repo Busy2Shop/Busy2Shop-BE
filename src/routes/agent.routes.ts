@@ -8,11 +8,24 @@ const router = Router();
 // Public routes
 router.get('/', AgentController.getAllAgents);
 router.get('/:id', AgentController.getAgentProfile);
+router.get('/nearby', AgentController.findNearbyAgents);
 
 // Protected routes
-router.use( basicAuth('access'));
-router.get('/:id/stats', basicAuth('access'),  AuthenticatedController(AgentController.getAgentStats));
-router.get('/available/:shoppingListId', basicAuth('access'),  AuthenticatedController(AgentController.getAvailableAgentsForOrder));
-router.post('/assign/:orderId', basicAuth('access'),  AuthenticatedController(AgentController.assignOrderToAgent));
+router.use(basicAuth('access'));
+
+// Agent stats and order management
+router.get('/:id/stats', AuthenticatedController(AgentController.getAgentStats));
+router.get('/available/:shoppingListId', AuthenticatedController(AgentController.getAvailableAgentsForOrder));
+router.post('/assign/:orderId', AuthenticatedController(AgentController.assignOrderToAgent));
+
+// Agent location management routes
+router.post('/locations', AuthenticatedController(AgentController.addLocation));
+router.put('/locations/:id', AuthenticatedController(AgentController.updateLocation));
+router.delete('/locations/:id', AuthenticatedController(AgentController.deleteLocation));
+router.get('/locations', AuthenticatedController(AgentController.getLocations));
+
+// Agent status management routes
+router.put('/status', AuthenticatedController(AgentController.updateStatus));
+router.get('/status', AuthenticatedController(AgentController.getStatus));
 
 export default router;

@@ -62,27 +62,10 @@ export default class UserSettings extends Model<UserSettings | IUserSettings> {
 
     @Column({
         type: DataType.JSONB,
+        defaultValue: null,
         allowNull: true,
-        validate: {
-            isValidAgentMeta(this: User, value: IAgentMeta | null) {
-                if (this.status?.userType === 'agent') {
-                    if (!value?.nin) {
-                        throw new Error('NIN is required for agents');
-                    }
-                    if (!/^\d{11}$/.test(value.nin)) {
-                        throw new Error('Invalid NIN format. Must be 11 digits');
-                    }
-                }
-            },
-        },
     })
-        agentMetaData : IAgentMeta | null;
-
-    /*@Column({
-        type: DataType.BOOLEAN,
-        defaultValue: false,
-    })
-    locationTrackingEnabled: boolean;*/
+        agentMetaData: IAgentMeta | null;
 
     @IsUUID(4)
     @Unique
@@ -102,11 +85,13 @@ export interface IUserSettings {
     isDeactivated?: boolean;
     isKycVerified?: boolean;
     agentMetaData?: IAgentMeta | null;
-    //locationTrackingEnabled?: boolean;
     meta?: IBlockMeta | null;
 }
 
 export interface IAgentMeta {
     nin: string;
     images: string[];
+    currentStatus: 'available' | 'busy' | 'away' | 'offline';
+    lastStatusUpdate: string; // ISO date string
+    isAcceptingOrders: boolean;
 }

@@ -131,51 +131,55 @@ export default class OrderController {
             throw new BadRequestError('Status is required');
         }
 
-        const updatedOrder = await OrderService.updateOrderStatus(id, req.user.id, status);
+        const order = await OrderService.updateOrderStatus(id, req.user.id, status);
 
         res.status(200).json({
             status: 'success',
             message: 'Order status updated successfully',
-            data: updatedOrder,
+            data: order,
         });
     }
 
-    static async addAgentNotes(req: AuthenticatedRequest, res: Response) {
-        // Only agents can add agent notes
+    static async addNotes(req: AuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+        const { notes } = req.body;
+        const userType = req.user.status.userType as 'agent' | 'customer';
+
+        if (!notes) {
+            throw new BadRequestError('Notes are required');
+        }
+
+        const order = await OrderService.addNotes(id, req.user.id, notes, userType);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Notes added successfully',
+            data: order,
+        });
+    }
+
+    /**
+     * Handle agent rejection of an assigned order
+     */
+    static async rejectOrder(req: AuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        if (!reason) {
+            throw new BadRequestError('Reason for rejection is required');
+        }
+
+        // Check if the user is an agent
         if (req.user.status.userType !== 'agent') {
-            throw new ForbiddenError('Only agents can add agent notes');
+            throw new ForbiddenError('Only agents can reject orders');
         }
 
-        const { id } = req.params;
-        const { notes } = req.body;
-
-        if (!notes) {
-            throw new BadRequestError('Notes are required');
-        }
-
-        const updatedOrder = await OrderService.addAgentNotes(id, req.user.id, notes);
+        const order = await OrderService.handleAgentRejection(id, req.user.id, reason);
 
         res.status(200).json({
             status: 'success',
-            message: 'Agent notes added successfully',
-            data: updatedOrder,
-        });
-    }
-
-    static async addCustomerNotes(req: AuthenticatedRequest, res: Response) {
-        const { id } = req.params;
-        const { notes } = req.body;
-
-        if (!notes) {
-            throw new BadRequestError('Notes are required');
-        }
-
-        const updatedOrder = await OrderService.addCustomerNotes(id, req.user.id, notes);
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Customer notes added successfully',
-            data: updatedOrder,
+            message: 'Order rejection processed successfully',
+            data: order,
         });
     }
 }
