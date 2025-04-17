@@ -56,11 +56,7 @@ export default class EmailService {
     private createNodemailerEmail(): SendEmailFunction {
         let transporter;
 
-        console.log({ EMAIL_SERVICE });
-
         if (EMAIL_SERVICE === 'zoho') {
-
-            console.log('Using Zoho Mail for sending emails');
             // Zoho Mail configuration
             transporter = nodemailer.createTransport({
                 host: 'smtp.zoho.com',
@@ -73,7 +69,6 @@ export default class EmailService {
             });
         } else {
             // Default Gmail configuration with OAuth2
-            console.log('Using Gmail for sending emails');
             transporter = nodemailer.createTransport({
                 host: 'smtp.gmail.com',
                 port: 465,
