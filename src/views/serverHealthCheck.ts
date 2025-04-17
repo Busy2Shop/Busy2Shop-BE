@@ -7,7 +7,7 @@ import { serverHealth } from './serverhealth';
 export async function getServerHealth(req: Request, res: Response): Promise<void> {
     const data = {
         serverStatus: 'success',
-        message: `Welcome to Base ${process.env.NODE_ENV} server`,
+        message: `Welcome to Busy2Shop ${process.env.NODE_ENV} server`,
         documentation: DOCUMENTATION_URL,
         client: WEBSITE_URL,
         admin: 'www.twitter.com',

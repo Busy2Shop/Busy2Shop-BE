@@ -9,18 +9,19 @@ import passport from 'passport';
 
 const router: Router = express.Router();
 
-// // Configure the upload middleware for single file upload
+//Configure the upload middleware for single file upload
 const upload = uploadMiddleware(UploadType.Single, 'file');
 
 router
-    .post('/signup', AuthController.signup)
+    .post('/customer/signup', AuthController.customerSignup)
+    .post('/agent/signup', AuthController.agentSignup)
     .post('/verifyemail', AuthController.verifyEmail)
     .get('/resendverifyemail', AuthController.resendVerificationEmail)
     .post('/forgotpassword', AuthController.forgotPassword)
     .post('/login', AuthController.login)
     .post('/resetpassword', AuthController.resetPassword)
 
-    // .post('/setpassword', basicAuth('setpassword'), AuthenticatedController(AuthController.setPassword))
+    //.post('/setpassword', basicAuth('setpassword'), AuthenticatedController(AuthController.setPassword))
     .post('/changepassword', basicAuth('access'), AuthenticatedController(AuthController.changePassword))
     .get('/logout', basicAuth('access'), AuthenticatedController(AuthController.logout))
     .get('/loggeduser', basicAuth('access'), AuthenticatedController(AuthController.getLoggedUserData))

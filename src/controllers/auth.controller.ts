@@ -14,36 +14,22 @@ import CloudinaryClientConfig from '../clients/cloudinary.config';
 
 export default class AuthController {
 
-    static async signup(req: Request, res: Response) {
-        const {
-            firstName,
-            lastName,
-            dob,
-            email,
-            location: {
-                country,
-                city,
-                address,
-            } = {},
-            password,
-            userType,
-            otherName,
-            displayImage,
-            gender,
-            phone: {
-                countryCode,
-                number,
-            } = {},
-        } = req.body;
+    /**
+     * Validates signup data for both customer and agent registrations
+     * @param signupData The signup data to validate
+     * @throws BadRequestError if validation fails
+     */
+    private static validateSignupData(signupData: {
+        firstName?: string;
+        lastName?: string;
+        email?: string;
+        password?: string;
+    }) {
+        const { firstName, lastName, email, password } = signupData;
 
         // Validate required fields
         if (!firstName || !lastName || !email || !password) {
             throw new BadRequestError('First name, last name, email, and password are required');
-        }
-
-        // Validate user type
-        if (!userType || !['customer', 'agent'].includes(userType)) {
-            throw new BadRequestError('User type must be either "customer" or "agent"');
         }
 
         // Validate email format
@@ -56,6 +42,33 @@ export default class AuthController {
         if (!Validator.isValidPassword(password)) {
             throw new BadRequestError('Invalid password format');
         }
+    }
+
+
+    static async customerSignup(req: Request, res: Response) {
+        req.body.userType = 'customer';
+
+        const {
+            firstName,
+            lastName,
+            dob,
+            email,
+            location: {
+                country,
+                city,
+                address,
+            } = {},
+            password,
+            otherName,
+            displayImage,
+            gender,
+            phone: {
+                countryCode,
+                number,
+            } = {},
+        } = req.body;
+
+        AuthController.validateSignupData({ firstName, lastName, email, password });
 
         await UserService.isEmailAndUsernameAvailable(email);
 
@@ -85,7 +98,7 @@ export default class AuthController {
             status: {
                 activated: false,
                 emailVerified: false,
-                userType,
+                userType: 'customer',
             },
         });
 
@@ -95,7 +108,7 @@ export default class AuthController {
 
         const templateData = {
             otpCode,
-            name: firstName || 'User',
+            name: firstName ?? 'User',
         };
 
         console.log('sending email');
@@ -110,6 +123,99 @@ export default class AuthController {
                 recipientEmail: email,
             }],
             html: await new EmailTemplate().accountActivation({ otpCode, name: firstName || 'User' }),
+        });
+
+        // Create a new password for the user
+        await Password.create({ userId: newUser.id, password: password });
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Email verification code sent successfully',
+            data: {
+                user: newUser,
+            },
+        });
+    }
+    
+    static async agentSignup(req: Request, res: Response) {
+        req.body.userType = 'agent';
+
+        const {
+            firstName,
+            lastName,
+            email,
+            password,
+            dob,
+            otherName,
+            displayImage,
+            gender,
+            location: {
+                country,
+                city,
+                address,
+            } = {},
+            phone: {
+                countryCode,
+                number,
+            } = {},
+        } = req.body;
+
+        AuthController.validateSignupData({ firstName, lastName, email, password });
+
+        await UserService.isEmailAndUsernameAvailable(email);
+
+        const newUser = await UserService.addUser({
+            firstName,
+            lastName,
+            email,
+            otherName,
+            displayImage,
+            dob,
+            gender,
+            // Location data
+            location: country ? {
+                country,
+                city,
+                address,
+            } : undefined,
+            // Phone data
+            phone: countryCode ? {
+                countryCode,
+                number,
+            } : undefined,
+            status: {
+                activated: false,
+                emailVerified: false,
+                userType: 'agent',
+            },
+        });
+
+        const otpCode = await AuthUtil.generateCode({
+            type: 'emailverification',
+            identifier: newUser.id,
+            expiry: 60 * 10,
+        });
+
+        const templateData = {
+            otpCode,
+            name: firstName ?? 'Agent',
+        };
+
+        // Send verification email
+        await emailService.send({
+            email: 'batch',
+            subject: 'Agent Account Activation',
+            from: 'auth',
+            isPostmarkTemplate: true,
+            postMarkTemplateAlias: 'verify-email',
+            postmarkInfo: [{
+                postMarkTemplateData: templateData,
+                recipientEmail: email,
+            }],
+            html: await new EmailTemplate().accountActivation({
+                otpCode,
+                name: firstName ?? 'Agent',
+            }),
         });
 
         // Create a new password for the user
@@ -213,7 +319,7 @@ export default class AuthController {
             name: user.firstName,
         };
 
-        // TODO: Send email with the reset password link with the resetToken as query param
+        //TODO: Send email with the reset password link with the resetToken as query param
         await emailService.send({
             email: 'batch',
             subject: 'Password Reset ',
