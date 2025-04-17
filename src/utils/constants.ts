@@ -30,11 +30,15 @@ export const DB_CONFIG = {
 export const EMAIL_HOST = process.env.EMAIL_HOST as string,
     EMAIL_PORT = process.env.EMAIL_PORT as string,
     EMAIL_HOST_ADDRESS = process.env.EMAIL_HOST_ADDRESS as string,
+    EMAIL_SERVICE = process.env.EMAIL_SERVICE as string,
     OAUTH_CLIENT_ID = process.env.OAUTH_CLIENT_ID as string,
     OAUTH_CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET as string,
     OAUTH_REFRESH_TOKEN = process.env.OAUTH_REFRESH_TOKEN as string,
     OAUTH_ACCESS_TOKEN = process.env.OAUTH_ACCESS_TOKEN as string,
-    SUPER_ADMIN_EMAIL1 = process.env.SUPER_ADMIN_EMAIL1 as string;
+    SUPER_ADMIN_EMAIL1 = process.env.SUPER_ADMIN_EMAIL1 as string,
+    // Zoho Mail Configuration
+    ZOHO_USERNAME = process.env.ZOHO_USERNAME as string,
+    ZOHO_PASSWORD = process.env.ZOHO_PASSWORD as string;
 
 
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY as string;

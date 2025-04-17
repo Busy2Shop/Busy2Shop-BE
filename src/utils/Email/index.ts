@@ -6,6 +6,9 @@ import {
     OAUTH_CLIENT_SECRET,
     OAUTH_REFRESH_TOKEN,
     OAUTH_ACCESS_TOKEN,
+    EMAIL_SERVICE,
+    ZOHO_USERNAME,
+    ZOHO_PASSWORD,
     // POSTMARK_API_KEY,
     // NODE_ENV,
 } from '../constants';
@@ -51,19 +54,40 @@ export default class EmailService {
     }
 
     private createNodemailerEmail(): SendEmailFunction {
-        const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 465,
-            secure: true,
-            auth: {
-                type: 'OAuth2',
-                user: EMAIL_HOST_ADDRESS,
-                clientId: OAUTH_CLIENT_ID,
-                clientSecret: OAUTH_CLIENT_SECRET,
-                refreshToken: OAUTH_REFRESH_TOKEN,
-                accessToken: OAUTH_ACCESS_TOKEN,
-            },
-        });
+        let transporter;
+
+        console.log({ EMAIL_SERVICE });
+
+        if (EMAIL_SERVICE === 'zoho') {
+
+            console.log('Using Zoho Mail for sending emails');
+            // Zoho Mail configuration
+            transporter = nodemailer.createTransport({
+                host: 'smtp.zoho.com',
+                port: 465,
+                secure: true, // true for 465, false for other ports
+                auth: {
+                    user: ZOHO_USERNAME,
+                    pass: ZOHO_PASSWORD,
+                },
+            });
+        } else {
+            // Default Gmail configuration with OAuth2
+            console.log('Using Gmail for sending emails');
+            transporter = nodemailer.createTransport({
+                host: 'smtp.gmail.com',
+                port: 465,
+                secure: true,
+                auth: {
+                    type: 'OAuth2',
+                    user: EMAIL_HOST_ADDRESS,
+                    clientId: OAUTH_CLIENT_ID,
+                    clientSecret: OAUTH_CLIENT_SECRET,
+                    refreshToken: OAUTH_REFRESH_TOKEN,
+                    accessToken: OAUTH_ACCESS_TOKEN,
+                },
+            });
+        }
 
         return async (options) => {
             logger.info('options for sending', options);
@@ -73,7 +97,7 @@ export default class EmailService {
                 // Use Promise.all to wait for all emails to send
                 await Promise.all((options.postmarkInfo ?? []).map(async (recipient) => {
                     const mailOptions = {
-                        from: `Base Accounts<${EMAIL_HOST_ADDRESS}>`,
+                        from: `Base Accounts<${EMAIL_SERVICE === 'zoho' ? ZOHO_USERNAME : EMAIL_HOST_ADDRESS}>`,
                         to: recipient.recipientEmail,
                         subject: options.subject,
                         html: options.html ? options.html : undefined,
