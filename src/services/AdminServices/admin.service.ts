@@ -3,6 +3,8 @@ import Admin, { IAdmin } from '../../models/admin.model';
 import { BadRequestError, NotFoundError } from '../../utils/customErrors';
 import moment from 'moment';
 import UserSettings, { IBlockMeta } from '../../models/userSettings.model';
+import { FindAndCountOptions, Op } from 'sequelize';
+import Pagination, { IPaging } from '../../utils/pagination';
 
 // interface RevenueStatResult {
 //     period: Date;
@@ -20,6 +22,14 @@ import UserSettings, { IBlockMeta } from '../../models/userSettings.model';
 //     total: string;
 // }
 
+export interface IViewAdminsQuery {
+    page?: number;
+    size?: number;
+    q?: string; // Search query
+    isSuperAdmin?: boolean;
+}
+
+
 export default class AdminService {
 
     static async createAdmin(adminData: IAdmin): Promise<Admin> {
@@ -28,13 +38,51 @@ export default class AdminService {
             throw new BadRequestError('Admin with this email already exists');
         }
 
-        const newAdmin = await Admin.create(adminData);
-        return newAdmin;
+        return await Admin.create(adminData);
     }
 
-    static async getAllAdmins(): Promise<Admin[]> {
-        return Admin.findAll();
+    static async getAllAdmins(queryData?: IViewAdminsQuery): Promise<{ admins: Admin[], count: number, totalPages?: number }> {
+        const { page, size, q: query, isSuperAdmin } = queryData || {};
+
+        const where: Record<string | symbol, unknown> = {};
+
+        // Handle the search query
+        if (query) {
+            where[Op.or] = [
+                { name: { [Op.iLike]: `%${query}%` } },
+                { email: { [Op.iLike]: `%${query}%` } },
+            ];
+        }
+
+        // Filter by superadmin status if specified
+        if (isSuperAdmin !== undefined) {
+            where.isSuperAdmin = isSuperAdmin;
+        }
+
+        // Basic query options
+        const queryOptions: FindAndCountOptions<Admin> = {
+            where,
+            order: [['createdAt', 'DESC']], // Sort by creation date, the newest first
+        };
+
+        // Handle pagination
+        if (page && size && page > 0 && size > 0) {
+            const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
+            queryOptions.limit = limit ?? 0;
+            queryOptions.offset = offset ?? 0;
+        }
+
+        const { rows: admins, count } = await Admin.findAndCountAll(queryOptions);
+
+        // Calculate pagination metadata if applicable
+        if (page && size && admins.length > 0) {
+            const totalPages = Pagination.estimateTotalPage({ count, limit: size } as IPaging);
+            return { admins, count, ...totalPages };
+        } else {
+            return { admins, count };
+        }
     }
+
 
     static async getAdminByEmail(email: string): Promise<Admin> {   
 

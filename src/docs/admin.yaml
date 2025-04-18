@@ -9,7 +9,7 @@ info:
   license:
     name: proprietary
 servers:
-  - url: http://localhost:8000/api/v0
+  - url: ${protocol}://${host}/api/v0
     description: Development server
 
 components:
@@ -116,8 +116,11 @@ components:
               type: boolean
             isDeactivated:
               type: boolean
+            isKycVerified:
+              type: boolean
             meta:
               type: object
+              description: Block/unblock history (only included for admin queries)
               properties:
                 blockHistory:
                   type: array
@@ -127,6 +130,29 @@ components:
                   type: array
                   items:
                     type: object
+            agentMetaData:
+              type: object
+              description: Only included when userType is 'agent' and the withAgentMeta scope is applied
+              properties:
+                nin:
+                  type: string
+                  description: National ID number
+                images:
+                  type: array
+                  items:
+                    type: string
+                  description: Verification images
+                currentStatus:
+                  type: string
+                  enum: ['available', 'busy', 'away', 'offline']
+                  description: Agent's current status
+                lastStatusUpdate:
+                  type: string
+                  format: date-time
+                  description: ISO timestamp of last status update
+                isAcceptingOrders:
+                  type: boolean
+                  description: Whether agent is currently accepting orders
 
   securitySchemes:
     AdminAuth:
@@ -250,7 +276,28 @@ paths:
       security:
         - AdminAuth: [ ]
       summary: Get all admins
-      description: Retrieves a list of all admins
+      description: Retrieves a paginated list of admins with filtering options
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number for pagination
+        - in: query
+          name: size
+          schema:
+            type: integer
+          description: Number of items per page
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Search query for admin name or email
+        - in: query
+          name: isSuperAdmin
+          schema:
+            type: boolean
+          description: Filter by super admin status
       responses:
         200:
           description: Admins retrieved successfully
@@ -266,9 +313,18 @@ paths:
                     type: string
                     example: Admins retrieved successfully
                   data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Admin'
+                    type: object
+                    properties:
+                      admins:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Admin'
+                      count:
+                        type: integer
+                        description: Total number of admins matching the filter
+                      totalPages:
+                        type: integer
+                        description: Total number of pages available (when pagination is used)
 
   /admin/delete:
     delete:
@@ -281,7 +337,7 @@ paths:
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
               $ref: '#/components/schemas/DeleteAdminRequest'
       responses:
@@ -454,7 +510,10 @@ paths:
       security:
         - AdminAuth: [ ]
       summary: Get all users
-      description: Retrieves a list of all users with filtering options
+      description: >
+        Retrieves a list of all users with filtering options.
+        When userType is 'agent', additional agent metadata is included in the response.
+        The meta field is only included in admin API responses.
       parameters:
         - in: query
           name: page
@@ -486,7 +545,7 @@ paths:
           schema:
             type: string
             enum: [ agent, customer ]
-          description: Filter by user type
+          description: Filter by user type. When 'agent' is specified, agent metadata is included in the response.
       responses:
         200:
           description: Users retrieved successfully
