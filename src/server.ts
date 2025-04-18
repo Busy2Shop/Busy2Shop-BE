@@ -20,7 +20,15 @@ async function startServer(): Promise<void> {
 
         // Start the server and listen on port 8080
         server.listen(process.env.PORT ?? 8090, () => {
-            logger.info(`Server is running on Port ${process.env.PORT ?? 8088}`);
+            const address = server.address();
+            console.log({ address });
+            const port = typeof address === 'string' ? process.env.PORT ?? 8088 : address?.port ?? 8088;
+            const host = typeof address === 'string' ? 'localhost' : address?.address ?? 'localhost';
+            const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+            const hostname = host === '::' ? 'localhost' : host;
+
+            logger.info(`Server is running on Port ${port}`);
+            logger.info(`Swagger documentation available at: ${protocol}://${hostname}:${port}/api-docs`);
         });
     } catch (err) {
         console.log(err);
