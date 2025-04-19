@@ -95,7 +95,7 @@ export default class EmailService {
                         from: `Base Accounts<${EMAIL_SERVICE === 'zoho' ? ZOHO_USERNAME : EMAIL_HOST_ADDRESS}>`,
                         to: recipient.recipientEmail,
                         subject: options.subject,
-                        html: options.html ? options.html : undefined,
+                        html: options.html ?? undefined,
                         attachments: options.attachments,
                     };
 

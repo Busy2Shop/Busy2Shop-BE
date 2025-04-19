@@ -10,6 +10,11 @@ user auth login
   "password": "Password123!"
 }
 
+admin auth login
+{
+  "email": "ghostofadmin@yopmail.com",
+}
+
 Json model to create a market.
 {
   "name": "Home Affairs Supermarket",
