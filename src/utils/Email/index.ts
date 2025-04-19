@@ -92,10 +92,10 @@ export default class EmailService {
                 // Use Promise.all to wait for all emails to send
                 await Promise.all((options.postmarkInfo ?? []).map(async (recipient) => {
                     const mailOptions = {
-                        from: `Base Accounts<${EMAIL_SERVICE === 'zoho' ? ZOHO_USERNAME : EMAIL_HOST_ADDRESS}>`,
+                        from: `Busy2Shop Accounts<${EMAIL_SERVICE === 'zoho' ? ZOHO_USERNAME : EMAIL_HOST_ADDRESS}>`,
                         to: recipient.recipientEmail,
                         subject: options.subject,
-                        html: options.html ? options.html : undefined,
+                        html: options.html ?? undefined,
                         attachments: options.attachments,
                     };
 
