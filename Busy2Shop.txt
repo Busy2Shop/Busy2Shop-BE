@@ -1,12 +1,12 @@
 agent auth login.
 {
-  "email": "ghostofvendor@yopmail.com",
+  "email": "ghostofagent@yopmail.com",
   "password": "P@ssword123!"
 }
 
 user auth login
 {
-  "email": "ghostofeshop@yopmail.com",
+  "email": "ghostofcustomer@yopmail.com",
   "password": "Password123!"
 }
 

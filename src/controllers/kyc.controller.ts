@@ -4,7 +4,7 @@ import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
 import AgentService from '../services/agent.service';
 import UserService from '../services/user.service';
-import { IAgentMeta } from '../models/userSettings.model';
+import UserSettings, { IAgentMeta } from '../models/userSettings.model';
 
 export default class KycController {
     /**
@@ -118,24 +118,90 @@ export default class KycController {
             throw new ForbiddenError('Please verify your email before checking KYC status');
         }
 
-        const user = await UserService.viewSingleUser(id);
-        const agentMeta: IAgentMeta = user.settings?.agentMetaData || {
+        // Get fresh data directly from the database to avoid any caching issues
+        const userSettings = await UserSettings.findOne({
+            where: { userId: id },
+            attributes: ['isKycVerified', 'agentMetaData'],
+        });
+
+        if (!userSettings) {
+            throw new BadRequestError('User settings not found');
+        }
+
+        const agentMeta: IAgentMeta = userSettings.agentMetaData || {
             nin: '',
             images: [],
             currentStatus: 'offline',
             lastStatusUpdate: new Date().toISOString(),
-            isAcceptingOrders: false
+            isAcceptingOrders: false,
         };
 
         res.status(200).json({
             status: 'success',
             message: 'Verification status retrieved successfully',
             data: {
-                isVerified: user.settings?.isKycVerified || false,
+                isVerified: userSettings.isKycVerified || false,
                 documents: {
                     nin: !!agentMeta.nin,
                     images: agentMeta.images && agentMeta.images.length > 0,
                 },
+            },
+        });
+    }
+
+    /**
+     * Approve KYC verification for an agent
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    //Todo: Implement logic for admin to handle KYC approval process
+    static async approveKycVerification(req: AuthenticatedRequest, res: Response) {
+        const { id, status } = req.user;
+
+        // Ensure the requesting user is an agent
+        if (status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can self-approve KYC verification');
+        }
+
+        // Don't use viewSingleUser for this - directly fetch the settings
+        const userSettings = await UserSettings.findOne({
+            where: { userId: id },
+            // Make sure to get all the necessary fields
+            attributes: ['id', 'userId', 'isKycVerified', 'agentMetaData'],
+        });
+
+        if (!userSettings) {
+            throw new BadRequestError('User settings not found');
+        }
+
+        // Access the agentMetaData
+        const agentMeta = userSettings.agentMetaData;
+
+        if (!agentMeta) {
+            throw new BadRequestError('Agent metadata not found');
+        }
+
+        // Check for NIN
+        if (!agentMeta.nin) {
+            throw new BadRequestError('NIN document is required for KYC verification');
+        }
+
+        // Check for images
+        if (!agentMeta.images || agentMeta.images.length === 0) {
+            throw new BadRequestError('Verification images are required for KYC verification');
+        }
+
+        // Update KYC verification status
+        await userSettings.update({ isKycVerified: true });
+
+        // Now fetch the updated user to return in response
+        const updatedUser = await UserService.viewSingleUser(id);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'KYC verification approved successfully',
+            data: {
+                user: updatedUser,
             },
         });
     }

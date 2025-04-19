@@ -1,8 +1,7 @@
 import {
     Table, Column, Model, DataType, HasOne, Default, BeforeFind, Scopes,
     IsEmail, IsUUID, PrimaryKey, Index, BeforeCreate, BeforeUpdate,
-    HasMany,
-    BeforeValidate,
+    HasMany, AfterCreate,
 } from 'sequelize-typescript';
 import Password from './password.model';
 import UserSettings from './userSettings.model';
@@ -26,7 +25,7 @@ export interface IUserStatus {
             {
                 model: UserSettings,
                 as: 'settings',
-                attributes: ['joinDate', 'isBlocked', 'isDeactivated', 'lastLogin', 'meta'],
+                attributes: ['joinDate', 'isBlocked', 'isDeactivated', 'lastLogin', 'meta', 'agentMetaData'],
             },
         ],
     },
@@ -180,12 +179,22 @@ export default class User extends Model<User | IUser> {
         }
     }
 
-    @BeforeValidate
+    @AfterCreate
     static async validateAgentMeta(instance: User) {
         if (instance.status?.userType === 'agent') {
             const userSettings = await UserSettings.findOne({ where: { userId: instance.id } });
-            if (!userSettings?.agentMetaData?.nin) {
-                throw new Error('Agent must have NIN information in their settings');
+            if (userSettings) {
+                // Initialize agent metadata with default values
+                await userSettings.update({
+                    agentMetaData: {
+                        nin: '',
+                        images: [],
+                        currentStatus: 'offline',
+                        lastStatusUpdate: '',
+                        isAcceptingOrders: false,
+                    },
+                });
+
             }
         }
     }

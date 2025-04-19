@@ -9,7 +9,7 @@ info:
   license:
     name: proprietary
 servers:
-  - url: http://localhost:8000/api/v0
+  - url: ${protocol}://${host}/api/v0
     description: Development server
 
 components:
@@ -197,3 +197,31 @@ paths:
           description: Unauthorized - Authentication required
         '403':
           description: Forbidden - Only agents can check verification status or email not verified
+  
+  /kyc/approve-kyc:
+    patch:
+      summary: Approve KYC verification status for an agent
+      tags:
+        - KYC
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Verification status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Verification status approved successfully
+                  data:
+                    $ref: '#/components/schemas/VerificationStatusResponse'
+        '401':
+          description: Unauthorized - Authentication required
+        '403':
+          description: Forbidden - Only admins can update verification status

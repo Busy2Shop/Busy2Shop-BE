@@ -28,7 +28,7 @@ components:
           format: password
           example: "Password123!"
 
-    UserSignup:
+    CustomerSignup:
       type: object
       required:
         - email
@@ -36,7 +36,6 @@ components:
         - lastName
         - password
         - dob
-        - userType
         - gender
       properties:
         email:
@@ -63,10 +62,66 @@ components:
           type: string
           format: uri
           example: "https://example.com/image.jpg"
-        userType:
+        location:
+          type: object
+          properties:
+            country:
+              type: string
+              example: "United States"
+            city:
+              type: string
+              example: "New York"
+            address:
+              type: string
+              example: "123 Main St"
+        phone:
+          type: object
+          properties:
+            countryCode:
+              type: string
+              example: "+1"
+            number:
+              type: string
+              example: "2345678900"
+        dob:
           type: string
-          enum: [ customer, agent ]
-          example: "customer"
+          format: date
+          example: "1990-01-01"
+
+    AgentSignup:
+      type: object
+      required:
+        - email
+        - firstName
+        - lastName
+        - password
+        - dob
+        - gender
+      properties:
+        email:
+          type: string
+          format: email
+          example: "agent@example.com"
+        password:
+          type: string
+          format: password
+          example: "Password123!"
+        firstName:
+          type: string
+          example: "John"
+        lastName:
+          type: string
+          example: "Doe"
+        otherName:
+          type: string
+          example: "Smith"
+        gender:
+          type: string
+          example: "male"
+        displayImage:
+          type: string
+          format: uri
+          example: "https://example.com/image.jpg"
         location:
           type: object
           properties:
@@ -177,21 +232,15 @@ components:
         displayImage:
           type: string
         location:
-          type: object
-          properties:
-            country:
-              type: string
-            city:
-              type: string
-            address:
-              type: string
+          $ref: '#/components/schemas/Location'
         phone:
-          type: object
-          properties:
-            countryCode:
-              type: string
-            number:
-              type: string
+          $ref: '#/components/schemas/Phone'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
         status:
           type: object
           properties:
@@ -201,72 +250,44 @@ components:
               type: boolean
             userType:
               type: string
-        dob:
-          type: string
-          format: date
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
+              enum: [customer, agent]
 
-    UpdateProfile:
+    Phone:
       type: object
       properties:
-        firstName:
+        countryCode:
           type: string
-          example: "John"
-        lastName:
+        number:
           type: string
-          example: "Doe"
-        otherName:
-          type: string
-          example: "Smith"
-        displayImage:
-          type: string
-          example: "https://example.com/image.jpg"
-        gender:
-          type: string
-          example: "male"
-        location:
-          type: object
-          properties:
-            country:
-              type: string
-              example: "United States"
-            city:
-              type: string
-              example: "New York"
-            address:
-              type: string
-              example: "123 Main St"
-        isDeactivated:
-          type: string
-          enum: [ "true", "false" ]
-          example: "false"
 
-  securitySchemes:
-    BearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    Location:
+      type: object
+      properties:
+        country:
+          type: string
+        city:
+          type: string
+        address:
+          type: string
+
+
 
 paths:
-  /auth/signup:
+  /auth/customer/signup:
     post:
       tags:
         - Authentication
-      summary: Register a new user
+      summary: Create a new customer account
+      description: Register a new customer in the system
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserSignup'
+              $ref: '#/components/schemas/CustomerSignup'
       responses:
-        201:
-          description: User created successfully
+        '201':
+          description: Successfully created customer account
           content:
             application/json:
               schema:
@@ -283,8 +304,50 @@ paths:
                     properties:
                       user:
                         $ref: '#/components/schemas/User'
-        409:
-          description: Email already exists
+        '400':
+          description: Bad request, validation failed
+        '409':
+          description: Email already in use
+        '500':
+          description: Internal server error
+
+  /auth/agent/signup:
+    post:
+      tags:
+        - Authentication
+      summary: Create a new agent account
+      description: Register a new agent in the system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentSignup'
+      responses:
+        '201':
+          description: Successfully created agent account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "success"
+                  message:
+                    type: string
+                    example: "Email verification code sent successfully"
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request, validation failed
+        '409':
+          description: Email already in use
+        '500':
+          description: Internal server error
 
   /auth/verifyemail:
     post:

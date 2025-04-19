@@ -119,11 +119,11 @@ export default class EmailService {
     //     case 'auth':
     //         return 'accounts@blkat.io';
     //     case 'support':
-    //         return 'support@Base.com';
+    //         return 'support@Busy2Shop.com';
     //     case 'vibes':
-    //         return 'vibes@Base.com';
+    //         return 'vibes@Busy2Shop.com';
     //     default:
-    //         return 'accounts@Base.com';
+    //         return 'accounts@Busy2Shop.com';
     //     }
     // }
 
@@ -150,7 +150,7 @@ export default class EmailService {
     //                     Attachments: options.attachments ? options.attachments : [],
     //                     TemplateModel: recipient.postMarkTemplateData as Record<string, unknown>,
     //                     TemplateAlias: options.postMarkTemplateAlias,
-    //                     ...(senderEmail === 'vibes@Base.com' ? { MessageStream: 'vibes' } : {}),
+    //                     ...(senderEmail === 'vibes@Busy2Shop.com' ? { MessageStream: 'vibes' } : {}),
     //                 };
     //                 return message;
     //             });
