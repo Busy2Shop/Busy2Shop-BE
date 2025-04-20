@@ -1,7 +1,7 @@
-import { Op, FindAndCountOptions } from 'sequelize';
+import { FindAndCountOptions, Op } from 'sequelize';
 import Product, { IProduct } from '../models/product.model';
 import Market from '../models/market.model';
-import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customErrors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 
 export interface IViewProductsQuery {
@@ -27,13 +27,12 @@ export default class ProductService {
             throw new NotFoundError('Market not found');
         }
 
-        // Verify if this market can have products (only supermarkets can have products)
-        if (market.marketType !== 'supermarket') {
-            throw new BadRequestError('Only supermarkets can have products');
+        // If this is a market type that explicitly shouldn't have products
+        if (market.marketType === 'local_market') {
+            throw new BadRequestError('This type of market cannot have products');
         }
 
-        const newProduct = await Product.create({ ...productData });
-        return newProduct;
+        return await Product.create({ ...productData });
     }
 
     static async viewProducts(queryData?: IViewProductsQuery): Promise<{ products: Product[], count: number, totalPages?: number }> {
@@ -110,7 +109,7 @@ export default class ProductService {
             throw new NotFoundError('Market not found');
         }
 
-        // Add marketId to query
+        // Add marketId to the query
         const marketQuery = {
             ...queryData,
             marketId,
@@ -197,7 +196,7 @@ export default class ProductService {
             throw new ForbiddenError('You do not have permission to add products to all the specified markets');
         }
 
-        // Ensure all markets are supermarkets
+        // Ensure all marketType can have catalog products.
         const marketTypes = await Market.findAll({
             attributes: ['id', 'marketType'],
             where: {
@@ -205,9 +204,9 @@ export default class ProductService {
             },
         });
 
-        const nonSupermarkets = marketTypes.filter(m => m.marketType !== 'supermarket');
-        if (nonSupermarkets.length > 0) {
-            throw new BadRequestError('Products can only be added to supermarkets');
+        const localMarkets = marketTypes.filter(m => m.marketType === 'local_market');
+        if (localMarkets.length > 0) {
+            throw new BadRequestError('This type of market(local_market) cannot have products');
         }
 
         // Create all products
