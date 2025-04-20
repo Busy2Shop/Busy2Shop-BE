@@ -4,7 +4,7 @@ agent auth login.
   "password": "P@ssword123!"
 }
 
-user auth login
+customer auth login
 {
   "email": "ghostofcustomer@yopmail.com",
   "password": "Password123!"

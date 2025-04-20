@@ -9,7 +9,7 @@ info:
   license:
     name: proprietary
 servers:
-  - url: http://localhost:8000/api/v0
+  - url: ${protocol}://${host}/api/v0
     description: Development server
 
 components:
@@ -23,24 +23,6 @@ components:
         isDeactivated:
           type: boolean
           description: Whether the agent account is deactivated
-
-    Market:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier for the market
-        name:
-          type: string
-          description: Name of the market
-        description:
-          type: string
-          description: Description of the market
-        ownerId:
-          type: string
-          format: uuid
-          description: ID of the agent who owns the market
 
     AgentResponse:
       type: object
@@ -74,11 +56,6 @@ components:
               description: Whether the email is verified
         settings:
           $ref: '#/components/schemas/AgentSettings'
-        ownedMarkets:
-          type: array
-          items:
-            $ref: '#/components/schemas/Market'
-          description: Markets owned by the agent
         createdAt:
           type: string
           format: date-time
@@ -103,19 +80,16 @@ components:
         pendingOrders:
           type: integer
           description: Number of orders currently pending or in progress
-        totalMarkets:
-          type: integer
-          description: Number of markets owned by the agent
 
     AssignOrderRequest:
       type: object
       properties:
-        agentId:
+        orderId:
           type: string
           format: uuid
-          description: ID of the agent to assign the order to
+          description: ID of the order to assign to an agent.
       required:
-        - agentId
+        - orderId
 
   securitySchemes:
     BearerAuth:
@@ -306,7 +280,7 @@ paths:
 
   /agent/assign/{orderId}:
     post:
-      summary: Assign an order to an agent
+      summary: Assigns an order to a specific agent. Requires an agent ID in the request body and the order must be in 'pending' status.
       tags:
         - Agent
       security:
@@ -318,7 +292,7 @@ paths:
           schema:
             type: string
             format: uuid
-          description: ID of the order to assign
+          description: ID of the order to assign to an agent
       requestBody:
         required: true
         content:
@@ -342,7 +316,7 @@ paths:
                   data:
                     $ref: '#/components/schemas/AgentResponse'
         '400':
-          description: Bad request - Agent ID is required or order is not in pending status
+          description: Bad request - Agent ID is required in request body or order is not in 'pending' status
         '403':
           description: Forbidden - Not authorized to assign orders
         '404':
