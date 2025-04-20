@@ -9,7 +9,7 @@ info:
   license:
     name: proprietary
 servers:
-  - url: http://localhost:8000/api/v0
+  - url: ${protocol}://${host}/api/v0
     description: Development server
 
 components:
