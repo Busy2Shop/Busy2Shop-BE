@@ -10,7 +10,7 @@ customer auth login
   "password": "Password123!"
 }
 
-Json model to create a market.
+JSON model to create a market.
 {
   "name": "MedPlus Pharmacy",
   "address": "24 Diya St, Gbagada, Lagos",
@@ -63,7 +63,7 @@ Json model to create a market.
 }
 
 
-Bulk upload Json Data.
+Bulk upload JSON Data.
 {
   "products": [
     {
@@ -181,6 +181,48 @@ Bulk upload Json Data.
         "case_material": "Plastic",
         "dimensions": "20cm x 15cm x 5cm"
       }
+    }
+  ]
+}
+
+
+Customer Shopping List
+{
+  "name": "Medicine Shopping List",
+  "notes": "My monthly medication refill",
+  "marketId": "5bc12c9c-4eab-470a-98b5-b3c0a0e03676",
+  "estimatedTotal": 14350,
+  "items": [
+    {
+      "name": "Paracetamol 500mg Tablets",
+      "quantity": 2,
+      "unit": "pack",
+      "notes": "Prefer GSK brand if available",
+      "estimatedPrice": 650,
+      "productId": "9490790f-11e5-47dd-a6d9-e616203e567f"
+    },
+    {
+      "name": "Vitamin C 1000mg Tablets",
+      "quantity": 1,
+      "unit": "bottle",
+      "notes": "Looking for the 100-tablet bottle",
+      "estimatedPrice": 2300,
+      "productId": "afa28c38-1a32-411e-a61d-2a5e69627bbe"
+    },
+    {
+      "name": "First Aid Kit",
+      "quantity": 1,
+      "unit": "kit",
+      "notes": "Need to replace my old one",
+      "estimatedPrice": 5500,
+      "productId": "5ee95d8a-09fe-45b3-b7e1-3505458e8d9b"
+    },
+    {
+      "name": "Bandages",
+      "quantity": 3,
+      "unit": "pack",
+      "notes": "Extra bandages not in the first aid kit",
+      "estimatedPrice": 1750
     }
   ]
 }
