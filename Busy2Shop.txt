@@ -10,6 +10,11 @@ customer auth login
   "password": "Password123!"
 }
 
+admin auth login
+{
+  "email": "ghostofadmin@yopmail.com",
+}
+
 JSON model to create a market.
 {
   "name": "MedPlus Pharmacy",
