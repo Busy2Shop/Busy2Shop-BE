@@ -105,19 +105,25 @@ export default class UserService {
             settingsWhere.isDeactivated = isDeactivated;
         }
 
-        // Add filter for user type
+        // Add filter for the user type
         if (userType) {
             where['status'] = { [Op.contains]: { userType } };
         }
+
+        // Use the model with the appropriate scope
+        const UserSettingsModel =
+            userType === 'agent'
+                ? UserSettings.scope('withAgentMeta')
+                : UserSettings;
 
         const queryOptions: FindAndCountOptions<User> = {
             where,
             include: [
                 {
-                    model: UserSettings,
+                    model: UserSettingsModel,
                     as: 'settings',
-                    attributes: ['joinDate', 'isBlocked', 'isDeactivated', 'lastLogin', 'meta'],
                     where: settingsWhere,
+                    // No need to specify attributes - let the scope handle it
                 },
             ],
         };

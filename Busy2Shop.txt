@@ -10,7 +10,16 @@ customer auth login
   "password": "Password123!"
 }
 
+<<<<<<< HEAD
 JSON model to create a market.
+=======
+admin auth login
+{
+  "email": "ghostofadmin@yopmail.com",
+}
+
+Json model to create a market.
+>>>>>>> 211c3bc08ad6085abdec8b55d04ad602a64dd28d
 {
   "name": "MedPlus Pharmacy",
   "address": "24 Diya St, Gbagada, Lagos",

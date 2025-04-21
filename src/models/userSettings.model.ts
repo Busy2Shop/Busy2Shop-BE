@@ -1,6 +1,6 @@
 // Import necessary modules and dependencies
 import {
-    Table, Column, Model, DataType, ForeignKey, DefaultScope,
+    Table, Column, Model, DataType, ForeignKey, DefaultScope, Scopes,
     BelongsTo, IsUUID, Unique, PrimaryKey, Default,
 } from 'sequelize-typescript';
 import User from './user.model'; // Adjust the import path as necessary
@@ -15,8 +15,14 @@ export interface IBlockMeta {
 }
 // default scope to exclude the meta
 @DefaultScope(() => ({
-    attributes: { exclude: ['meta'] },
+    attributes: { exclude: ['meta', 'agentMetaData'] },
 }))
+@Scopes(() => ({
+    withAgentMeta: {
+        attributes: { exclude: [] }, // Include all attributes
+    },
+}))
+
 
 @Table({ timestamps: false })
 export default class UserSettings extends Model<UserSettings | IUserSettings> {

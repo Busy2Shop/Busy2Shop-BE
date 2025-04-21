@@ -103,17 +103,37 @@ export default class AdminController {
     }
 
     static async getAllAdmins(req: AdminAuthenticatedRequest, res: Response) {
-        const admins = await AdminService.getAllAdmins();
-        
+        const page = req.query.page ? Number(req.query.page) : 1;
+        const size = req.query.size ? Number(req.query.size) : 10;
+        const { q, isSuperAdmin } = req.query;
+
+        const queryParams: Record<string, unknown> = {
+            page,
+            size,
+        };
+
+
+        if (q) queryParams.q = q as string;
+
+        if (isSuperAdmin !== undefined) {
+            queryParams.isSuperAdmin = isSuperAdmin === 'true';
+        }
+
+        const result = await AdminService.getAllAdmins(queryParams);
+
         res.status(200).json({
             status: 'success',
             message: 'Admins retrieved successfully',
-            data: admins,
+            data: { ...result },
         });
     }
 
     static async deleteAdmin(req: AdminAuthenticatedRequest, res: Response) {
         const { adminId } = req.body;
+
+        if (!adminId) {
+            throw new BadRequestError('Admin ID is required');
+        }
 
         if (!req.isSuperAdmin) {
             throw new ForbiddenError('Only super admin can delete admins');

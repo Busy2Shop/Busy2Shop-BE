@@ -310,7 +310,7 @@ export default class AuthController {
         }
 
         const resetToken = await AuthUtil.generateCode({ type: 'passwordreset', identifier: user.id, expiry: 60 * 10 });
-        const redirectLink: string = redirectUrl || `${WEBSITE_URL}/reset-password`;
+        const redirectLink: string = redirectUrl ??  `${WEBSITE_URL}/reset-password`;
 
         const resetLink = `${redirectLink}?prst=${resetToken}&e=${encodeURIComponent(email)}`;
 
