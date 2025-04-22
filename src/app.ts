@@ -22,6 +22,46 @@ const app = express();
 // Initialize Passport configuration
 new FederationLoginConfig();
 
+// Configure CORS
+const corsOptions = {
+    // origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Set-Cookie'],
+    maxAge: 86400, // 24 hours
+};
+
+app.use(cors(corsOptions));
+
+// Security middleware
+app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+}));
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Cookie middleware
+app.use(cookieParser());
+app.use(
+    cookieSession({
+        name: 'session',
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        keys: [SESSION_SECRET],
+        secure: NODE_ENV === 'production',
+        sameSite: 'lax',
+        httpOnly: true,
+    })
+);
+
+// Passport middleware
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Request logging middleware
 app.use(
     expressWinston.logger({
         winstonInstance: logger,
@@ -30,21 +70,10 @@ app.use(
 );
 expressWinston.requestWhitelist.push('body');
 expressWinston.responseWhitelist.push('body');
-app.use(helmet());
+
+// Additional middleware
 app.use(mongoSanitize());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cors());
 app.use(morgan('dev'));
-app.use(cookieParser());
-app.use(
-    cookieSession({
-        maxAge: 24 * 60 * 60 * 1000,
-        keys: [SESSION_SECRET],
-    })
-);
-app.use(passport.initialize());
-app.use(passport.session());
 
 // Serve static files from the public directory
 app.use(express.static('src/public'));
