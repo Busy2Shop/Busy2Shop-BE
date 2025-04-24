@@ -18,7 +18,7 @@ export default class OrderController {
      * - Processes date range parameters (startDate, endDate) as strings
      *
      * @example
-     * // From a request with query ?page=2&size=10&status=pending
+     * // From a request with the query ?page=2&size=10&status=pending
      * const queryParams = this.extractOrderQueryParams(req.query);
      * // Returns: { page: 2, size: 10, status: 'pending' }
      */
@@ -77,7 +77,7 @@ export default class OrderController {
     }
 
     static async getUserOrders(req: AuthenticatedRequest, res: Response) {
-        const queryParams = this.extractOrderQueryParams(req.query);
+        const queryParams = OrderController.extractOrderQueryParams(req.query);
 
         const orders = await OrderService.getUserOrders(req.user.id, queryParams);
 
@@ -94,7 +94,7 @@ export default class OrderController {
             throw new ForbiddenError('Only agents can access their assigned orders');
         }
 
-        const queryParams = this.extractOrderQueryParams(req.query);
+        const queryParams = OrderController.extractOrderQueryParams(req.query);
 
         const orders = await OrderService.getAgentOrders(req.user.id, queryParams);
 

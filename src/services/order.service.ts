@@ -167,7 +167,7 @@ export default class OrderService {
 
 
     /**
-     * Create a new order with automatic agent assignment
+     * Create a new order with the automatic agent assignment
      */
     static async createOrder(orderData: IOrder): Promise<Order> {
         return await Database.transaction(async (transaction: Transaction) => {
@@ -192,9 +192,9 @@ export default class OrderService {
             const marketLocation = shoppingList.market?.location || { latitude: 0, longitude: 0 };
 
             // Find available agents at the market first
-            const availableAgents = await AgentService.getAvailableAgentsForOrder(shoppingList.id);
+            const availableAgents = await AgentService.getAvailableAgentsForOrder(shoppingList.marketId);
 
-            // If no agents at market, find nearest available agent
+            // If no agents at market, find the nearest available agent
             let assignedAgent: User | undefined = availableAgents[0];
             if (!assignedAgent) {
                 const nearestAgent = await AgentService.findNearestAgent(
@@ -259,7 +259,7 @@ export default class OrderService {
             },
         ];
 
-        // Add agent include if requested
+        // Add the agent include if requested
         if (includeAgent) {
             includes.push({
                 model: User,
@@ -339,7 +339,7 @@ export default class OrderService {
             },
         ];
 
-        // Add agent include if requested
+        // Add the agent include if requested
         if (includeAgent) {
             includes.push({
                 model: User,
@@ -537,7 +537,7 @@ export default class OrderService {
                 throw new ForbiddenError('You are not assigned to this order');
             }
 
-            // Get the shopping list to access market location
+            // Get the shopping list to access the market location
             const shoppingList = await ShoppingList.findByPk(order.shoppingListId, {
                 include: [{
                     model: Market,
@@ -550,8 +550,15 @@ export default class OrderService {
                 throw new NotFoundError('Shopping list not found');
             }
 
-            // Get market location for agent assignment
-            const marketLocation = shoppingList.market?.location || { latitude: 0, longitude: 0 };
+            // Explicitly get the market for location data - this is the fix
+            const market = await Market.findByPk(shoppingList.marketId);
+            if (!market || !market.location) {
+                throw new NotFoundError('Market not found or has no location');
+            }
+
+            // Get market location for agent assignment (using the correct property access)
+            const marketLatitude = market.location.latitude;
+            const marketLongitude = market.location.longitude;
 
             // Add the rejecting agent to the rejectedAgents array
             const rejectedAgents = order.rejectedAgents || [];
@@ -582,18 +589,18 @@ export default class OrderService {
             // Find a new agent, excluding previously rejected agents
             const rejectedAgentIds = rejectedAgents.map(ra => ra.agentId);
 
-            // First try to find available agents at the market
+            // First, try to find available agents at the market
             const availableAgents = await AgentService.getAvailableAgentsForOrder(
                 shoppingList.id,
                 rejectedAgentIds
             );
 
-            // If no agents at market, find nearest available agent
+            // If no agents at market, find the nearest available agent
             let newAgent: User | undefined = availableAgents[0];
             if (!newAgent) {
                 const nearestAgent = await AgentService.findNearestAgent(
-                    marketLocation.latitude,
-                    marketLocation.longitude,
+                    marketLatitude,
+                    marketLongitude,
                     rejectedAgentIds
                 );
                 if (nearestAgent) {
@@ -601,7 +608,7 @@ export default class OrderService {
                 }
             }
 
-            // If no new agent found, update order status
+            // If no new agent found, update the order status
             if (!newAgent) {
                 await order.update({
                     status: 'cancelled',

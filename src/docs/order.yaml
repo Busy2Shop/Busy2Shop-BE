@@ -73,7 +73,7 @@ components:
           description: Unique identifier for the order
         status:
           type: string
-          enum: [ pending, accepted, in_progress, completed, cancelled ]
+          enum: [ pending, accepted, in_progress, shopping, shopping_completed, delivery, completed, cancelled ]
           description: Current status of the order
         totalAmount:
           type: number
@@ -99,10 +99,26 @@ components:
           type: string
           format: date-time
           description: When the order was accepted by a agent
+        shoppingStartedAt:
+          type: string
+          format: date-time
+          description: When shopping started
+        shoppingCompletedAt:
+          type: string
+          format: date-time
+          description: When shopping was completed
+        deliveryStartedAt:
+          type: string
+          format: date-time
+          description: When delivery started
         completedAt:
           type: string
           format: date-time
           description: When the order was completed
+        cancelledAt:
+          type: string
+          format: date-time
+          description: When the order was cancelled
         customerId:
           type: string
           format: uuid
@@ -115,6 +131,20 @@ components:
           type: string
           format: uuid
           description: ID of the shopping list this order is based on
+        rejectedAgents:
+          type: array
+          items:
+            type: object
+            properties:
+              agentId:
+                type: string
+                format: uuid
+              reason:
+                type: string
+              rejectedAt:
+                type: string
+                format: date-time
+          description: List of agents who rejected this order
         createdAt:
           type: string
           format: date-time
@@ -129,7 +159,7 @@ components:
       properties:
         status:
           type: string
-          enum: [ pending, accepted, in_progress, completed, cancelled ]
+          enum: [ pending, accepted, in_progress, shopping, shopping_completed, delivery, completed, cancelled ]
           description: New status for the order
       required:
         - status
@@ -142,6 +172,15 @@ components:
           description: Notes to add to the order
       required:
         - notes
+
+    RejectOrderRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Reason for rejecting the order
+      required:
+        - reason
 
   securitySchemes:
     BearerAuth:
@@ -204,7 +243,7 @@ paths:
           name: status
           schema:
             type: string
-            enum: [ pending, accepted, in_progress, completed, cancelled ]
+            enum: [ pending, accepted, in_progress, shopping, shopping_completed, delivery, completed, cancelled ]
           description: Filter orders by status
         - in: query
           name: startDate
@@ -268,7 +307,7 @@ paths:
           name: status
           schema:
             type: string
-            enum: [ pending, accepted, in_progress, completed, cancelled ]
+            enum: [ pending, accepted, in_progress, shopping, shopping_completed, delivery, completed, cancelled ]
           description: Filter orders by status
         - in: query
           name: startDate
@@ -390,9 +429,9 @@ paths:
         '404':
           description: Order not found
 
-  /order/{id}/agent-notes:
+  /order/{id}/notes:
     patch:
-      summary: Add agent notes to an order
+      summary: Add notes to an order (for both agents and customers)
       tags:
         - Order
       security:
@@ -404,7 +443,7 @@ paths:
           schema:
             type: string
             format: uuid
-          description: ID of the order to add agent notes to
+          description: ID of the order to add notes to
       requestBody:
         required: true
         content:
@@ -413,7 +452,7 @@ paths:
               $ref: '#/components/schemas/OrderNotesRequest'
       responses:
         '200':
-          description: Agent notes added successfully
+          description: Notes added successfully
           content:
             application/json:
               schema:
@@ -424,19 +463,19 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: Agent notes added successfully
+                    example: Notes added successfully
                   data:
                     $ref: '#/components/schemas/OrderResponse'
         '400':
           description: Bad request - Notes are required
         '403':
-          description: Forbidden - Only agents can add agent notes or not assigned to this order
+          description: Forbidden - Not authorized to add notes to this order
         '404':
           description: Order not found
 
-  /order/{id}/customer-notes:
-    patch:
-      summary: Add customer notes to an order
+  /order/{id}/reject:
+    post:
+      summary: Reject an order (agent only)
       tags:
         - Order
       security:
@@ -448,16 +487,16 @@ paths:
           schema:
             type: string
             format: uuid
-          description: ID of the order to add customer notes to
+          description: ID of the order to reject
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/OrderNotesRequest'
+              $ref: '#/components/schemas/RejectOrderRequest'
       responses:
         '200':
-          description: Customer notes added successfully
+          description: Order rejection processed successfully
           content:
             application/json:
               schema:
@@ -468,12 +507,12 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: Customer notes added successfully
+                    example: Order rejection processed successfully
                   data:
                     $ref: '#/components/schemas/OrderResponse'
         '400':
-          description: Bad request - Notes are required
+          description: Bad request - Reason for rejection is required or Maximum number of agent rejections reached
         '403':
-          description: Forbidden - You are not the customer for this order
+          description: Forbidden - Only agents can reject orders or You are not assigned to this order
         '404':
           description: Order not found

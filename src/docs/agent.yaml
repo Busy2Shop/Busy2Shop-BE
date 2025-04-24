@@ -23,6 +23,69 @@ components:
         isDeactivated:
           type: boolean
           description: Whether the agent account is deactivated
+        agentMetaData:
+          type: object
+          properties:
+            nin:
+              type: string
+              description: National Identification Number
+            images:
+              type: array
+              items:
+                type: string
+              description: Verification images
+            currentStatus:
+              type: string
+              enum: [ available, busy, away, offline ]
+              description: Current agent status
+            lastStatusUpdate:
+              type: string
+              format: date-time
+              description: When the status was last updated
+            isAcceptingOrders:
+              type: boolean
+              description: Whether the agent is accepting new orders
+
+    AgentLocation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the location
+        agentId:
+          type: string
+          format: uuid
+          description: ID of the agent this location belongs to
+        latitude:
+          type: number
+          format: float
+          description: Latitude coordinate
+        longitude:
+          type: number
+          format: float
+          description: Longitude coordinate
+        radius:
+          type: number
+          format: float
+          description: Radius in kilometers (default 5.0)
+        isActive:
+          type: boolean
+          description: Whether this location is active
+        name:
+          type: string
+          description: Optional name for the location
+        address:
+          type: string
+          description: Optional address description
+        createdAt:
+          type: string
+          format: date-time
+          description: When the location was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the location was last updated
 
     AgentResponse:
       type: object
@@ -46,7 +109,7 @@ components:
           properties:
             userType:
               type: string
-              enum: [agent]
+              enum: [ agent ]
               description: Type of user
             activated:
               type: boolean
@@ -54,8 +117,17 @@ components:
             emailVerified:
               type: boolean
               description: Whether the email is verified
+            availability:
+              type: string
+              enum: [ available, busy, away, offline ]
+              description: Agent availability status
         settings:
           $ref: '#/components/schemas/AgentSettings'
+        locations:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentLocation'
+          description: Agent's preferred service locations
         createdAt:
           type: string
           format: date-time
@@ -80,16 +152,97 @@ components:
         pendingOrders:
           type: integer
           description: Number of orders currently pending or in progress
+        uniqueMarkets:
+          type: integer
+          description: Number of unique markets the agent has shopped in
+
+    AgentStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ available, busy, away, offline ]
+          description: Current agent status
+        isAcceptingOrders:
+          type: boolean
+          description: Whether the agent is accepting new orders
+        lastStatusUpdate:
+          type: string
+          format: date-time
+          description: When the status was last updated
 
     AssignOrderRequest:
       type: object
       properties:
-        orderId:
+        agentId:
           type: string
           format: uuid
-          description: ID of the order to assign to an agent.
+          description: ID of the agent to assign the order to
       required:
-        - orderId
+        - agentId
+
+    AddLocationRequest:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: float
+          description: Latitude coordinate
+        longitude:
+          type: number
+          format: float
+          description: Longitude coordinate
+        radius:
+          type: number
+          format: float
+          description: Radius in kilometers (default 5.0)
+        name:
+          type: string
+          description: Optional name for the location
+        address:
+          type: string
+          description: Optional address description
+      required:
+        - latitude
+        - longitude
+
+    UpdateLocationRequest:
+      type: object
+      properties:
+        latitude:
+          type: number
+          format: float
+          description: Latitude coordinate
+        longitude:
+          type: number
+          format: float
+          description: Longitude coordinate
+        radius:
+          type: number
+          format: float
+          description: Radius in kilometers
+        name:
+          type: string
+          description: Optional name for the location
+        address:
+          type: string
+          description: Optional address description
+        isActive:
+          type: boolean
+          description: Whether this location is active
+
+    UpdateStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ available, busy, away, offline ]
+          description: Agent's new status
+        isAcceptingOrders:
+          type: boolean
+          description: Whether the agent is accepting new orders
+      required:
+        - status
 
   securitySchemes:
     BearerAuth:
@@ -170,6 +323,44 @@ paths:
                         type: integer
                         description: Total number of pages
 
+  /agent/nearby:
+    get:
+      summary: Find nearby agents based on coordinates
+      tags:
+        - Agent
+      parameters:
+        - in: query
+          name: latitude
+          required: true
+          schema:
+            type: number
+            format: float
+          description: Latitude coordinate
+        - in: query
+          name: longitude
+          required: true
+          schema:
+            type: number
+            format: float
+          description: Longitude coordinate
+        - in: query
+          name: maxRadius
+          schema:
+            type: number
+            format: float
+          description: Maximum radius to search in kilometers (default 20km)
+      responses:
+        '200':
+          description: Nearby agents retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentResponse'
+        '400':
+          description: Bad request - latitude and longitude are required
+
   /agent/{id}:
     get:
       summary: Get a specific agent's profile
@@ -208,7 +399,7 @@ paths:
       tags:
         - Agent
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: id
@@ -244,7 +435,7 @@ paths:
       tags:
         - Agent
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: shoppingListId
@@ -280,11 +471,12 @@ paths:
 
   /agent/assign/{orderId}:
     post:
-      summary: Assigns an order to a specific agent. Requires an agent ID in the request body and the order must be in 'pending' status.
+      summary: Assigns an order to a specific agent
+      description: Requires an agent ID in the request body and the order must be in 'pending' status.
       tags:
         - Agent
       security:
-        - BearerAuth: []
+        - BearerAuth: [ ]
       parameters:
         - in: path
           name: orderId
@@ -314,10 +506,168 @@ paths:
                     type: string
                     example: Order assigned to agent successfully
                   data:
-                    $ref: '#/components/schemas/AgentResponse'
+                    type: object
+                    description: The updated order
         '400':
           description: Bad request - Agent ID is required in request body or order is not in 'pending' status
         '403':
           description: Forbidden - Not authorized to assign orders
         '404':
           description: Order or agent not found
+
+  /agent/locations:
+    get:
+      summary: Get all locations for the authenticated agent
+      tags:
+        - Agent Locations
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Locations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentLocation'
+        '401':
+          description: Unauthorized - Authentication required
+        '403':
+          description: Forbidden - User is not an agent
+
+    post:
+      summary: Add a new location for the authenticated agent
+      tags:
+        - Agent Locations
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddLocationRequest'
+      responses:
+        '201':
+          description: Location created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentLocation'
+        '400':
+          description: Bad request - Invalid location data
+        '401':
+          description: Unauthorized - Authentication required
+        '403':
+          description: Forbidden - User is not an agent
+
+  /agent/locations/{id}:
+    put:
+      summary: Update an existing location for the authenticated agent
+      tags:
+        - Agent Locations
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the location to update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLocationRequest'
+      responses:
+        '200':
+          description: Location updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentLocation'
+        '400':
+          description: Bad request - Invalid location data
+        '401':
+          description: Unauthorized - Authentication required
+        '403':
+          description: Forbidden - User is not an agent or doesn't own this location
+        '404':
+          description: Location not found
+
+    delete:
+      summary: Delete a location for the authenticated agent
+      tags:
+        - Agent Locations
+      security:
+        - BearerAuth: [ ]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: ID of the location to delete
+      responses:
+        '204':
+          description: Location deleted successfully
+        '401':
+          description: Unauthorized - Authentication required
+        '403':
+          description: Forbidden - User is not an agent or doesn't own this location
+        '404':
+          description: Location not found
+
+  /agent/status:
+    get:
+      summary: Get the current status of the authenticated agent
+      tags:
+        - Agent Status
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentStatusResponse'
+        '401':
+          description: Unauthorized - Authentication required
+        '403':
+          description: Forbidden - User is not an agent
+        '404':
+          description: Agent not found
+
+    put:
+      summary: Update the status of the authenticated agent
+      tags:
+        - Agent Status
+      security:
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateStatusRequest'
+      responses:
+        '200':
+          description: Status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentResponse'
+        '400':
+          description: Bad request - Invalid status data
+        '401':
+          description: Unauthorized - Authentication required
+        '403':
+          description: Forbidden - User is not an agent
+        '404':
+          description: Agent not found

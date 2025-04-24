@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { FindAndCountOptions, Op, Transaction, Sequelize } from 'sequelize';
+import { FindAndCountOptions, Op, Sequelize, Transaction } from 'sequelize';
 import User from '../models/user.model';
 import UserSettings, { IAgentMeta } from '../models/userSettings.model';
 import Market from '../models/market.model';
@@ -86,7 +86,13 @@ export default class AgentService {
         const agent = await User.findOne({
             where: {
                 id,
-                'status.userType': 'agent',
+                // Fix the ambiguous status column by specifying the table
+                [Op.and]: [
+                    Sequelize.where(
+                        Sequelize.fn('jsonb_extract_path_text', Sequelize.col('"User"."status"'), 'userType'),
+                        'agent'
+                    ),
+                ],
             },
             include: [
                 {
@@ -164,28 +170,38 @@ export default class AgentService {
 
     /**
      * Get available agents for an order at a specific market
-     * @param marketId The ID of the market
+     * @param shoppingListId The ID of the shopping list for the order
      * @param excludeAgentIds Optional array of agent IDs to exclude from the search
      * @returns Array of available agents
      */
     static async getAvailableAgentsForOrder(
-        marketId: string,
+        shoppingListId: string,
         excludeAgentIds: string[] = []
     ): Promise<User[]> {
-        // Get the market location
-        const market = await Market.findByPk(marketId);
-        if (!market || !market.location) {
-            throw new NotFoundError('Market not found or has no location');
+        // First, get the shopping list to get the market ID
+        const shoppingList = await ShoppingList.findByPk(shoppingListId);
+        if (!shoppingList) {
+            throw new NotFoundError('Shopping list not found');
         }
 
-        // Find agents with locations near the market
+        // Make sure we have a market ID
+        if (!shoppingList.marketId) {
+            throw new NotFoundError('Shopping list has no associated market');
+        }
+
+        // Get the market to get its location
+        const market = await Market.findByPk(shoppingList.marketId);
+        if (!market || !market.location) {
+            // Instead of throwing an error, return an empty array if no market location
+            // This allows the code to continue and try other methods to find agents
+            console.warn(`Market ${shoppingList.marketId} not found or has no location. Returning empty agent list.`);
+            return [];
+        }
+
+        // Now we can use the market's location to find agents near it
         const agents = await this.findNearbyAgents(
             market.location.latitude,
             market.location.longitude,
-            5, // Initial radius in km
-            20, // Max radius in km
-            5, // Radius increment in km
-            10 // Limit results
         );
 
         // Filter out excluded agents
@@ -236,7 +252,7 @@ export default class AgentService {
         for (const agent of availableAgents) {
             if (!agent.locations || agent.locations.length === 0) continue;
 
-            // Calculate distance for each location and use the closest one
+            // Calculate the distance for each location and use the closest one
             const distances = agent.locations.map(location => {
                 return this.calculateDistance(
                     latitude,
@@ -405,12 +421,16 @@ export default class AgentService {
         }
 
         const currentTime = new Date().toISOString();
-        const agentMetaData = user.settings.agentMetaData || {
-            nin: '',
-            images: [],
-            currentStatus: 'offline',
+        // Fix: Check if agentMetaData exists AND has the necessary properties
+        const existingMetaData = user.settings.agentMetaData || {} as IAgentMeta;
+        const agentMetaData = {
+            // Preserve existing values or use defaults
+            nin: existingMetaData.nin ?? '',
+            images: existingMetaData.images ?? [],
+            // Update the status fields
+            currentStatus: status,
             lastStatusUpdate: currentTime,
-            isAcceptingOrders: false,
+            isAcceptingOrders: isAcceptingOrders,
         };
 
         agentMetaData.currentStatus = status;
@@ -539,9 +559,9 @@ export default class AgentService {
         }
 
         return {
-            status: agent.settings?.agentMetaData?.currentStatus || 'offline',
+            status: agent.settings?.agentMetaData?.currentStatus ?? 'offline',
             isAcceptingOrders: agent.settings?.agentMetaData?.isAcceptingOrders || false,
-            lastStatusUpdate: agent.settings?.agentMetaData?.lastStatusUpdate || new Date().toISOString(),
+            lastStatusUpdate: agent.settings?.agentMetaData?.lastStatusUpdate ?? new Date().toISOString(),
         };
     }
 
@@ -549,7 +569,7 @@ export default class AgentService {
          * Get all available agents
          */
     static async getAvailableAgents(): Promise<User[]> {
-        const users = await User.findAll({
+        return await User.findAll({
             where: {
                 'status.userType': 'agent',
             },
@@ -566,8 +586,6 @@ export default class AgentService {
                 },
             }],
         });
-
-        return users;
     }
 
     /**
@@ -590,9 +608,9 @@ export default class AgentService {
             // Create a new location with the required fields
             const newLocation = await AgentLocation.create({
                 agentId,
-                latitude: locationData.latitude || 0,
-                longitude: locationData.longitude || 0,
-                radius: locationData.radius || 5.0,
+                latitude: locationData.latitude ?? 0,
+                longitude: locationData.longitude ?? 0,
+                radius: locationData.radius ?? 5.0,
                 isActive: locationData.isActive !== undefined ? locationData.isActive : true,
                 name: locationData.name,
                 address: locationData.address,
@@ -702,11 +720,26 @@ export default class AgentService {
                     {
                         model: UserSettings,
                         as: 'settings',
-                        where: Sequelize.where(
-                            Sequelize.col('settings.agentMetaData'),
-                            Op.contains,
-                            { currentStatus: 'available', isAcceptingOrders: true }
-                        ),
+                        where: {
+                            [Op.and]: [
+                                Sequelize.where(
+                                    Sequelize.fn(
+                                        'jsonb_extract_path_text',
+                                        Sequelize.col('"settings"."agentMetaData"'),
+                                        'currentStatus'
+                                    ),
+                                    'available'
+                                ),
+                                Sequelize.where(
+                                    Sequelize.fn(
+                                        'jsonb_extract_path_text',
+                                        Sequelize.col('"settings"."agentMetaData"'),
+                                        'isAcceptingOrders'
+                                    ),
+                                    'true'
+                                ),
+                            ],
+                        },
                     },
                     {
                         model: AgentLocation,
@@ -723,7 +756,7 @@ export default class AgentService {
             agents = nearbyAgents.filter(agent => {
                 if (!agent.locations || agent.locations.length === 0) return false;
 
-                // Calculate distance for each location and use the closest one
+                // Calculate the distance for each location and use the closest one
                 const distances = agent.locations.map(location => {
                     return this.calculateDistance(
                         latitude,
@@ -784,7 +817,7 @@ export default class AgentService {
     }
 
     /**
-     * Calculate distance between two points using the Haversine formula
+     * Calculate the distance between two points using the Haversine formula
      */
     private static calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
         const R = 6371; // Radius of the earth in km
@@ -795,8 +828,7 @@ export default class AgentService {
             Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
             Math.sin(dLon / 2) * Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        const distance = R * c; // Distance in km
-        return distance;
+        return R * c; // Distance in km
     }
 
     /**
