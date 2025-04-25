@@ -345,6 +345,7 @@ export default class AgentService {
      */
     static async updateAgentDocuments(agentId: string, documents: Partial<IAgentMeta>): Promise<User> {
         return await Database.transaction(async (transaction: Transaction) => {
+            // First check if agent exists
             const agent = await User.findOne({
                 where: {
                     id: agentId,
@@ -365,45 +366,121 @@ export default class AgentService {
                 throw new NotFoundError('User settings not found');
             }
 
-            // Get current agent metadata or initialize with default values
-            const currentAgentMeta: IAgentMeta = agent.settings.agentMetaData || {
-                nin: '',
-                images: [],
-                currentStatus: 'offline',
-                lastStatusUpdate: new Date().toISOString(),
-                isAcceptingOrders: false,
-            };
+            // Use different approaches based on what we're updating
+            if (documents.nin !== undefined) {
+                // Update NIN using jsonb_set
+                await UserSettings.update(
+                    {
+                        agentMetaData: Sequelize.fn(
+                            'jsonb_set',
+                            // If agentMetaData is null, initialize with the default structure
+                            Sequelize.fn(
+                                'COALESCE',
+                                Sequelize.col('agentMetaData'),
+                                Sequelize.literal(`'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`)
+                            ),
+                            // Path to the property
+                            Sequelize.literal('\'{nin}\''),
+                            // Value to set
+                            Sequelize.literal(`'"${documents.nin}"'`),
+                            // Create if it doesn't exist
+                            true
+                        ),
+                    },
+                    {
+                        where: { userId: agentId },
+                        transaction,
+                    }
+                );
+            }
 
-            // Update with new document data
-            const updatedAgentMeta: IAgentMeta = {
-                ...currentAgentMeta,
-                ...(documents.nin && { nin: documents.nin }),
-                ...(documents.images && {
-                    images: documents.images.length > 0
-                        ? [...currentAgentMeta.images, ...documents.images]
-                        : currentAgentMeta.images,
-                }),
-            };
+            if (documents.images && documents.images.length > 0) {
+                // First, ensure the agentMetaData exists and has an image array
+                await UserSettings.update(
+                    {
+                        agentMetaData: Sequelize.fn(
+                            'jsonb_set',
+                            // If agentMetaData is null, initialize with the default structure
+                            Sequelize.fn(
+                                'COALESCE',
+                                Sequelize.col('agentMetaData'),
+                                Sequelize.literal(`'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`)
+                            ),
+                            // Path to the image property
+                            Sequelize.literal('\'{images}\''),
+                            // If images are missing, initialize with an empty array
+                            Sequelize.fn(
+                                'COALESCE',
+                                Sequelize.fn(
+                                    'jsonb_extract_path',
+                                    Sequelize.col('agentMetaData'),
+                                    'images'
+                                ),
+                                Sequelize.literal('\'[]\'::jsonb')
+                            ),
+                            // Create if it doesn't exist
+                            true
+                        ),
+                    },
+                    {
+                        where: { userId: agentId },
+                        transaction,
+                    }
+                );
 
-            // Update agent with new metadata
-            await agent.settings.update({
-                agentMetaData: updatedAgentMeta,
-            }, { transaction });
+                // Now append the new images to the existing images array
+                for (const imageUrl of documents.images) {
+                    await UserSettings.update(
+                        {
+                            agentMetaData: Sequelize.literal(
+                                `jsonb_set(
+                                "agentMetaData",
+                                '{images}',
+                                (
+                                    COALESCE(
+                                        jsonb_extract_path("agentMetaData", 'images'), 
+                                        '[]'::jsonb
+                                    ) || '"${imageUrl}"'::jsonb
+                                )
+                            )`
+                            ),
+                        },
+                        {
+                            where: { userId: agentId },
+                            transaction,
+                        }
+                    );
+                }
+            }
 
-            return agent;
+            // Get the updated agent
+            const updatedAgent = await User.findOne({
+                where: {
+                    id: agentId,
+                    'status.userType': 'agent',
+                },
+                include: [{
+                    model: UserSettings,
+                    as: 'settings',
+                }],
+                transaction,
+            });
+
+            return updatedAgent!;
         });
     }
 
 
     /**
-         * Update an agent's status
-         */
+     * Update an agent's status
+     */
     static async updateAgentStatus(
         userId: string,
         status: 'available' | 'busy' | 'away' | 'offline',
         isAcceptingOrders: boolean = true,
         transaction?: Transaction
     ): Promise<User> {
+        // Check if the user exists
         const user = await User.findByPk(userId, {
             include: [{
                 model: UserSettings,
@@ -421,30 +498,68 @@ export default class AgentService {
         }
 
         const currentTime = new Date().toISOString();
-        // Fix: Check if agentMetaData exists AND has the necessary properties
-        const existingMetaData = user.settings.agentMetaData || {} as IAgentMeta;
-        const agentMetaData = {
-            // Preserve existing values or use defaults
-            nin: existingMetaData.nin ?? '',
-            images: existingMetaData.images ?? [],
-            // Update the status fields
-            currentStatus: status,
-            lastStatusUpdate: currentTime,
-            isAcceptingOrders: isAcceptingOrders,
-        };
 
-        agentMetaData.currentStatus = status;
-        agentMetaData.lastStatusUpdate = currentTime;
-        agentMetaData.isAcceptingOrders = isAcceptingOrders;
+        // Create a transaction if one wasn't provided
+        const txn = transaction || await Database.transaction();
 
-        await user.settings.update({
-            agentMetaData,
-        }, { transaction });
+        try {
+            // Use jsonb_set to update status-related fields while preserving others
+            await UserSettings.update(
+                {
+                    agentMetaData: Sequelize.literal(`
+                    jsonb_set(
+                        jsonb_set(
+                            jsonb_set(
+                                COALESCE("agentMetaData", 
+                                    '{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${currentTime}","isAcceptingOrders":false}'::jsonb
+                                ),
+                                '{currentStatus}',
+                                '"${status}"'::jsonb,
+                                true
+                            ),
+                            '{lastStatusUpdate}',
+                            '"${currentTime}"'::jsonb,
+                            true
+                        ),
+                        '{isAcceptingOrders}',
+                        '${isAcceptingOrders}'::jsonb,
+                        true
+                    )
+                `),
+                },
+                {
+                    where: { userId: userId },
+                    transaction: txn,
+                }
+            );
 
-        return user;
+            // Only commit if we created our own transaction
+            if (!transaction) {
+                await txn.commit();
+            }
+
+            // Fetch and return the updated user
+            return await User.findByPk(userId, {
+                include: [{
+                    model: UserSettings,
+                    as: 'settings',
+                }],
+                transaction,
+            }) as User;
+        } catch (error) {
+            // Only rollback if we created our own transaction
+            if (!transaction) {
+                await txn.rollback();
+            }
+            throw error;
+        }
     }
 
+    /**
+     * Update an agent's accepting orders status
+     */
     static async updateAgentAcceptingOrders(userId: string, isAcceptingOrders: boolean): Promise<User> {
+        // Check if the user exists
         const user = await User.findByPk(userId, {
             include: [{
                 model: UserSettings,
@@ -461,25 +576,48 @@ export default class AgentService {
         }
 
         const currentTime = new Date().toISOString();
-        const agentMetaData = user.settings.agentMetaData || {
-            nin: '',
-            images: [],
-            currentStatus: 'offline',
-            lastStatusUpdate: currentTime,
-            isAcceptingOrders: false,
-        };
 
-        agentMetaData.isAcceptingOrders = isAcceptingOrders;
-        agentMetaData.lastStatusUpdate = currentTime;
+        // Use a transaction
+        return await Database.transaction(async (transaction: Transaction) => {
+            // Update only the isAcceptingOrders and lastStatusUpdate fields
+            await UserSettings.update(
+                {
+                    agentMetaData: Sequelize.literal(`
+                    jsonb_set(
+                        jsonb_set(
+                            COALESCE("agentMetaData", 
+                                '{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${currentTime}","isAcceptingOrders":false}'::jsonb
+                            ),
+                            '{isAcceptingOrders}',
+                            '${isAcceptingOrders}'::jsonb,
+                            true
+                        ),
+                        '{lastStatusUpdate}',
+                        '"${currentTime}"'::jsonb,
+                        true
+                    )
+                `),
+                },
+                {
+                    where: { userId: userId },
+                    transaction,
+                }
+            );
 
-        await user.settings.update({ agentMetaData });
-
-        return user;
+            // Fetch and return the updated user
+            return await User.findByPk(userId, {
+                include: [{
+                    model: UserSettings,
+                    as: 'settings',
+                }],
+                transaction,
+            }) as User;
+        });
     }
 
     /**
-         * Set agent as busy with a specific order
-         */
+     * Set agent as busy with a specific order
+     */
     static async setAgentBusy(agentId: string, orderId: string, transaction?: Transaction): Promise<User> {
         // Use the provided transaction or create a new one
         const txn = transaction || await Database.transaction();
@@ -505,32 +643,55 @@ export default class AgentService {
                 throw new NotFoundError('User settings not found');
             }
 
-            // Update agent meta to busy status
-            const currentAgentMeta: IAgentMeta = agent.settings.agentMetaData || {
-                nin: '',
-                images: [],
-                currentStatus: 'offline',
-                lastStatusUpdate: new Date().toISOString(),
-                isAcceptingOrders: false,
-            };
+            const currentTime = new Date().toISOString();
 
-            const updatedMeta: IAgentMeta = {
-                ...currentAgentMeta,
-                currentStatus: 'busy',
-                lastStatusUpdate: new Date().toISOString(),
-                isAcceptingOrders: false,
-            };
-
-            await agent.settings.update({
-                agentMetaData: updatedMeta,
-            }, { transaction: txn });
+            // Update only the status-related fields
+            await UserSettings.update(
+                {
+                    agentMetaData: Sequelize.literal(`
+                    jsonb_set(
+                        jsonb_set(
+                            jsonb_set(
+                                COALESCE("agentMetaData", 
+                                    '{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${currentTime}","isAcceptingOrders":false}'::jsonb
+                                ),
+                                '{currentStatus}',
+                                '"busy"'::jsonb,
+                                true
+                            ),
+                            '{lastStatusUpdate}',
+                            '"${currentTime}"'::jsonb,
+                            true
+                        ),
+                        '{isAcceptingOrders}',
+                        'false'::jsonb,
+                        true
+                    )
+                `),
+                },
+                {
+                    where: { userId: agentId },
+                    transaction: txn,
+                }
+            );
 
             // Only commit if we created our own transaction
             if (!transaction) {
                 await txn.commit();
             }
 
-            return agent;
+            // Fetch the updated agent to return
+            return await User.findOne({
+                where: {
+                    id: agentId,
+                    'status.userType': 'agent',
+                },
+                include: [{
+                    model: UserSettings,
+                    as: 'settings',
+                }],
+                transaction: txn,
+            }) as User;
         } catch (error) {
             // Only rollback if we created our own transaction
             if (!transaction) {
