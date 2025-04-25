@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Transaction, Op, FindAndCountOptions, Includeable } from 'sequelize';
+import { FindAndCountOptions, Includeable, Op, Transaction } from 'sequelize';
 import Order, { IOrder } from '../models/order.model';
 import ShoppingList from '../models/shoppingList.model';
 import ShoppingListItem from '../models/shoppingListItem.model';
 import User from '../models/user.model';
-import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customErrors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import { Database } from '../models';
 import AgentService from './agent.service';
@@ -292,7 +292,11 @@ export default class OrderService {
     /**
      * Get orders for a specific customer
      */
-    static async getUserOrders(userId: string, queryData?: IViewOrdersQuery): Promise<{ orders: Order[], count: number, totalPages?: number }> {
+    static async getUserOrders(userId: string, queryData?: IViewOrdersQuery): Promise<{
+        orders: Order[],
+        count: number,
+        totalPages?: number
+    }> {
         return this.getOrders(
             { customerId: userId },
             queryData,
@@ -304,7 +308,11 @@ export default class OrderService {
     /**
      * Get orders for a specific agent
      */
-    static async getAgentOrders(agentId: string, queryData?: IViewOrdersQuery): Promise<{ orders: Order[], count: number, totalPages?: number }> {
+    static async getAgentOrders(agentId: string, queryData?: IViewOrdersQuery): Promise<{
+        orders: Order[],
+        count: number,
+        totalPages?: number
+    }> {
         return this.getOrders(
             { agentId },
             queryData,
@@ -476,7 +484,11 @@ export default class OrderService {
         return await this.getOrder(id);
     }
 
-    static async calculateTotals(shoppingListId: string): Promise<{ totalAmount: number, serviceFee: number, deliveryFee: number }> {
+    static async calculateTotals(shoppingListId: string): Promise<{
+        totalAmount: number,
+        serviceFee: number,
+        deliveryFee: number
+    }> {
         const shoppingList = await ShoppingList.findByPk(shoppingListId, {
             include: [
                 {
@@ -529,7 +541,11 @@ export default class OrderService {
         agentId: string,
         reason: string
     ): Promise<Order> {
-        return await Database.transaction(async (transaction: Transaction) => {
+        // Initialize the result with a fake value that will be overwritten
+        let orderId_to_fetch: string = orderId;
+
+        // Use a separate variable to hold the result
+        await Database.transaction(async (transaction: Transaction) => {
             const order = await this.getOrder(orderId);
 
             // Verify the agent is assigned to this order
@@ -560,13 +576,24 @@ export default class OrderService {
             const marketLatitude = market.location.latitude;
             const marketLongitude = market.location.longitude;
 
-            // Add the rejecting agent to the rejectedAgents array
-            const rejectedAgents = order.rejectedAgents || [];
-            rejectedAgents.push({
-                agentId,
-                reason,
-                rejectedAt: new Date(),
-            });
+            // Get existing rejected agents
+            const existingRejectedAgents = order.rejectedAgents || [];
+
+            // Check if this agent has already rejected the order
+            if (existingRejectedAgents.some(ra => ra.agentId === agentId)) {
+                console.warn(`Agent ${agentId} has rejected order ${orderId} multiple times`);
+                throw new BadRequestError('You have already rejected this order');
+            }
+
+            // If not already rejected, add the new rejection
+            const rejectedAgents = [
+                ...existingRejectedAgents,
+                {
+                    agentId,
+                    reason,
+                    rejectedAt: new Date(),
+                },
+            ];
 
             // Check if we've reached the maximum number of rejections (5)
             if (rejectedAgents.length >= 5) {
@@ -622,6 +649,12 @@ export default class OrderService {
                     status: 'cancelled',
                 }, { transaction });
 
+                // Log details about the rejection
+                console.warn(`No agents available for order ${orderId} after rejection. ` +
+                    `Previous agent: ${agentId}, Market: ${shoppingList.marketId}, ` +
+                    `${rejectedAgentIds.length} total rejections`);
+
+                // Then throw the error
                 throw new BadRequestError('No available agents found to handle this order. Order has been cancelled.');
             }
 
@@ -642,7 +675,32 @@ export default class OrderService {
             // Update the previous agent's status back to available
             await AgentService.updateAgentStatus(agentId, 'available');
 
-            return await this.getOrder(order.id);
+
+            // Log using console.info instead
+            console.info(`Order ${orderId} rejected by agent ${agentId}. Reason: ${reason}. Reassigned to agent ${newAgent.id}`);
+
+            // We only need to store the orderId, not the whole order object
+            orderId_to_fetch = order.id;
         });
+
+        // After the transaction completes, fetch fresh data outside the transaction
+        const freshOrder = await Order.findByPk(orderId_to_fetch, {
+            include: [
+                { model: User, as: 'agent' },
+                { model: User, as: 'customer' },
+                {
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    include: ['items'],
+                },
+            ],
+        });
+
+        // Handle the case where findByPk might return null
+        if (!freshOrder) {
+            throw new NotFoundError(`Order with ID ${orderId_to_fetch} not found after update`);
+        }
+
+        return freshOrder;
     }
 }
