@@ -89,7 +89,7 @@ export default class MarketController {
             queryParams.lat = Number(lat);
             queryParams.lng = Number(lng);
 
-            // Default distance to 5km if not specified
+            // Default distance to 5 km if not specified
             queryParams.distance = distance ? Number(distance) : 5;
         }
 
@@ -125,7 +125,7 @@ export default class MarketController {
             operatingHours,
         } = req.body;
 
-        // Check if user is the owner of the market
+        // Check if the user is the owner of the market
         const market = await MarketService.viewSingleMarket(id);
 
         if (market.ownerId !== req.user.id) {
@@ -182,7 +182,7 @@ export default class MarketController {
     static async deleteMarket(req: AuthenticatedRequest, res: Response) {
         const { id } = req.params;
 
-        // Check if user is the owner of the market
+        // Check if the user is the owner of the market
         const market = await MarketService.viewSingleMarket(id);
 
         if (market.ownerId !== req.user.id) {
@@ -223,7 +223,7 @@ export default class MarketController {
             throw new BadRequestError('Market ID and Category ID are required');
         }
 
-        // Check if user is the owner of the market
+        // Check if the user is the owner of the market
         // const market = await MarketService.viewSingleMarket(marketId);
 
         // if (market.ownerId !== req.user.id && req.user.status.userType !== 'admin') {
@@ -246,7 +246,7 @@ export default class MarketController {
             throw new BadRequestError('Market ID and Category ID are required');
         }
 
-        // Check if user is the owner of the market
+        // Check if the user is the owner of the market
         // const market = await MarketService.viewSingleMarket(marketId);
 
         // if (market.ownerId !== req.user.id && req.user.status.userType !== 'admin') {

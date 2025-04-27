@@ -41,7 +41,7 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
 
     @Column({
         type: DataType.DECIMAL(10, 2),
-        allowNull: true, // Null for local markets or when price is unknown
+        allowNull: true, // Null for local markets or when the price is unknown
     })
         estimatedPrice: number;
 
@@ -62,7 +62,7 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
     @IsUUID(4)
     @ForeignKey(() => Product)
     @Column({
-        allowNull: true, // Can be null if item isn't linked to a specific product
+        allowNull: true, // Can be null if the item isn't linked to a specific product
     })
         productId: string;
 

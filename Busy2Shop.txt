@@ -4,7 +4,7 @@ agent auth login.
   "password": "P@ssword123!"
 }
 
-user auth login
+customer auth login
 {
   "email": "ghostofcustomer@yopmail.com",
   "password": "Password123!"
@@ -15,9 +15,9 @@ admin auth login
   "email": "ghostofadmin@yopmail.com",
 }
 
-Json model to create a market.
+JSON model to create a market.
 {
-  "name": "Home Affairs Supermarket",
+  "name": "MedPlus Pharmacy",
   "address": "24 Diya St, Gbagada, Lagos",
   "location": {
     "latitude": 6.553191,
@@ -27,63 +27,207 @@ Json model to create a market.
     "country": "Nigeria"
   },
   "phoneNumber": "08044233345",
-  "marketType": "supermarket",
-  "description": "Amazing all in one stop shop. Our staffs are courteous and helpful",
+  "marketType": "pharmacy",
+  "description": "Your trusted neighborhood pharmacy with a wide range of medications, health products, and wellness items. Our pharmacists are professional and always available for consultation.",
   "operatingHours": {
     "monday": {
-      "open": "09:00 AM",
-      "close": "09:00 PM"
+      "open": "08:00 AM",
+      "close": "10:00 PM"
     },
     "tuesday": {
-      "open": "09:00 AM",
-      "close": "09:00 PM"
+      "open": "08:00 AM",
+      "close": "10:00 PM"
     },
     "wednesday": {
-      "open": "09:00 AM",
-      "close": "09:00 PM"
+      "open": "08:00 AM",
+      "close": "10:00 PM"
     },
     "thursday": {
-      "open": "09:00 AM",
-      "close": "09:00 PM"
+      "open": "08:00 AM",
+      "close": "10:00 PM"
     },
     "friday": {
-      "open": "09:00 AM",
-      "close": "09:00 PM"
+      "open": "08:00 AM",
+      "close": "10:00 PM"
     },
-    "Saturday": {
+    "saturday": {
       "open": "09:00 AM",
-      "close": "09:00 PM"
+      "close": "10:00 PM"
     },
     "sunday": {
-      "open": "09:30 AM",
-      "close": "09:00 PM"
+      "open": "10:00 AM",
+      "close": "08:00 PM"
     }
-  }
+  },
+  "categoryIds": [
+    "b3cb261a-323b-454b-8592-a04686a3bdba"
+  ],
+  "files": [
+    "C:\\Users\\****\\Downloads\\medplus image.jpeg"
+  ]
 }
 
-Bulk upload Json Data.
+
+Bulk upload JSON Data.
 {
   "products": [
     {
-      "name": "Chicken-pie",
-      "description": "The best chicken-pie you will ever come across.",
-      "price": 950,
-      "discountPrice": 0,
-      "sku": "25",
-      "stockQuantity": 3,
+      "name": "Paracetamol 500mg Tablets",
+      "description": "Effective pain relief and fever reducer. Pack of 20 tablets.",
+      "price": 650,
+      "discountPrice": 550,
+      "sku": "MED-P001",
+      "stockQuantity": 100,
       "isAvailable": true,
-      "marketId": "4d581548-3451-44d8-85ad-c1972a31e115"
+      "marketId": "5bc12c9c-4eab-470a-98b5-b3c0a0e03676",
+      "images": ["https://res.cloudinary.com/drc6omjqc/image/upload/v1745159356/Base/category/bc2367cb-f67c-40af-8a53-96fbaf1ed29b/pharmacy.jpeg.jpg"],
+      "barcode": "5901234123457",
+      "attributes": {
+        "dosageForm": "Tablet",
+        "manufacturer": "GSK",
+        "expiryDate": "2026-12-31",
+        "requires_prescription": false,
+        "dosage": "1-2 tablets every 4-6 hours as needed"
+      }
     },
-
     {
-      "name": "Fish-pie",
-      "description": "The best fish-pie you will ever come across.",
-      "price": 1000,
-      "discountPrice": 0,
-      "sku": "29",
-      "stockQuantity": 12,
+      "name": "Amoxicillin 250mg Capsules",
+      "description": "Antibiotic for treatment of bacterial infections. Pack of 15 capsules.",
+      "price": 1200,
+      "discountPrice": 1100,
+      "sku": "MED-A001",
+      "stockQuantity": 50,
       "isAvailable": true,
-      "marketId": "4d581548-3451-44d8-85ad-c1972a31e115"
+      "marketId": "5bc12c9c-4eab-470a-98b5-b3c0a0e03676",
+      "images": ["https://res.cloudinary.com/drc6omjqc/image/upload/v1745159356/Base/category/bc2367cb-f67c-40af-8a53-96fbaf1ed29b/pharmacy.jpeg.jpg"],
+      "barcode": "5901234123458",
+      "attributes": {
+        "dosageForm": "Capsule",
+        "manufacturer": "Pfizer",
+        "expiryDate": "2025-10-15",
+        "requires_prescription": true,
+        "dosage": "1 capsule three times daily",
+        "pharmaceutical_class": "Penicillin antibiotic"
+      }
+    },
+    {
+      "name": "Digital Thermometer",
+      "description": "Fast and accurate digital thermometer for taking body temperature.",
+      "price": 3500,
+      "discountPrice": 3200,
+      "sku": "MED-DT001",
+      "stockQuantity": 30,
+      "isAvailable": true,
+      "marketId": "5bc12c9c-4eab-470a-98b5-b3c0a0e03676",
+      "images": ["https://res.cloudinary.com/drc6omjqc/image/upload/v1745159356/Base/category/bc2367cb-f67c-40af-8a53-96fbaf1ed29b/pharmacy.jpeg.jpg"],
+      "barcode": "5901234123460",
+      "attributes": {
+        "type": "Medical Device",
+        "manufacturer": "Omron",
+        "warranty": "1 year",
+        "battery_included": true,
+        "measurement_range": "32.0°C to 42.9°C"
+      }
+    },
+    {
+      "name": "Vitamin C 1000mg Tablets",
+      "description": "High-dose vitamin C supplement to support immune health. Bottle of 100 tablets.",
+      "price": 2300,
+      "discountPrice": 2000,
+      "sku": "MED-VC001",
+      "stockQuantity": 80,
+      "isAvailable": true,
+      "marketId": "5bc12c9c-4eab-470a-98b5-b3c0a0e03676",
+      "images": ["https://res.cloudinary.com/drc6omjqc/image/upload/v1745159356/Base/category/bc2367cb-f67c-40af-8a53-96fbaf1ed29b/pharmacy.jpeg.jpg"],
+      "barcode": "5901234123461",
+      "attributes": {
+        "dosageForm": "Tablet",
+        "manufacturer": "Nature's Way",
+        "expiryDate": "2026-08-15",
+        "requires_prescription": false,
+        "dosage": "1 tablet daily",
+        "vitamin_type": "Water-soluble"
+      }
+    },
+    {
+      "name": "Blood Pressure Monitor",
+      "description": "Digital automatic blood pressure monitor for home use. Includes cuff and storage case.",
+      "price": 18500,
+      "discountPrice": 16000,
+      "sku": "MED-BP001",
+      "stockQuantity": 15,
+      "isAvailable": true,
+      "marketId": "5bc12c9c-4eab-470a-98b5-b3c0a0e03676",
+      "images": ["https://res.cloudinary.com/drc6omjqc/image/upload/v1745159356/Base/category/bc2367cb-f67c-40af-8a53-96fbaf1ed29b/pharmacy.jpeg.jpg"],
+      "barcode": "5901234123462",
+      "attributes": {
+        "type": "Medical Device",
+        "manufacturer": "Omron",
+        "warranty": "2 years",
+        "memory_capacity": "60 readings",
+        "cuff_size": "22-32cm"
+      }
+    },
+    {
+      "name": "First Aid Kit",
+      "description": "Comprehensive first aid kit for home or travel emergencies. Contains bandages, antiseptics, and more.",
+      "price": 5500,
+      "discountPrice": 4800,
+      "sku": "MED-FA001",
+      "stockQuantity": 25,
+      "isAvailable": true,
+      "marketId": "5bc12c9c-4eab-470a-98b5-b3c0a0e03676",
+      "images": ["https://res.cloudinary.com/drc6omjqc/image/upload/v1745159356/Base/category/bc2367cb-f67c-40af-8a53-96fbaf1ed29b/pharmacy.jpeg.jpg"],
+      "barcode": "5901234123463",
+      "attributes": {
+        "type": "Medical Supply",
+        "manufacturer": "Johnson & Johnson",
+        "item_count": 42,
+        "case_material": "Plastic",
+        "dimensions": "20cm x 15cm x 5cm"
+      }
+    }
+  ]
+}
+
+
+Customer Shopping List
+{
+  "name": "Medicine Shopping List",
+  "notes": "My monthly medication refill",
+  "marketId": "5bc12c9c-4eab-470a-98b5-b3c0a0e03676",
+  "estimatedTotal": 14350,
+  "items": [
+    {
+      "name": "Paracetamol 500mg Tablets",
+      "quantity": 2,
+      "unit": "pack",
+      "notes": "Prefer GSK brand if available",
+      "estimatedPrice": 650,
+      "productId": "9490790f-11e5-47dd-a6d9-e616203e567f"
+    },
+    {
+      "name": "Vitamin C 1000mg Tablets",
+      "quantity": 1,
+      "unit": "bottle",
+      "notes": "Looking for the 100-tablet bottle",
+      "estimatedPrice": 2300,
+      "productId": "afa28c38-1a32-411e-a61d-2a5e69627bbe"
+    },
+    {
+      "name": "First Aid Kit",
+      "quantity": 1,
+      "unit": "kit",
+      "notes": "Need to replace my old one",
+      "estimatedPrice": 5500,
+      "productId": "5ee95d8a-09fe-45b3-b7e1-3505458e8d9b"
+    },
+    {
+      "name": "Bandages",
+      "quantity": 3,
+      "unit": "pack",
+      "notes": "Extra bandages not in the first aid kit",
+      "estimatedPrice": 1750
     }
   ]
 }

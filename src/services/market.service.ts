@@ -139,7 +139,7 @@ export default class MarketService {
                     model: Product,
                     as: 'products',
                     separate: true, // Lazy load to avoid large responses
-                    limit: 10,      // Only get first few products
+                    limit: 10,      // Only get the first few products
                 },
             ],
         });
