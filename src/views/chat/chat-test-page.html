@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="GB-EN">
+<html lang="en-GB">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,12 +15,17 @@
 <div class="chat-container">
     <div class="control-panel">
         <div class="form-group">
+            <label for="serverUrl">Server URL:</label>
+            <input type="text" id="serverUrl" value="http://localhost:8000">
+        </div>
+
+        <div class="form-group">
             <label for="token">Authorization Token:</label>
             <input type="text" id="token"
                    value="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNWFlNzQ2ZjUtNDk4My00ZDdkLWI1MjEtMzJlN2Q2Yzc1NjY0In0sInRva2VuVHlwZSI6ImFjY2VzcyIsImlhdCI6MTc0NTg0MjE2NCwiZXhwIjoxNzQ4NDM0MTY0fQ.CkMdIk0NzfFqaDdtuwNMMjLtVfMiMO_kNUPEs1t1cr4">
             <div class="button-group">
-                <button id="connect" class="btn-primary"><i class="fas fa-plug"></i> Connect</button>
-                <button id="disconnect" class="btn-danger" disabled><i class="fas fa-power-off"></i> Disconnect</button>
+                <button id="connect" class="btn-primary" title="Connect"><i class="fas fa-plug"></i> Connect</button>
+                <button id="disconnect" class="btn-danger" disabled title="Disconnect"><i class="fas fa-power-off"></i> Disconnect</button>
             </div>
         </div>
 
@@ -39,10 +44,14 @@
 
     <div class="message-input-container">
         <div class="message-input-wrapper">
+            <label for="messageInput">Message:</label>
             <input type="text" id="messageInput" placeholder="Type your message here..." disabled>
+        </div>
+        <div class="message-input-wrapper">
+            <label for="imageUrl">Image URL:</label>
             <input type="text" id="imageUrl" placeholder="Image URL (optional)" disabled>
         </div>
-        <button id="sendMessage" disabled><i class="fas fa-paper-plane"></i></button>
+        <button id="sendMessage" disabled title="Send Message"><i class="fas fa-paper-plane"></i></button>
     </div>
 
     <div id="status">Not connected</div>
@@ -53,56 +62,71 @@
 
     document.getElementById('connect').addEventListener('click', function () {
         const token = document.getElementById('token').value;
+        const serverUrl = document.getElementById('serverUrl').value;
 
-        socket = io('http://localhost:8000', {
-            auth: {token}
-        });
+        console.log(`Attempting to connect to: ${serverUrl}`);
 
-        // Connection events
-        socket.on('connect', function () {
-            document.getElementById('status').textContent = 'Connected';
-            document.getElementById('connect').disabled = true;
-            document.getElementById('disconnect').disabled = false;
-            document.getElementById('joinChat').disabled = false;
-        });
+        try {
+            socket = io(serverUrl, {
+                auth: {token}
+            });
 
-        socket.on('disconnect', function () {
-            document.getElementById('status').textContent = 'Disconnected';
-            document.getElementById('connect').disabled = false;
-            document.getElementById('disconnect').disabled = true;
-            document.getElementById('joinChat').disabled = true;
-            document.getElementById('leaveChat').disabled = true;
-            document.getElementById('messageInput').disabled = true;
-            document.getElementById('imageUrl').disabled = true;
-            document.getElementById('sendMessage').disabled = true;
-        });
+            // Connection events
+            socket.on('connect', function () {
+                document.getElementById('status').textContent = 'Connected';
+                document.getElementById('connect').disabled = true;
+                document.getElementById('disconnect').disabled = false;
+                document.getElementById('joinChat').disabled = false;
+            });
 
-        socket.on('error', function (error) {
-            document.getElementById('status').textContent = 'Error: ' + error.message;
-        });
+            socket.on('disconnect', function () {
+                document.getElementById('status').textContent = 'Disconnected';
+                document.getElementById('connect').disabled = false;
+                document.getElementById('disconnect').disabled = true;
+                document.getElementById('joinChat').disabled = true;
+                document.getElementById('leaveChat').disabled = true;
+                document.getElementById('messageInput').disabled = true;
+                document.getElementById('imageUrl').disabled = true;
+                document.getElementById('sendMessage').disabled = true;
+            });
 
-        // Chat events
-        socket.on('previous-messages', function (messages) {
-            document.getElementById('messages').innerHTML = '';
-            messages.forEach(addMessage);
-            document.getElementById('status').textContent = 'Received previous messages';
-        });
+            socket.on('error', function (error) {
+                document.getElementById('status').textContent = `Error: ${error.message}`;
+                console.error('Socket error:', error);
+            });
 
-        socket.on('new-message', function (message) {
-            addMessage(message);
-        });
+            socket.on('connect_error', function (error) {
+                document.getElementById('status').textContent = `Connection error: ${error.message}`;
+                console.error('Socket connection error:', error);
+                document.getElementById('connect').disabled = false;
+            });
 
-        socket.on('user-joined', function (user) {
-            addSystemMessage(`${user.name} (${user.type}) joined the chat`);
-        });
+            // Chat events
+            socket.on('previous-messages', function (messages) {
+                document.getElementById('messages').innerHTML = '';
+                messages.forEach(addMessage);
+                document.getElementById('status').textContent = 'Received previous messages';
+            });
 
-        socket.on('user-left', function (user) {
-            addSystemMessage(`${user.name} (${user.type}) left the chat`);
-        });
+            socket.on('new-message', function (message) {
+                addMessage(message);
+            });
 
-        socket.on('chat-activated', function (data) {
-            addSystemMessage(`Chat activated by ${data.activatedBy.name} (${data.activatedBy.type})`);
-        });
+            socket.on('user-joined', function (user) {
+                addSystemMessage(`${user.name} (${user.type}) joined the chat`);
+            });
+
+            socket.on('user-left', function (user) {
+                addSystemMessage(`${user.name} (${user.type}) left the chat`);
+            });
+
+            socket.on('chat-activated', function (data) {
+                addSystemMessage(`Chat activated by ${data.activatedBy.name} (${data.activatedBy.type})`);
+            });
+        } catch (err) {
+            console.error('Error setting up socket connection:', err);
+            document.getElementById('status').textContent = `Setup error: ${err.message}`;
+        }
     });
 
     document.getElementById('disconnect').addEventListener('click', function () {
@@ -174,7 +198,7 @@
         messageDiv.className = 'message ' + message.senderType;
 
         // Format timestamp
-        const timestamp = new Date(message.createdAt);
+        const timestamp = new Date(message.createdAt || new Date());
         const formattedTime = timestamp.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
 
         let content = `
@@ -209,6 +233,7 @@
     }
 
     function capitalizeFirstLetter(string) {
+        if (!string) return '';
         return string.charAt(0).toUpperCase() + string.slice(1);
     }
 </script>
