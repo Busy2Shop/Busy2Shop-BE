@@ -4,6 +4,12 @@ agent auth login.
   "password": "P@ssword123!"
 }
 
+second agent login
+{
+  "email": "twoghostofagent@yopmail.com",
+  "password": "Password123!"
+}
+
 customer auth login
 {
   "email": "ghostofcustomer@yopmail.com",

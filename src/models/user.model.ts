@@ -9,6 +9,7 @@ import { FindOptions } from 'sequelize';
 import Market from './market.model';
 import Review from './review.model';
 import ShoppingList from './shoppingList.model';
+import AgentLocation from './agentLocation.model';
 
 
 export type userTypeValues = 'agent' | 'customer';
@@ -153,6 +154,10 @@ export default class User extends Model<User | IUser> {
     @HasOne(() => UserSettings)
         settings: UserSettings;
 
+    // Association with AgentLocation model
+    @HasMany(() => AgentLocation, 'agentId')
+        locations?: AgentLocation[];
+
 
     @BeforeFind
     static beforeFindHook(options: FindOptions) {
@@ -248,4 +253,5 @@ export interface IUser {
     shoppingLists?: ShoppingList[];
     assignedOrders?: ShoppingList[];
     reviews?: Review[];
+    locations?: AgentLocation[];
 }
