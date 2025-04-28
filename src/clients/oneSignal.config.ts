@@ -1,4 +1,4 @@
-import { logger } from 'utils/logger';
+import { logger } from '../utils/logger';
 import { ONESIGNAL_USER_AUTH_KEY, ONESIGNAL_REST_API_KEY, ONESIGNAL_APP_ID } from '../utils/constants';
 import { INotification } from '../models/notification.model';
 import * as OneSignal from '@onesignal/node-onesignal';
@@ -59,7 +59,9 @@ class NotificationUtil {
             const oneSignalNotification = new OneSignal.Notification();
             oneSignalNotification.contents = { en: notification.message };
             oneSignalNotification.headings = { en: notification.heading || notification.title };
-            oneSignalNotification.include_aliases = { 'external_id': ['3847768b-0c3d-4fc0-a630-f2ebaa8aa600'] }; // userids
+            oneSignalNotification.include_aliases = { 'external_id': userIds };
+            // For email only
+            oneSignalNotification.target_channel = 'email';
             oneSignalNotification.app_id = ONESIGNAL_APP_ID;
             oneSignalNotification.included_segments = ['All'];
 

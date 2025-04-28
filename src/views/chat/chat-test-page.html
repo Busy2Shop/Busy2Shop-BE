@@ -40,6 +40,9 @@
                 <button id="joinChat" class="btn-success" disabled><i class="fas fa-sign-in-alt"></i>
                     Join Chat
                 </button>
+                <button id="activateChat" class="btn-info" disabled><i class="fas fa-play"></i>
+                    Activate Chat
+                </button>
                 <button id="leaveChat" class="btn-warning" disabled><i class="fas fa-sign-out-alt"></i>
                     Leave Chat
                 </button>
@@ -142,6 +145,12 @@
         }
     });
 
+    document.getElementById('activateChat').addEventListener('click', function () {
+        const orderId = document.getElementById('orderId').value;
+        socket.emit('activate-chat', orderId);
+        addSystemMessage('Activating chat...');
+    });
+
     document.getElementById('joinChat').addEventListener('click', function () {
         const orderId = document.getElementById('orderId').value;
 
@@ -149,6 +158,7 @@
         document.getElementById('status').textContent = 'Joining chat...';
 
         document.getElementById('joinChat').disabled = true;
+        document.getElementById('activateChat').disabled = false;
         document.getElementById('leaveChat').disabled = false;
         document.getElementById('messageInput').disabled = false;
         document.getElementById('imageUrl').disabled = false;
@@ -162,6 +172,7 @@
         document.getElementById('status').textContent = 'Left chat';
 
         document.getElementById('joinChat').disabled = false;
+        document.getElementById('activateChat').disabled = true;
         document.getElementById('leaveChat').disabled = true;
         document.getElementById('messageInput').disabled = true;
         document.getElementById('imageUrl').disabled = true;
