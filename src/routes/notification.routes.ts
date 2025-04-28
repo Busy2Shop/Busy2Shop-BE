@@ -4,10 +4,10 @@ import { AuthenticatedController, basicAuth } from '../middlewares/authMiddlewar
 
 const router: Router = express.Router();
 
-router
-    .get('/', basicAuth('access'), AuthenticatedController(NotificationController.listNotifications))
-    .get('/single', basicAuth('access'), AuthenticatedController(NotificationController.getNotification))
-    .patch('/read', basicAuth('access'), AuthenticatedController(NotificationController.markNotificationAsRead));
+// Protected routes
+router.get('/', basicAuth('access'), AuthenticatedController(NotificationController.listNotifications));
+router.get('/single', basicAuth('access'), AuthenticatedController(NotificationController.getNotification));
+router.patch('/read', basicAuth('access'), AuthenticatedController(NotificationController.markNotificationAsRead));
 
 export default router;
 

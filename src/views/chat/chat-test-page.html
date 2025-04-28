@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="GB-EN">
+<head>
+    <title>Chat Test Client</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <style>
+        #messages {
+            height: 300px;
+            overflow-y: scroll;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .message {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 5px;
+        }
+
+        .customer {
+            background-color: #e3f2fd;
+            text-align: right;
+        }
+
+        .agent {
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+<h1>Chat Test Client</h1>
+
+<div>
+    <label for="token">Auth Token:</label>
+    <input type="text" id="token" size="50"
+           value="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNWFlNzQ2ZjUtNDk4My00ZDdkLWI1MjEtMzJlN2Q2Yzc1NjY0In0sInRva2VuVHlwZSI6ImFjY2VzcyIsImlhdCI6MTc0NTg0MjE2NCwiZXhwIjoxNzQ4NDM0MTY0fQ.CkMdIk0NzfFqaDdtuwNMMjLtVfMiMO_kNUPEs1t1cr4">
+    <button id="connect">Connect</button>
+    <button id="disconnect" disabled>Disconnect</button>
+</div>
+
+<div style="margin-top: 10px;">
+    <label for="orderId">Order ID:</label>
+    <input type="text" id="orderId" size="40" value="bddb17f6-9cef-4ad9-b380-4124c190eebb">
+    <button id="joinChat" disabled>Join Chat</button>
+    <button id="leaveChat" disabled>Leave Chat</button>
+</div>
+
+<div id="messages" style="margin-top: 20px;"></div>
+
+<div>
+    <input type="text" id="messageInput" placeholder="Type message..." disabled>
+    <input type="text" id="imageUrl" placeholder="Image URL (optional)" disabled>
+    <button id="sendMessage" disabled>Send</button>
+</div>
+
+<div id="status" style="margin-top: 10px; color: gray;"></div>
+
+<script>
+    let socket;
+
+    document.getElementById('connect').addEventListener('click', function () {
+        const token = document.getElementById('token').value;
+
+        socket = io('http://localhost:8000', {
+            auth: {token}
+        });
+
+        // Connection events
+        socket.on('connect', function () {
+            document.getElementById('status').textContent = 'Connected';
+            document.getElementById('connect').disabled = true;
+            document.getElementById('disconnect').disabled = false;
+            document.getElementById('joinChat').disabled = false;
+        });
+
+        socket.on('disconnect', function () {
+            document.getElementById('status').textContent = 'Disconnected';
+            document.getElementById('connect').disabled = false;
+            document.getElementById('disconnect').disabled = true;
+            document.getElementById('joinChat').disabled = true;
+            document.getElementById('leaveChat').disabled = true;
+            document.getElementById('messageInput').disabled = true;
+            document.getElementById('imageUrl').disabled = true;
+            document.getElementById('sendMessage').disabled = true;
+        });
+
+        socket.on('error', function (error) {
+            document.getElementById('status').textContent = 'Error: ' + error.message;
+        });
+
+        // Chat events
+        socket.on('previous-messages', function (messages) {
+            document.getElementById('messages').innerHTML = '';
+            messages.forEach(addMessage);
+            document.getElementById('status').textContent = 'Received previous messages';
+        });
+
+        socket.on('new-message', function (message) {
+            addMessage(message);
+        });
+
+        socket.on('user-joined', function (user) {
+            const status = document.getElementById('status');
+            status.textContent = `${user.name} (${user.type}) joined the chat`;
+        });
+
+        socket.on('user-left', function (user) {
+            const status = document.getElementById('status');
+            status.textContent = `${user.name} (${user.type}) left the chat`;
+        });
+
+        socket.on('chat-activated', function (data) {
+            const status = document.getElementById('status');
+            status.textContent = `Chat activated by ${data.activatedBy.name} (${data.activatedBy.type})`;
+        });
+    });
+
+    document.getElementById('disconnect').addEventListener('click', function () {
+        if (socket) {
+            socket.disconnect();
+        }
+    });
+
+    document.getElementById('joinChat').addEventListener('click', function () {
+        const orderId = document.getElementById('orderId').value;
+
+        socket.emit('join-order-chat', orderId);
+        document.getElementById('status').textContent = 'Joining chat...';
+
+        document.getElementById('joinChat').disabled = true;
+        document.getElementById('leaveChat').disabled = false;
+        document.getElementById('messageInput').disabled = false;
+        document.getElementById('imageUrl').disabled = false;
+        document.getElementById('sendMessage').disabled = false;
+    });
+
+    document.getElementById('leaveChat').addEventListener('click', function () {
+        const orderId = document.getElementById('orderId').value;
+
+        socket.emit('leave-order-chat', orderId);
+        document.getElementById('status').textContent = 'Left chat';
+
+        document.getElementById('joinChat').disabled = false;
+        document.getElementById('leaveChat').disabled = true;
+        document.getElementById('messageInput').disabled = true;
+        document.getElementById('imageUrl').disabled = true;
+        document.getElementById('sendMessage').disabled = true;
+    });
+
+    document.getElementById('sendMessage').addEventListener('click', function () {
+        const orderId = document.getElementById('orderId').value;
+        const message = document.getElementById('messageInput').value;
+        const imageUrl = document.getElementById('imageUrl').value;
+
+        if (!message.trim()) {
+            return;
+        }
+
+        const data = {
+            orderId,
+            message
+        };
+
+        if (imageUrl.trim()) {
+            data.imageUrl = imageUrl.trim();
+        }
+
+        socket.emit('send-message', data);
+        document.getElementById('messageInput').value = '';
+        document.getElementById('imageUrl').value = '';
+    });
+
+    // Press the Enter key to send a message
+    document.getElementById('messageInput').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            document.getElementById('sendMessage').click();
+        }
+    });
+
+    function addMessage(message) {
+        const messagesDiv = document.getElementById('messages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message ' + message.senderType;
+
+        let content = `<strong>${message.senderType}</strong>: ${message.message}`;
+        if (message.imageUrl) {
+            content += `<br><img src="${message.imageUrl}" style="max-width: 200px;">`;
+        }
+
+        messageDiv.innerHTML = content;
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+</script>
+</body>
+</html>
