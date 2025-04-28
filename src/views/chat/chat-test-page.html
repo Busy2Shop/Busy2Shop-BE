@@ -1,60 +1,52 @@
 <!DOCTYPE html>
 <html lang="GB-EN">
 <head>
-    <title>Chat Test Client</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Busy2Shop Chat Test Client</title>
     <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-    <style>
-        #messages {
-            height: 300px;
-            overflow-y: scroll;
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin-bottom: 10px;
-        }
-
-        .message {
-            margin-bottom: 5px;
-            padding: 5px;
-            border-radius: 5px;
-        }
-
-        .customer {
-            background-color: #e3f2fd;
-            text-align: right;
-        }
-
-        .agent {
-            background-color: #f5f5f5;
-        }
-    </style>
+    <link rel="stylesheet" href="chat-styles.css">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
 </head>
 <body>
-<h1>Chat Test Client</h1>
+<h1>Busy2Shop Chat Test Client</h1>
 
-<div>
-    <label for="token">Auth Token:</label>
-    <input type="text" id="token" size="50"
-           value="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNWFlNzQ2ZjUtNDk4My00ZDdkLWI1MjEtMzJlN2Q2Yzc1NjY0In0sInRva2VuVHlwZSI6ImFjY2VzcyIsImlhdCI6MTc0NTg0MjE2NCwiZXhwIjoxNzQ4NDM0MTY0fQ.CkMdIk0NzfFqaDdtuwNMMjLtVfMiMO_kNUPEs1t1cr4">
-    <button id="connect">Connect</button>
-    <button id="disconnect" disabled>Disconnect</button>
+<div class="chat-container">
+    <div class="control-panel">
+        <div class="form-group">
+            <label for="token">Authorization Token:</label>
+            <input type="text" id="token"
+                   value="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNWFlNzQ2ZjUtNDk4My00ZDdkLWI1MjEtMzJlN2Q2Yzc1NjY0In0sInRva2VuVHlwZSI6ImFjY2VzcyIsImlhdCI6MTc0NTg0MjE2NCwiZXhwIjoxNzQ4NDM0MTY0fQ.CkMdIk0NzfFqaDdtuwNMMjLtVfMiMO_kNUPEs1t1cr4">
+            <div class="button-group">
+                <button id="connect" class="btn-primary"><i class="fas fa-plug"></i> Connect</button>
+                <button id="disconnect" class="btn-danger" disabled><i class="fas fa-power-off"></i> Disconnect</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="orderId">Order ID:</label>
+            <input type="text" id="orderId" value="bddb17f6-9cef-4ad9-b380-4124c190eebb">
+            <div class="button-group">
+                <button id="joinChat" class="btn-success" disabled><i class="fas fa-sign-in-alt"></i> Join Chat</button>
+                <button id="leaveChat" class="btn-warning" disabled><i class="fas fa-sign-out-alt"></i> Leave Chat
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="messages" class="clearfix"></div>
+
+    <div class="message-input-container">
+        <div class="message-input-wrapper">
+            <input type="text" id="messageInput" placeholder="Type your message here..." disabled>
+            <input type="text" id="imageUrl" placeholder="Image URL (optional)" disabled>
+        </div>
+        <button id="sendMessage" disabled><i class="fas fa-paper-plane"></i></button>
+    </div>
+
+    <div id="status">Not connected</div>
 </div>
-
-<div style="margin-top: 10px;">
-    <label for="orderId">Order ID:</label>
-    <input type="text" id="orderId" size="40" value="bddb17f6-9cef-4ad9-b380-4124c190eebb">
-    <button id="joinChat" disabled>Join Chat</button>
-    <button id="leaveChat" disabled>Leave Chat</button>
-</div>
-
-<div id="messages" style="margin-top: 20px;"></div>
-
-<div>
-    <input type="text" id="messageInput" placeholder="Type message..." disabled>
-    <input type="text" id="imageUrl" placeholder="Image URL (optional)" disabled>
-    <button id="sendMessage" disabled>Send</button>
-</div>
-
-<div id="status" style="margin-top: 10px; color: gray;"></div>
 
 <script>
     let socket;
@@ -101,18 +93,15 @@
         });
 
         socket.on('user-joined', function (user) {
-            const status = document.getElementById('status');
-            status.textContent = `${user.name} (${user.type}) joined the chat`;
+            addSystemMessage(`${user.name} (${user.type}) joined the chat`);
         });
 
         socket.on('user-left', function (user) {
-            const status = document.getElementById('status');
-            status.textContent = `${user.name} (${user.type}) left the chat`;
+            addSystemMessage(`${user.name} (${user.type}) left the chat`);
         });
 
         socket.on('chat-activated', function (data) {
-            const status = document.getElementById('status');
-            status.textContent = `Chat activated by ${data.activatedBy.name} (${data.activatedBy.type})`;
+            addSystemMessage(`Chat activated by ${data.activatedBy.name} (${data.activatedBy.type})`);
         });
     });
 
@@ -173,7 +162,8 @@
 
     // Press the Enter key to send a message
     document.getElementById('messageInput').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault(); // Prevent the default action (new line)
             document.getElementById('sendMessage').click();
         }
     });
@@ -183,14 +173,43 @@
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message ' + message.senderType;
 
-        let content = `<strong>${message.senderType}</strong>: ${message.message}`;
+        // Format timestamp
+        const timestamp = new Date(message.createdAt);
+        const formattedTime = timestamp.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+
+        let content = `
+            <div class="sender-name">${capitalizeFirstLetter(message.senderType)}</div>
+            <div class="message-text">${message.message}</div>
+        `;
+
         if (message.imageUrl) {
-            content += `<br><img src="${message.imageUrl}" style="max-width: 200px;">`;
+            content += `<img src="${message.imageUrl}" onclick="window.open(this.src)" alt="">`;
         }
+
+        content += `<span class="timestamp">${formattedTime}</span>`;
 
         messageDiv.innerHTML = content;
         messagesDiv.appendChild(messageDiv);
+
+        // Add a clearfix div after each message
+        const clearfix = document.createElement('div');
+        clearfix.className = 'clearfix';
+        messagesDiv.appendChild(clearfix);
+
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function addSystemMessage(text) {
+        const messagesDiv = document.getElementById('messages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'system-message';
+        messageDiv.innerHTML = text;
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function capitalizeFirstLetter(string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
     }
 </script>
 </body>

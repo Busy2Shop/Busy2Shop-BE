@@ -1,0 +1,257 @@
+/* chat-styles.css */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'JetBrains Mono Light', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+    background-color: #f5f7fb;
+    color: #333;
+    line-height: 1.6;
+    padding: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.chat-container {
+    background-color: white;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    margin-top: 20px;
+}
+
+h1 {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 20px;
+    font-weight: 600;
+}
+
+.control-panel {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #495057;
+}
+
+input[type="text"] {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ced4da;
+    border-radius: 5px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+input[type="text"]:focus {
+    border-color: #4dabf7;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(77, 171, 247, 0.1);
+}
+
+.button-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+button {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    min-width: 100px;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background-color: #4dabf7;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: #339af0;
+}
+
+.btn-danger {
+    background-color: #fa5252;
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background-color: #e03131;
+}
+
+.btn-success {
+    background-color: #40c057;
+    color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+    background-color: #2f9e44;
+}
+
+.btn-warning {
+    background-color: #fab005;
+    color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+    background-color: #f59f00;
+}
+
+#messages {
+    height: 400px;
+    overflow-y: scroll;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background-color: #fafafa;
+}
+
+.message {
+    margin-bottom: 12px;
+    padding: 10px 15px;
+    border-radius: 10px;
+    max-width: 80%;
+    word-wrap: break-word;
+    position: relative;
+    clear: both;
+}
+
+.message .timestamp {
+    font-size: 11px;
+    color: #868e96;
+    margin-top: 5px;
+    display: block;
+}
+
+.message .sender-name {
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.customer {
+    background-color: #e3f2fd;
+    color: #0d47a1;
+    float: right;
+    border-bottom-right-radius: 0;
+}
+
+.agent {
+    background-color: #e9ecef;
+    color: #495057;
+    float: left;
+    border-bottom-left-radius: 0;
+}
+
+.admin {
+    background-color: #fff3bf;
+    color: #664d03;
+    float: left;
+    border-bottom-left-radius: 0;
+}
+
+.message-input-container {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.message-input-wrapper {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#messageInput {
+    flex-grow: 1;
+    min-height: 50px;
+    resize: none;
+    padding: 12px;
+    border-radius: 25px;
+}
+
+#imageUrl {
+    flex-grow: 1;
+}
+
+#sendMessage {
+    align-self: flex-end;
+    height: 50px;
+    width: 50px;
+    border-radius: 50%;
+    background-color: #4dabf7;
+    color: white;
+    font-size: 18px;
+    min-width: unset;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#sendMessage:hover:not(:disabled) {
+    background-color: #339af0;
+    transform: scale(1.05);
+}
+
+#status {
+    text-align: center;
+    padding: 10px;
+    color: #495057;
+    margin-top: 15px;
+    font-style: italic;
+}
+
+.system-message {
+    text-align: center;
+    padding: 8px;
+    margin: 10px 0;
+    background-color: #f1f3f5;
+    border-radius: 20px;
+    font-size: 12px;
+    color: #868e96;
+    clear: both;
+}
+
+.message img {
+    max-width: 200px;
+    margin-top: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.message img:hover {
+    transform: scale(1.03);
+}
+
+/* Add a clear fix to handle floating elements */
+.clearfix::after {
+    content: "";
+    clear: both;
+    display: table;
+}
