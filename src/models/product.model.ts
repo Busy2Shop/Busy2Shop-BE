@@ -82,7 +82,7 @@ export default class Product extends Model<Product | IProduct> {
     @BelongsTo(() => Market)
         market: Market;
 
-    @HasMany(() => Review, 'reviewerId')
+    @HasMany(() => Review, 'productId')  // Change 'reviewerId' to 'productId'
         reviews: Review[];
 }
 
