@@ -1,11 +1,11 @@
-import { Op, FindAndCountOptions, fn, col } from 'sequelize';
+import { col, FindAndCountOptions, fn, Op } from 'sequelize';
 import Review, { IReview } from '../models/review.model';
 import User from '../models/user.model';
 import Market from '../models/market.model';
 import Product from '../models/product.model';
 import Order from '../models/order.model';
 import ShoppingList from '../models/shoppingList.model';
-import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customErrors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 
 export interface IViewReviewsQuery {
@@ -15,6 +15,13 @@ export interface IViewReviewsQuery {
     marketId?: string;
     productId?: string;
     reviewerId?: string;
+}
+
+export interface IReviewableItemsQuery {
+    page?: number;
+    size?: number;
+    marketType?: string;    // Optional filter by market type
+    productName?: string;   // Optional search by product name
 }
 
 export default class ReviewService {
@@ -41,7 +48,7 @@ export default class ReviewService {
                 throw new NotFoundError('Market not found');
             }
 
-            // Check if user has already reviewed this market
+            // Check if the user has already reviewed this market
             const existingReview = await Review.findOne({
                 where: {
                     marketId: reviewData.marketId,
@@ -61,7 +68,7 @@ export default class ReviewService {
                 throw new NotFoundError('Product not found');
             }
 
-            // Check if user has already reviewed this product
+            // Check if the user has already reviewed this product
             const existingReview = await Review.findOne({
                 where: {
                     productId: reviewData.productId,
@@ -74,8 +81,7 @@ export default class ReviewService {
             }
         }
 
-        const newReview = await Review.create({ ...reviewData });
-        return newReview;
+        return await Review.create({ ...reviewData });
     }
 
     static async viewReviews(queryData?: IViewReviewsQuery): Promise<{ reviews: Review[], count: number, totalPages?: number }> {
@@ -179,7 +185,7 @@ export default class ReviewService {
     static async updateReview(id: string, reviewerId: string, dataToUpdate: Partial<IReview>): Promise<Review> {
         const review = await this.getReview(id);
 
-        // Check if user is the reviewer
+        // Check if the user is the reviewer
         if (review.reviewerId !== reviewerId) {
             throw new ForbiddenError('You are not authorized to update this review');
         }
@@ -202,7 +208,7 @@ export default class ReviewService {
     static async deleteReview(id: string, userId: string, isAdmin: boolean): Promise<void> {
         const review = await this.getReview(id);
 
-        // Check if user is the reviewer or an admin
+        // Check if the user is the reviewer or an admin
         if (review.reviewerId !== userId && !isAdmin) {
             throw new ForbiddenError('You are not authorized to delete this review');
         }
@@ -239,7 +245,7 @@ export default class ReviewService {
     }
 
     static async canUserReviewMarket(userId: string, marketId: string): Promise<boolean> {
-        // Check if user has any completed orders from this market
+        // Check if the user has any completed orders from this market
         const completedOrders = await Order.count({
             where: {
                 customerId: userId,
@@ -256,7 +262,7 @@ export default class ReviewService {
             ],
         });
 
-        // Check if user has already reviewed this market
+        // Check if the user has already reviewed this market
         const existingReview = await Review.findOne({
             where: {
                 marketId,
@@ -264,7 +270,7 @@ export default class ReviewService {
             },
         });
 
-        // User can review if they have completed orders and haven't already reviewed
+        // User can review if they have completed orders and haven't yet been reviewed
         return completedOrders > 0 && !existingReview;
     }
 
@@ -275,7 +281,7 @@ export default class ReviewService {
             throw new NotFoundError('Product not found');
         }
 
-        // Check if user has any completed orders from this product's market
+        // Check if the user has any completed orders from this product's market
         const completedOrders = await Order.count({
             where: {
                 customerId: userId,
@@ -292,7 +298,7 @@ export default class ReviewService {
             ],
         });
 
-        // Check if user has already reviewed this product
+        // Check if the user has already reviewed this product
         const existingReview = await Review.findOne({
             where: {
                 productId,
@@ -300,7 +306,7 @@ export default class ReviewService {
             },
         });
 
-        // User can review if they have completed orders and haven't already reviewed
+        // User can review if they have completed orders and haven't yet been reviewed
         return completedOrders > 0 && !existingReview;
     }
 
@@ -335,19 +341,12 @@ export default class ReviewService {
             },
         });
 
-        // Find products from supermarkets the user has ordered from
-        const supermarketIds = (await Market.findAll({
-            where: {
-                id: { [Op.in]: marketIds },
-                marketType: 'supermarket',
-            },
-            attributes: ['id'],
-        })).map(market => market.id);
-
-        // Get all products from these supermarkets
+        // FIXED: Get products from ALL market types the user has ordered from
+        // No need to filter by market type
+        // Get all products from these markets
         const products = await Product.findAll({
             where: {
-                marketId: { [Op.in]: supermarketIds },
+                marketId: { [Op.in]: marketIds },
             },
             include: [
                 {
