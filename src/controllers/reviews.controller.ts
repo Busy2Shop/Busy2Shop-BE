@@ -8,7 +8,20 @@ import CloudinaryClientConfig from '../clients/cloudinary.config';
 
 export default class ReviewController {
     static async createReview(req: AuthenticatedRequest, res: Response) {
-        const { comment, rating, marketId, productId } = req.body;
+        const { comment, rating } = req.body;
+
+        // More comprehensive handling of empty/null values
+        const productId = !req.body.productId || req.body.productId === '' || req.body.productId === 'null'
+            ? null
+            : req.body.productId;
+
+        const marketId = !req.body.marketId || req.body.marketId === '' || req.body.marketId === 'null'
+            ? null
+            : req.body.marketId;
+
+        // Replace the values in the request or use these variables directly
+        req.body.productId = productId;
+        req.body.marketId = marketId;
 
         if (!comment || !rating) {
             throw new BadRequestError('Comment and rating are required');
@@ -19,7 +32,7 @@ export default class ReviewController {
             throw new BadRequestError('Either market ID or product ID must be provided (not both)');
         }
 
-        // Check if user is eligible to review this item
+        // Check if the user is eligible to review this item
         if (marketId) {
             const canReview = await ReviewService.canUserReviewMarket(req.user.id, marketId);
             if (!canReview) {
@@ -159,7 +172,7 @@ export default class ReviewController {
 
         // Only admins or the user themselves can see their reviews
         // if (userId !== req.user.id && req.user.status.userType !== 'admin') {
-        //     throw new ForbiddenError('You are not authorized to view these reviews');
+        //     throw new ForbiddenError('You are not authorised to view these reviews');
         // }
 
         const queryParams: Record<string, unknown> = {
@@ -182,8 +195,19 @@ export default class ReviewController {
 
     static async getReviewableItems(req: AuthenticatedRequest, res: Response) {
         const userId = req.user.id;
+        const { page, size, marketType, productName } = req.query;
 
-        const reviewableItems = await ReviewService.getUserReviewableItems(userId);
+        const queryParams: Record<string, unknown> = {};
+
+        if (page && size) {
+            queryParams.page = Number(page);
+            queryParams.size = Number(size);
+        }
+
+        if (marketType) queryParams.marketType = marketType as string;
+        if (productName) queryParams.productName = productName as string;
+
+        const reviewableItems = await ReviewService.getUserReviewableItems(userId, queryParams);
 
         res.status(200).json({
             status: 'success',

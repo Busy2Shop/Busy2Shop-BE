@@ -1,11 +1,11 @@
-import { Op, FindAndCountOptions, fn, col } from 'sequelize';
+import { col, FindAndCountOptions, fn, Op } from 'sequelize';
 import Review, { IReview } from '../models/review.model';
 import User from '../models/user.model';
 import Market from '../models/market.model';
 import Product from '../models/product.model';
 import Order from '../models/order.model';
 import ShoppingList from '../models/shoppingList.model';
-import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customErrors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 
 export interface IViewReviewsQuery {
@@ -15,6 +15,13 @@ export interface IViewReviewsQuery {
     marketId?: string;
     productId?: string;
     reviewerId?: string;
+}
+
+export interface IReviewableItemsQuery {
+    page?: number;
+    size?: number;
+    marketType?: string;    // Optional filter by market type
+    productName?: string;   // Optional search by product name
 }
 
 export default class ReviewService {
@@ -41,7 +48,7 @@ export default class ReviewService {
                 throw new NotFoundError('Market not found');
             }
 
-            // Check if user has already reviewed this market
+            // Check if the user has already reviewed this market
             const existingReview = await Review.findOne({
                 where: {
                     marketId: reviewData.marketId,
@@ -61,7 +68,7 @@ export default class ReviewService {
                 throw new NotFoundError('Product not found');
             }
 
-            // Check if user has already reviewed this product
+            // Check if the user has already reviewed this product
             const existingReview = await Review.findOne({
                 where: {
                     productId: reviewData.productId,
@@ -74,8 +81,7 @@ export default class ReviewService {
             }
         }
 
-        const newReview = await Review.create({ ...reviewData });
-        return newReview;
+        return await Review.create({ ...reviewData });
     }
 
     static async viewReviews(queryData?: IViewReviewsQuery): Promise<{ reviews: Review[], count: number, totalPages?: number }> {
@@ -179,7 +185,7 @@ export default class ReviewService {
     static async updateReview(id: string, reviewerId: string, dataToUpdate: Partial<IReview>): Promise<Review> {
         const review = await this.getReview(id);
 
-        // Check if user is the reviewer
+        // Check if the user is the reviewer
         if (review.reviewerId !== reviewerId) {
             throw new ForbiddenError('You are not authorized to update this review');
         }
@@ -202,7 +208,7 @@ export default class ReviewService {
     static async deleteReview(id: string, userId: string, isAdmin: boolean): Promise<void> {
         const review = await this.getReview(id);
 
-        // Check if user is the reviewer or an admin
+        // Check if the user is the reviewer or an admin
         if (review.reviewerId !== userId && !isAdmin) {
             throw new ForbiddenError('You are not authorized to delete this review');
         }
@@ -239,7 +245,7 @@ export default class ReviewService {
     }
 
     static async canUserReviewMarket(userId: string, marketId: string): Promise<boolean> {
-        // Check if user has any completed orders from this market
+        // Check if the user has any completed orders from this market
         const completedOrders = await Order.count({
             where: {
                 customerId: userId,
@@ -256,7 +262,7 @@ export default class ReviewService {
             ],
         });
 
-        // Check if user has already reviewed this market
+        // Check if the user has already reviewed this market
         const existingReview = await Review.findOne({
             where: {
                 marketId,
@@ -264,7 +270,7 @@ export default class ReviewService {
             },
         });
 
-        // User can review if they have completed orders and haven't already reviewed
+        // User can review if they have completed orders and haven't yet been reviewed
         return completedOrders > 0 && !existingReview;
     }
 
@@ -275,7 +281,7 @@ export default class ReviewService {
             throw new NotFoundError('Product not found');
         }
 
-        // Check if user has any completed orders from this product's market
+        // Check if the user has any completed orders from this product's market
         const completedOrders = await Order.count({
             where: {
                 customerId: userId,
@@ -292,7 +298,7 @@ export default class ReviewService {
             ],
         });
 
-        // Check if user has already reviewed this product
+        // Check if the user has already reviewed this product
         const existingReview = await Review.findOne({
             where: {
                 productId,
@@ -300,11 +306,23 @@ export default class ReviewService {
             },
         });
 
-        // User can review if they have completed orders and haven't already reviewed
+        // User can review if they have completed orders and haven't yet been reviewed
         return completedOrders > 0 && !existingReview;
     }
 
-    static async getUserReviewableItems(customerId: string): Promise<{ markets: Market[], products: Product[] }> {
+    static async getUserReviewableItems(
+        customerId: string,
+        queryData?: IReviewableItemsQuery
+    ): Promise<{
+        markets: Market[],
+        products: Product[],
+        marketCount: number,
+        productCount: number,
+        marketTotalPages?: number,
+        productTotalPages?: number
+    }> {
+        const { page, size, marketType, productName } = queryData || {};
+
         // Find all markets the user has ordered from
         const completedShoppingLists = await ShoppingList.findAll({
             where: {
@@ -328,27 +346,45 @@ export default class ReviewService {
 
         const reviewableMarketIds = marketIds.filter(id => !reviewedMarketIds.includes(id));
 
-        // Get the reviewable markets
-        const markets = await Market.findAll({
-            where: {
-                id: { [Op.in]: reviewableMarketIds },
-            },
-        });
+        // Build market query options
+        const marketWhere: Record<string, unknown> = {
+            id: { [Op.in]: reviewableMarketIds },
+        };
 
-        // Find products from supermarkets the user has ordered from
-        const supermarketIds = (await Market.findAll({
-            where: {
-                id: { [Op.in]: marketIds },
-                marketType: 'supermarket',
-            },
-            attributes: ['id'],
-        })).map(market => market.id);
+        // Add optional market type filter
+        if (marketType) {
+            marketWhere.marketType = marketType;
+        }
 
-        // Get all products from these supermarkets
-        const products = await Product.findAll({
-            where: {
-                marketId: { [Op.in]: supermarketIds },
-            },
+        // Prepare market query options
+        const marketQueryOptions: FindAndCountOptions<Market> = {
+            where: marketWhere,
+            order: [['name', 'ASC']],
+        };
+
+        // Handle pagination for markets
+        if (page && size && page > 0 && size > 0) {
+            const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
+            marketQueryOptions.limit = limit ?? 0;
+            marketQueryOptions.offset = offset ?? 0;
+        }
+
+        // Get paginated reviewable markets
+        const { rows: markets, count: marketCount } = await Market.findAndCountAll(marketQueryOptions);
+
+        // Prepare product query options
+        const productWhere: Record<string, unknown> = {
+            marketId: { [Op.in]: marketIds },
+        };
+
+        // Add optional product name search
+        if (productName) {
+            productWhere.name = { [Op.iLike]: `%${productName}%` };
+        }
+
+        // Query to get all products from these markets
+        const productQueryOptions: FindAndCountOptions<Product> = {
+            where: productWhere,
             include: [
                 {
                     model: Review,
@@ -359,14 +395,49 @@ export default class ReviewService {
                     required: false,
                 },
             ],
-        });
+            order: [['name', 'ASC']],
+        };
+
+        // Handle pagination for products
+        if (page && size && page > 0 && size > 0) {
+            const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
+            productQueryOptions.limit = limit ?? 0;
+            productQueryOptions.offset = offset ?? 0;
+        }
+
+        // Get all products and count
+        const { rows: allProducts, count: productCount } = await Product.findAndCountAll(productQueryOptions);
 
         // Filter out products that have already been reviewed
-        const reviewableProducts = products.filter(product => !product.reviews?.length);
+        const reviewableProducts = allProducts.filter(product => !product.reviews?.length);
+
+        // Calculate pagination metadata
+        let marketTotalPages: number | undefined;
+        let productTotalPages: number | undefined;
+
+        if (page && size && page > 0 && size > 0) {
+            const marketPagination = Pagination.estimateTotalPage({
+                count: marketCount,
+                limit: size,
+            } as IPaging);
+
+            const productPagination = Pagination.estimateTotalPage({
+                count: productCount,
+                limit: size,
+            } as IPaging);
+
+            // Extract just the totalPages number from the returned objects
+            marketTotalPages = marketPagination.totalPages;
+            productTotalPages = productPagination.totalPages;
+        }
 
         return {
             markets,
             products: reviewableProducts,
+            marketCount,
+            productCount,
+            marketTotalPages,
+            productTotalPages,
         };
     }
 }

@@ -175,6 +175,18 @@ components:
           items:
             $ref: '#/components/schemas/Product'
           description: Products that can be reviewed
+        marketCount:
+          type: integer
+          description: Total count of reviewable markets
+        productCount:
+          type: integer
+          description: Total count of reviewable products
+        marketTotalPages:
+          type: integer
+          description: Total number of pages for markets
+        productTotalPages:
+          type: integer
+          description: Total number of pages for products
 
   securitySchemes:
     BearerAuth:
@@ -634,6 +646,30 @@ paths:
         - Review
       security:
         - BearerAuth: [ ]
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+          description: Page number for pagination (starts at 1)
+        - in: query
+          name: size
+          schema:
+            type: integer
+            minimum: 1
+          description: Number of items per page
+        - in: query
+          name: marketType
+          schema:
+            type: string
+            enum: [ pharmacy, supermarket, specialty_store ]
+          description: Filter by market type
+        - in: query
+          name: productName
+          schema:
+            type: string
+          description: Search products by name (partial match)
       responses:
         '200':
           description: Reviewable items retrieved successfully
@@ -649,6 +685,29 @@ paths:
                     type: string
                     example: Reviewable items retrieved successfully
                   data:
-                    $ref: '#/components/schemas/ReviewableItems'
+                    type: object
+                    properties:
+                      markets:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Market'
+                        description: Markets that can be reviewed
+                      products:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Product'
+                        description: Products that can be reviewed
+                      marketCount:
+                        type: integer
+                        description: Total count of reviewable markets
+                      productCount:
+                        type: integer
+                        description: Total count of reviewable products
+                      marketTotalPages:
+                        type: integer
+                        description: Total number of pages for markets
+                      productTotalPages:
+                        type: integer
+                        description: Total number of pages for products
         '401':
           description: Unauthorized - Authentication required
