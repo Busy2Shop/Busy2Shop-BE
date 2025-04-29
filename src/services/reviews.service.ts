@@ -310,7 +310,19 @@ export default class ReviewService {
         return completedOrders > 0 && !existingReview;
     }
 
-    static async getUserReviewableItems(customerId: string): Promise<{ markets: Market[], products: Product[] }> {
+    static async getUserReviewableItems(
+        customerId: string,
+        queryData?: IReviewableItemsQuery
+    ): Promise<{
+        markets: Market[],
+        products: Product[],
+        marketCount: number,
+        productCount: number,
+        marketTotalPages?: number,
+        productTotalPages?: number
+    }> {
+        const { page, size, marketType, productName } = queryData || {};
+
         // Find all markets the user has ordered from
         const completedShoppingLists = await ShoppingList.findAll({
             where: {
@@ -334,20 +346,45 @@ export default class ReviewService {
 
         const reviewableMarketIds = marketIds.filter(id => !reviewedMarketIds.includes(id));
 
-        // Get the reviewable markets
-        const markets = await Market.findAll({
-            where: {
-                id: { [Op.in]: reviewableMarketIds },
-            },
-        });
+        // Build market query options
+        const marketWhere: Record<string, unknown> = {
+            id: { [Op.in]: reviewableMarketIds },
+        };
 
-        // FIXED: Get products from ALL market types the user has ordered from
-        // No need to filter by market type
-        // Get all products from these markets
-        const products = await Product.findAll({
-            where: {
-                marketId: { [Op.in]: marketIds },
-            },
+        // Add optional market type filter
+        if (marketType) {
+            marketWhere.marketType = marketType;
+        }
+
+        // Prepare market query options
+        const marketQueryOptions: FindAndCountOptions<Market> = {
+            where: marketWhere,
+            order: [['name', 'ASC']],
+        };
+
+        // Handle pagination for markets
+        if (page && size && page > 0 && size > 0) {
+            const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
+            marketQueryOptions.limit = limit ?? 0;
+            marketQueryOptions.offset = offset ?? 0;
+        }
+
+        // Get paginated reviewable markets
+        const { rows: markets, count: marketCount } = await Market.findAndCountAll(marketQueryOptions);
+
+        // Prepare product query options
+        const productWhere: Record<string, unknown> = {
+            marketId: { [Op.in]: marketIds },
+        };
+
+        // Add optional product name search
+        if (productName) {
+            productWhere.name = { [Op.iLike]: `%${productName}%` };
+        }
+
+        // Query to get all products from these markets
+        const productQueryOptions: FindAndCountOptions<Product> = {
+            where: productWhere,
             include: [
                 {
                     model: Review,
@@ -358,14 +395,49 @@ export default class ReviewService {
                     required: false,
                 },
             ],
-        });
+            order: [['name', 'ASC']],
+        };
+
+        // Handle pagination for products
+        if (page && size && page > 0 && size > 0) {
+            const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
+            productQueryOptions.limit = limit ?? 0;
+            productQueryOptions.offset = offset ?? 0;
+        }
+
+        // Get all products and count
+        const { rows: allProducts, count: productCount } = await Product.findAndCountAll(productQueryOptions);
 
         // Filter out products that have already been reviewed
-        const reviewableProducts = products.filter(product => !product.reviews?.length);
+        const reviewableProducts = allProducts.filter(product => !product.reviews?.length);
+
+        // Calculate pagination metadata
+        let marketTotalPages: number | undefined;
+        let productTotalPages: number | undefined;
+
+        if (page && size && page > 0 && size > 0) {
+            const marketPagination = Pagination.estimateTotalPage({
+                count: marketCount,
+                limit: size,
+            } as IPaging);
+
+            const productPagination = Pagination.estimateTotalPage({
+                count: productCount,
+                limit: size,
+            } as IPaging);
+
+            // Extract just the totalPages number from the returned objects
+            marketTotalPages = marketPagination.totalPages;
+            productTotalPages = productPagination.totalPages;
+        }
 
         return {
             markets,
             products: reviewableProducts,
+            marketCount,
+            productCount,
+            marketTotalPages,
+            productTotalPages,
         };
     }
 }

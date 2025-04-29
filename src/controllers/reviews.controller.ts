@@ -195,8 +195,19 @@ export default class ReviewController {
 
     static async getReviewableItems(req: AuthenticatedRequest, res: Response) {
         const userId = req.user.id;
+        const { page, size, marketType, productName } = req.query;
 
-        const reviewableItems = await ReviewService.getUserReviewableItems(userId);
+        const queryParams: Record<string, unknown> = {};
+
+        if (page && size) {
+            queryParams.page = Number(page);
+            queryParams.size = Number(size);
+        }
+
+        if (marketType) queryParams.marketType = marketType as string;
+        if (productName) queryParams.productName = productName as string;
+
+        const reviewableItems = await ReviewService.getUserReviewableItems(userId, queryParams);
 
         res.status(200).json({
             status: 'success',
