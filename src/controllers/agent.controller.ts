@@ -154,7 +154,7 @@ export default class AgentController {
     static async updateLocation(req: AuthenticatedRequest, res: Response) {
         const { id } = req.params;
         const { latitude, longitude, radius, name, address, isActive } = req.body;
-        const location = await AgentService.updateAgentLocation(id, req.user.id, {
+        const location = await AgentService.updateAgentLocation(req.user.id, id, {
             latitude,
             longitude,
             radius,

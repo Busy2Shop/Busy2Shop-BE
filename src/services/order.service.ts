@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Transaction, Op, FindAndCountOptions, Includeable } from 'sequelize';
+import { FindAndCountOptions, Includeable, Op, Transaction } from 'sequelize';
 import Order, { IOrder } from '../models/order.model';
 import ShoppingList from '../models/shoppingList.model';
 import ShoppingListItem from '../models/shoppingListItem.model';
 import User from '../models/user.model';
-import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customErrors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import { Database } from '../models';
 import AgentService from './agent.service';
@@ -167,7 +167,7 @@ export default class OrderService {
 
 
     /**
-     * Create a new order with automatic agent assignment
+     * Create a new order with the automatic agent assignment
      */
     static async createOrder(orderData: IOrder): Promise<Order> {
         return await Database.transaction(async (transaction: Transaction) => {
@@ -192,9 +192,9 @@ export default class OrderService {
             const marketLocation = shoppingList.market?.location || { latitude: 0, longitude: 0 };
 
             // Find available agents at the market first
-            const availableAgents = await AgentService.getAvailableAgentsForOrder(shoppingList.id);
+            const availableAgents = await AgentService.getAvailableAgentsForOrder(shoppingList.marketId);
 
-            // If no agents at market, find nearest available agent
+            // If no agents at market, find the nearest available agent
             let assignedAgent: User | undefined = availableAgents[0];
             if (!assignedAgent) {
                 const nearestAgent = await AgentService.findNearestAgent(
@@ -259,7 +259,7 @@ export default class OrderService {
             },
         ];
 
-        // Add agent include if requested
+        // Add the agent include if requested
         if (includeAgent) {
             includes.push({
                 model: User,
@@ -292,7 +292,11 @@ export default class OrderService {
     /**
      * Get orders for a specific customer
      */
-    static async getUserOrders(userId: string, queryData?: IViewOrdersQuery): Promise<{ orders: Order[], count: number, totalPages?: number }> {
+    static async getUserOrders(userId: string, queryData?: IViewOrdersQuery): Promise<{
+        orders: Order[],
+        count: number,
+        totalPages?: number
+    }> {
         return this.getOrders(
             { customerId: userId },
             queryData,
@@ -304,7 +308,11 @@ export default class OrderService {
     /**
      * Get orders for a specific agent
      */
-    static async getAgentOrders(agentId: string, queryData?: IViewOrdersQuery): Promise<{ orders: Order[], count: number, totalPages?: number }> {
+    static async getAgentOrders(agentId: string, queryData?: IViewOrdersQuery): Promise<{
+        orders: Order[],
+        count: number,
+        totalPages?: number
+    }> {
         return this.getOrders(
             { agentId },
             queryData,
@@ -339,7 +347,7 @@ export default class OrderService {
             },
         ];
 
-        // Add agent include if requested
+        // Add the agent include if requested
         if (includeAgent) {
             includes.push({
                 model: User,
@@ -476,7 +484,11 @@ export default class OrderService {
         return await this.getOrder(id);
     }
 
-    static async calculateTotals(shoppingListId: string): Promise<{ totalAmount: number, serviceFee: number, deliveryFee: number }> {
+    static async calculateTotals(shoppingListId: string): Promise<{
+        totalAmount: number,
+        serviceFee: number,
+        deliveryFee: number
+    }> {
         const shoppingList = await ShoppingList.findByPk(shoppingListId, {
             include: [
                 {
@@ -529,7 +541,11 @@ export default class OrderService {
         agentId: string,
         reason: string
     ): Promise<Order> {
-        return await Database.transaction(async (transaction: Transaction) => {
+        // Initialize the result with a fake value that will be overwritten
+        let orderId_to_fetch: string = orderId;
+
+        // Use a separate variable to hold the result
+        await Database.transaction(async (transaction: Transaction) => {
             const order = await this.getOrder(orderId);
 
             // Verify the agent is assigned to this order
@@ -537,7 +553,7 @@ export default class OrderService {
                 throw new ForbiddenError('You are not assigned to this order');
             }
 
-            // Get the shopping list to access market location
+            // Get the shopping list to access the market location
             const shoppingList = await ShoppingList.findByPk(order.shoppingListId, {
                 include: [{
                     model: Market,
@@ -550,16 +566,34 @@ export default class OrderService {
                 throw new NotFoundError('Shopping list not found');
             }
 
-            // Get market location for agent assignment
-            const marketLocation = shoppingList.market?.location || { latitude: 0, longitude: 0 };
+            // Explicitly get the market for location data - this is the fix
+            const market = await Market.findByPk(shoppingList.marketId);
+            if (!market || !market.location) {
+                throw new NotFoundError('Market not found or has no location');
+            }
 
-            // Add the rejecting agent to the rejectedAgents array
-            const rejectedAgents = order.rejectedAgents || [];
-            rejectedAgents.push({
-                agentId,
-                reason,
-                rejectedAt: new Date(),
-            });
+            // Get market location for agent assignment (using the correct property access)
+            const marketLatitude = market.location.latitude;
+            const marketLongitude = market.location.longitude;
+
+            // Get existing rejected agents
+            const existingRejectedAgents = order.rejectedAgents || [];
+
+            // Check if this agent has already rejected the order
+            if (existingRejectedAgents.some(ra => ra.agentId === agentId)) {
+                console.warn(`Agent ${agentId} has rejected order ${orderId} multiple times`);
+                throw new BadRequestError('You have already rejected this order');
+            }
+
+            // If not already rejected, add the new rejection
+            const rejectedAgents = [
+                ...existingRejectedAgents,
+                {
+                    agentId,
+                    reason,
+                    rejectedAt: new Date(),
+                },
+            ];
 
             // Check if we've reached the maximum number of rejections (5)
             if (rejectedAgents.length >= 5) {
@@ -582,18 +616,18 @@ export default class OrderService {
             // Find a new agent, excluding previously rejected agents
             const rejectedAgentIds = rejectedAgents.map(ra => ra.agentId);
 
-            // First try to find available agents at the market
+            // First, try to find available agents at the market
             const availableAgents = await AgentService.getAvailableAgentsForOrder(
                 shoppingList.id,
                 rejectedAgentIds
             );
 
-            // If no agents at market, find nearest available agent
+            // If no agents at market, find the nearest available agent
             let newAgent: User | undefined = availableAgents[0];
             if (!newAgent) {
                 const nearestAgent = await AgentService.findNearestAgent(
-                    marketLocation.latitude,
-                    marketLocation.longitude,
+                    marketLatitude,
+                    marketLongitude,
                     rejectedAgentIds
                 );
                 if (nearestAgent) {
@@ -601,7 +635,7 @@ export default class OrderService {
                 }
             }
 
-            // If no new agent found, update order status
+            // If no new agent found, update the order status
             if (!newAgent) {
                 await order.update({
                     status: 'cancelled',
@@ -615,6 +649,12 @@ export default class OrderService {
                     status: 'cancelled',
                 }, { transaction });
 
+                // Log details about the rejection
+                console.warn(`No agents available for order ${orderId} after rejection. ` +
+                    `Previous agent: ${agentId}, Market: ${shoppingList.marketId}, ` +
+                    `${rejectedAgentIds.length} total rejections`);
+
+                // Then throw the error
                 throw new BadRequestError('No available agents found to handle this order. Order has been cancelled.');
             }
 
@@ -635,7 +675,32 @@ export default class OrderService {
             // Update the previous agent's status back to available
             await AgentService.updateAgentStatus(agentId, 'available');
 
-            return await this.getOrder(order.id);
+
+            // Log using console.info instead
+            console.info(`Order ${orderId} rejected by agent ${agentId}. Reason: ${reason}. Reassigned to agent ${newAgent.id}`);
+
+            // We only need to store the orderId, not the whole order object
+            orderId_to_fetch = order.id;
         });
+
+        // After the transaction completes, fetch fresh data outside the transaction
+        const freshOrder = await Order.findByPk(orderId_to_fetch, {
+            include: [
+                { model: User, as: 'agent' },
+                { model: User, as: 'customer' },
+                {
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    include: ['items'],
+                },
+            ],
+        });
+
+        // Handle the case where findByPk might return null
+        if (!freshOrder) {
+            throw new NotFoundError(`Order with ID ${orderId_to_fetch} not found after update`);
+        }
+
+        return freshOrder;
     }
 }
