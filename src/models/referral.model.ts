@@ -8,6 +8,15 @@ export enum ReferralStatus {
     Cancelled = 'cancelled'
 }
 
+@Table({
+    indexes: [
+        {
+            unique: true,
+            fields: ['refereeId', 'referredId'],
+        },
+    ],
+})
+
 @Table
 export default class Referral extends Model<Referral | IReferral> {
     @IsUUID(4)
