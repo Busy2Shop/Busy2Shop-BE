@@ -17,7 +17,6 @@ export enum ReferralStatus {
     ],
 })
 
-@Table
 export default class Referral extends Model<Referral | IReferral> {
     @IsUUID(4)
     @PrimaryKey
