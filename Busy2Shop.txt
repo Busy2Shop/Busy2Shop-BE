@@ -238,14 +238,40 @@ Customer Shopping List
   ]
 }
 
-#TODO
-Add isDeleted column to all database tables.
+Sign-up credentials
+//For a customer
+{
+    "email": "ghostofcustomer@yopmail.com",
+    "location": {
+      "city": "Lagos",
+      "address": "Yetunde Brown St, Ifako, Lagos 105102, Lagos",
+      "country": "Nigeria"
+    },
+    "dob": "1990-10-11",
+    "phone": {
+      "number": "7087652331",
+      "countryCode": "+234"
+    },
+    "displayImage": "https://images.igdb.com/igdb/image/upload/t_cover_big/co1tmu.jpg"
+}
 
-#TODO
-1] The create endpoint json request is not complete.
-
-#Todo
-1] A vendor can create a shopping list and a shopping item.
-
-#Todo
-1] If i am updating an item in a shopping list, i am meant to update the productId of the item I changed it to.
+//For an agent
+{
+    "email": "ghostofagent@yopmail.com",
+    "password": "P@ssword123!",
+    "firstName": "Jason",
+    "lastName": "Doe",
+    "otherName": "Smith",
+    "gender": "male",
+    "displayImage": "https://images.igdb.com/igdb/image/upload/t_cover_big/co2g63.jpg",
+    "location": {
+      "city": "Lagos",
+      "address": "123 Main Street, Ikeja, Lagos",
+      "country": "Nigeria"
+    },
+    "phone": {
+      "number": "8012345678",
+      "countryCode": "+234"
+    },
+    "dob": "1990-01-15"
+  }

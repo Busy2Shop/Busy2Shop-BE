@@ -1,6 +1,6 @@
-import { Transaction, Includeable, WhereOptions } from 'sequelize';
+import { Includeable, Transaction, WhereOptions } from 'sequelize';
 import User from '../models/user.model';
-import { NotFoundError, BadRequestError } from '../utils/customErrors';
+import { BadRequestError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import Referral, { IReferral, ReferralStatus } from '../models/referral.model';
 
@@ -15,14 +15,23 @@ export interface IViewReferralsQuery {
 export default class ReferralService {
 
     static async createReferral(referralData: IReferral, transaction?: Transaction): Promise<Referral> {
-        const newReferral = await Referral.create({ ...referralData }, { transaction });
-        return newReferral;
+        try {
+            return await Referral.create({ ...referralData }, { transaction });
+        } catch (error: unknown) {
+            // Type check for the error object
+            if (error && typeof error === 'object' && 'name' in error) {
+                if (error.name === 'SequelizeUniqueConstraintError') {
+                    throw new BadRequestError('A referral between these users already exists');
+                }
+            }
+            // Re-throw any other errors
+            throw error;
+        }
     }
 
     static async updateReferral(referral: Referral, dataToUpdate: Partial<IReferral>): Promise<Referral> {
         await referral.update(dataToUpdate);
-        const updatedReferral = await this.viewReferral(referral.id);
-        return updatedReferral;
+        return await this.viewReferral(referral.id);
     }
 
     static async deleteReferral(referral: Referral, transaction?: Transaction): Promise<void> {
@@ -34,12 +43,12 @@ export default class ReferralService {
             {
                 model: User,
                 as: 'referee',
-                attributes: ['id', 'username', 'email'],
+                attributes: ['id', 'firstName', 'lastName', 'email'],
             },
             {
                 model: User,
                 as: 'referred',
-                attributes: ['id', 'username', 'email'],
+                attributes: ['id', 'firstName', 'lastName', 'email'],
             },
         ];
 
@@ -85,12 +94,12 @@ export default class ReferralService {
                 {
                     model: User,
                     as: 'referee',
-                    attributes: ['id', 'username', 'email'],
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
                 },
                 {
                     model: User,
                     as: 'referred',
-                    attributes: ['id', 'username', 'email'],
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
                 },
             ],
         });
