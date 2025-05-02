@@ -41,6 +41,105 @@ interface OrderWithRelations {
     };
 }
 
+// Function to validate order data at runtime
+function validateOrderWithRelations(data: unknown): OrderWithRelations {
+    if (!data || typeof data !== 'object') {
+        throw new Error('Invalid order data: not an object');
+    }
+
+    // Use type assertion after basic validation
+    const order = data as {
+        id?: unknown;
+        customer?: unknown;
+        agent?: unknown;
+    };
+
+    if (typeof order.id !== 'string') {
+        throw new Error('Invalid order data: missing or invalid id');
+    }
+
+    // Create the result object that we'll build up
+    const result: OrderWithRelations = {
+        id: order.id,
+    };
+
+    if (order.customer !== undefined) {
+        if (typeof order.customer !== 'object' || order.customer === null) {
+            throw new Error('Invalid order data: customer is not an object');
+        }
+
+        // Type assertion for customer
+        const customer = order.customer as {
+            id?: unknown;
+            firstName?: unknown;
+            lastName?: unknown;
+        };
+
+        if (typeof customer.id !== 'string') {
+            throw new Error('Invalid order data: customer.id is missing or not a string');
+        }
+
+        // Add validated customer to result
+        result.customer = {
+            id: customer.id,
+        };
+
+        // Optional fields with validation
+        if (customer.firstName !== undefined) {
+            if (typeof customer.firstName !== 'string') {
+                throw new Error('Invalid order data: customer.firstName is not a string');
+            }
+            result.customer.firstName = customer.firstName;
+        }
+
+        if (customer.lastName !== undefined) {
+            if (typeof customer.lastName !== 'string') {
+                throw new Error('Invalid order data: customer.lastName is not a string');
+            }
+            result.customer.lastName = customer.lastName;
+        }
+    }
+
+    if (order.agent !== undefined) {
+        if (typeof order.agent !== 'object' || order.agent === null) {
+            throw new Error('Invalid order data: agent is not an object');
+        }
+
+        // Type assertion for agent
+        const agent = order.agent as {
+            id?: unknown;
+            firstName?: unknown;
+            lastName?: unknown;
+        };
+
+        if (typeof agent.id !== 'string') {
+            throw new Error('Invalid order data: agent.id is missing or not a string');
+        }
+
+        // Add validated agent to result
+        result.agent = {
+            id: agent.id,
+        };
+
+        // Optional fields with validation
+        if (agent.firstName !== undefined) {
+            if (typeof agent.firstName !== 'string') {
+                throw new Error('Invalid order data: agent.firstName is not a string');
+            }
+            result.agent.firstName = agent.firstName;
+        }
+
+        if (agent.lastName !== undefined) {
+            if (typeof agent.lastName !== 'string') {
+                throw new Error('Invalid order data: agent.lastName is not a string');
+            }
+            result.agent.lastName = agent.lastName;
+        }
+    }
+
+    return result;
+}
+
 export class ChatService {
     static async saveMessage(messageData: IMessageData): Promise<ChatMessageType> {
         const { orderId, senderId, senderType, message, imageUrl } = messageData;
@@ -125,30 +224,33 @@ export class ChatService {
                 nest: true, // Nest the joined models
             });
 
-            // Convert the raw data to our interface
-            const order = orderData as unknown as OrderWithRelations;
+            try {
+                // Validate the order data with our helper function
+                const order = validateOrderWithRelations(orderData);
 
-            if (!order) return [];
+                const participants = [];
 
-            const participants = [];
+                // Add a customer if not excluded and exists
+                if (order.customer && order.customer.id !== excludeUserId) {
+                    participants.push({
+                        id: order.customer.id,
+                        type: 'customer',
+                    });
+                }
 
-            // Add a customer if not excluded and exists
-            if (order.customer && order.customer.id !== excludeUserId) {
-                participants.push({
-                    id: order.customer.id,
-                    type: 'customer',
-                });
+                // Add agent if not excluded and exists
+                if (order.agent && order.agent.id !== excludeUserId) {
+                    participants.push({
+                        id: order.agent.id,
+                        type: 'agent',
+                    });
+                }
+
+                return participants;
+            } catch (validationError) {
+                console.error('Order validation failed:', validationError);
+                return [];
             }
-
-            // Add agent if not excluded and exists
-            if (order.agent && order.agent.id !== excludeUserId) {
-                participants.push({
-                    id: order.agent.id,
-                    type: 'agent',
-                });
-            }
-
-            return participants;
         } catch (error) {
             console.error('Error getting order participants:', error);
             return [];
