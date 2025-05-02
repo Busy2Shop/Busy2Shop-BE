@@ -127,7 +127,7 @@ export default class EmailService {
         }
     ): Promise<boolean> {
         try {
-            // Determine subject based on the notification type
+            // Determine a subject based on the notification type
             let subject = 'Chat Notification';
             switch (data.notificationType) {
             case 'CHAT_MESSAGE_RECEIVED':

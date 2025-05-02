@@ -32,82 +32,43 @@ export const chatNotificationTemplate = (data: {
     }
 
     return `
-  <!DOCTYPE html>
-  <html lang="en-GB">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${subject}</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        line-height: 1.6;
-        color: #333;
-        margin: 0;
-        padding: 0;
-      }
-      .container {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 20px;
-      }
-      .header {
-        background-color: #4a69bd;
-        color: white;
-        padding: 20px;
-        text-align: center;
-      }
-      .content {
-        padding: 20px;
-        background-color: #f9f9f9;
-      }
-      .message {
-        background-color: white;
-        border-left: 4px solid #4a69bd;
-        margin: 20px 0;
-        padding: 15px;
-        border-radius: 4px;
-      }
-      .button {
-        display: inline-block;
-        padding: 10px 20px;
-        background-color: #4a69bd;
-        color: white;
-        text-decoration: none;
-        border-radius: 4px;
-        margin-top: 20px;
-      }
-      .footer {
-        text-align: center;
-        color: #888;
-        font-size: 12px;
-        margin-top: 30px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <h2>${subject}</h2>
-      </div>
-      <div class="content">
-        <p>Hello ${recipientName},</p>
-        <p>${notificationHeading}</p>
-        
-        <div class="message">
-          <p><strong>${senderName}</strong></p>
-          <p>${message}</p>
-        </div>
-        
-        <a href="${appUrl}/order/${resourceId}/chat" class="button">${actionText}</a>
-        
-        <p>Thank you for using our platform!</p>
-      </div>
-      <div class="footer">
-        <p>This is an automated message, please do not reply directly to this email.</p>
-      </div>
-    </div>
-  </body>
-  </html>
+<table style="width: 95%; max-width: 670px; margin: 0 auto; background: #fff; border-radius: 3px; text-align: center; box-shadow: 0 6px 18px 0 rgba(0,0,0,.06);">
+    <tr>
+        <td style="height: 40px;"></td>
+    </tr>
+    <tr>
+        <td style="padding: 35px;">
+            <div style="width: 100%;">
+                <h1 style="color: #1e1e2d; margin: 10px 0; font-size: 35px; font-weight: 300; font-family: 'Rubik', sans-serif; text-transform: capitalize;">
+                    Hi ${recipientName}, 
+                </h1>
+                <p style="color: #1e1e2d; font-size: 18px; margin: 10px 0;">${notificationHeading}</p>
+            </div>
+            
+            <div style="margin: 30px 0; background: #f9f9f9; border-left: 4px solid #F04950; padding: 15px; text-align: left; border-radius: 5px;">
+                <p style="margin: 0; font-weight: bold; color: #1e1e2d; font-size: 18px;">${senderName}</p>
+                <p style="margin: 10px 0 0; color: #555; font-size: 16px;">${message}</p>
+            </div>
+            
+            <div style="margin-top: 25px;">
+                <a href="${appUrl}/order/${resourceId}/chat" style="text-decoration: none; display: inline-block; background: #F04950; color: #fff; font-weight: 800; text-transform: uppercase; font-size: 16px; padding: 10px 24px; border-radius: 5px;">
+                    ${actionText}
+                </a>
+            </div>
+            
+            <p style="color: #1e1e2d; font-size: 16px; margin: 30px 0 0;">If you can't click the button, copy and paste the following link into your browser:</p>
+            <div style="background: #eee; padding: 10px; border-radius: 5px; word-wrap: break-word; margin-top: 10px; text-align: left;">
+                <code style="font-size: 14px;">${appUrl}/order/${resourceId}/chat</code>
+            </div>
+            
+            <p style="color: #1e1e2d; font-size: 16px; margin: 30px 0 10px;">Thank you for using our platform!</p>
+        </td>
+    </tr>
+    <tr>
+        <td style="height: 40px; background-color: #f5f5f5; font-size: 12px; color: #777; text-align: center; padding: 10px 20px;">
+            <p>This is an automated message, please do not reply directly to this email.</p>
+        </td>
+    </tr>
+</table>
   `;
 };
