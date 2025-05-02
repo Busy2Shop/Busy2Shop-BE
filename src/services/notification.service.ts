@@ -3,6 +3,9 @@ import { col, fn, Op, Sequelize, Transaction } from 'sequelize';
 import { BadRequestError } from '../utils/customErrors';
 import Pagination, { IPaginationQuery, IPaging } from '../utils/pagination';
 import NotificationUtil from '../clients/oneSignal.config';
+import { emailService } from '../utils/Email';
+import User from '../models/user.model';
+import { NotificationTypes } from '../utils/interface';
 import { logger } from '../utils/logger';
 
 interface IGroupedNotification extends INotification {
@@ -12,6 +15,55 @@ interface IGroupedNotification extends INotification {
 }
 
 export default class NotificationService {
+
+    // Adding this new method to handle email notifications
+    static async sendEmailNotification(notification: INotification): Promise<void> {
+        try {
+            // Only send emails for chat-related notifications
+            const chatNotificationTypes = [
+                NotificationTypes.CHAT_MESSAGE_RECEIVED,
+                NotificationTypes.CHAT_ACTIVATED,
+                NotificationTypes.USER_LEFT_CHAT,
+            ];
+
+            if (!chatNotificationTypes.includes(notification.title as NotificationTypes)) {
+                return; // Skip if not a chat notification
+            }
+
+            // Get user details to send the email
+            const user = await User.findByPk(notification.userId);
+
+            if (!user?.email) {
+                logger.warn(`Cannot send email notification: No email found for user ${notification.userId}`);
+                return;
+            }
+
+            // Get actor details (if applicable)
+            let actorName = 'System';
+            if (notification.actorId) {
+                const actor = await User.findByPk(notification.actorId);
+                if (actor) {
+                    actorName = `${actor.firstName} ${actor.lastName}`.trim();
+                }
+            }
+
+            // Send email notification
+            await emailService.sendChatNotificationEmail(
+                user.email,
+                {
+                    recipientName: `${user.firstName} ${user.lastName}`.trim(),
+                    senderName: actorName,
+                    message: notification.message,
+                    notificationType: notification.title,
+                    resourceId: notification.resource ?? '',
+                }
+            );
+        } catch (error) {
+            logger.error('Error sending email notification:', error);
+            // Don't throw the error, just log it
+        }
+    }
+
     static async addNotification(notificationData: INotification, transaction?: Transaction): Promise<Notification> {
         const [notification, created] = await Notification.findOrCreate({
             where: {
@@ -38,6 +90,9 @@ export default class NotificationService {
                 } else {
                     console.error('Failed to send push notification');
                 }
+
+                // Added this line to send an email notification
+                await this.sendEmailNotification(notificationData);
             } catch (error) {
                 console.error('Error sending push notification:', error);
             }
@@ -96,12 +151,16 @@ export default class NotificationService {
 
                 for (let i = 0; i < uniqueUserIds.length; i += BATCH_SIZE) {
                     const batchUserIds = uniqueUserIds.slice(i, i + BATCH_SIZE);
-                    const batchPromises = batchUserIds.map(userId => {
+                    const batchPromises = batchUserIds.map(async userId => {
                         const userNotifications = notificationsByUser.get(userId);
                         if (!userNotifications?.length) return;
 
                         // Use the most recent notification for this user
                         const latestNotification = userNotifications[userNotifications.length - 1];
+
+                        // Added this: Send email notification for the latest notification
+                        await this.sendEmailNotification(latestNotification);
+
                         return NotificationUtil.sendNotificationToUser(
                             [userId],
                             latestNotification

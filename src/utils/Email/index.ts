@@ -1,4 +1,5 @@
 import EmailTemplate from './templates';
+import { chatNotificationTemplate } from './templates/chatNotification';
 import { logger } from '../logger';
 import {
     EMAIL_HOST_ADDRESS,
@@ -113,6 +114,61 @@ export default class EmailService {
         };
 
     }
+
+    // Add this new method for chat notifications
+    async sendChatNotificationEmail(
+        recipientEmail: string,
+        data: {
+            recipientName: string;
+            senderName: string;
+            message: string;
+            notificationType: string;
+            resourceId: string;
+        }
+    ): Promise<boolean> {
+        try {
+            // Determine subject based on the notification type
+            let subject = 'Chat Notification';
+            switch (data.notificationType) {
+            case 'CHAT_MESSAGE_RECEIVED':
+                subject = 'New Chat Message';
+                break;
+            case 'CHAT_ACTIVATED':
+                subject = 'Chat Activated';
+                break;
+            case 'USER_LEFT_CHAT':
+                subject = 'User Left Chat';
+                break;
+            }
+
+            // Get the app URL from the environment or use a default
+            const appUrl = process.env.APP_URL ?? 'https://yourapp.com';
+
+            // Generate HTML using the chat notification template
+            const html = chatNotificationTemplate({
+                ...data,
+                appUrl,
+            });
+
+            // Send the email
+            await this.send({
+                email: recipientEmail,
+                subject,
+                html,
+                postmarkInfo: [{
+                    recipientEmail,
+                    postMarkTemplateData: {},
+                }],
+            });
+
+            logger.info(`Chat notification email sent to ${recipientEmail}`);
+            return true;
+        } catch (error) {
+            logger.error('Error sending chat notification email:', error);
+            return false;
+        }
+    }
+
 
     // static getSenderEmail(type: string) {
     //     switch (type) {
