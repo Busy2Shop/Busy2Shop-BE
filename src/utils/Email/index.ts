@@ -14,6 +14,7 @@ import {
     // NODE_ENV,
 } from '../constants';
 import nodemailer from 'nodemailer';
+import { NotificationTypes } from '../interface';
 // import * as postmark from 'postmark';
 
 export type postmarkInfo = {
@@ -130,24 +131,25 @@ export default class EmailService {
             // Determine a subject based on the notification type
             let subject = 'Chat Notification';
             switch (data.notificationType) {
-            case 'CHAT_MESSAGE_RECEIVED':
+            case NotificationTypes.CHAT_MESSAGE_RECEIVED:
                 subject = 'New Chat Message';
                 break;
-            case 'CHAT_ACTIVATED':
+            case NotificationTypes.CHAT_ACTIVATED:
                 subject = 'Chat Activated';
                 break;
-            case 'USER_LEFT_CHAT':
+            case NotificationTypes.USER_LEFT_CHAT:
                 subject = 'User Left Chat';
                 break;
             }
 
+
             // Get the app URL from the environment or use a default
-            const appUrl = process.env.APP_URL ?? 'https://yourapp.com';
+            const frontendUrl = process.env.WEBSITE_URL ?? 'http://localhost:5173';
 
             // Generate HTML using the chat notification template
             const html = chatNotificationTemplate({
                 ...data,
-                appUrl,
+                websiteUrl: frontendUrl,
             });
 
             // Send the email

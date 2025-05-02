@@ -1,12 +1,14 @@
+import { NotificationTypes } from '../../interface';
+
 export const chatNotificationTemplate = (data: {
     recipientName: string;
     senderName: string;
     message: string;
     notificationType: string;
     resourceId: string;
-    appUrl: string;
+    websiteUrl: string;
 }): string => {
-    const { recipientName, senderName, message, notificationType, resourceId, appUrl } = data;
+    const { recipientName, senderName, message, notificationType, resourceId, websiteUrl } = data;
 
     let subject: string;
     let notificationHeading: string;
@@ -14,15 +16,15 @@ export const chatNotificationTemplate = (data: {
 
     // Set the appropriate heading based on the notification type
     switch (notificationType) {
-    case 'CHAT_MESSAGE_RECEIVED':
+    case NotificationTypes.CHAT_MESSAGE_RECEIVED:
         subject = 'New Chat Message';
         notificationHeading = 'You have a new message';
         break;
-    case 'CHAT_ACTIVATED':
+    case NotificationTypes.CHAT_ACTIVATED:
         subject = 'Chat Activated';
         notificationHeading = 'Chat has been activated';
         break;
-    case 'USER_LEFT_CHAT':
+    case NotificationTypes.USER_LEFT_CHAT:
         subject = 'User Left Chat';
         notificationHeading = 'A user has left the chat';
         break;
@@ -51,14 +53,14 @@ export const chatNotificationTemplate = (data: {
             </div>
             
             <div style="margin-top: 25px;">
-                <a href="${appUrl}/order/${resourceId}/chat" style="text-decoration: none; display: inline-block; background: #F04950; color: #fff; font-weight: 800; text-transform: uppercase; font-size: 16px; padding: 10px 24px; border-radius: 5px;">
+                <a href="${websiteUrl}/order/${resourceId}/chat" style="text-decoration: none; display: inline-block; background: #F04950; color: #fff; font-weight: 800; text-transform: uppercase; font-size: 16px; padding: 10px 24px; border-radius: 5px;">
                     ${actionText}
                 </a>
             </div>
             
             <p style="color: #1e1e2d; font-size: 16px; margin: 30px 0 0;">If you can't click the button, copy and paste the following link into your browser:</p>
             <div style="background: #eee; padding: 10px; border-radius: 5px; word-wrap: break-word; margin-top: 10px; text-align: left;">
-                <code style="font-size: 14px;">${appUrl}/order/${resourceId}/chat</code>
+                <code style="font-size: 14px;">${websiteUrl}/order/${resourceId}/chat</code>
             </div>
             
             <p style="color: #1e1e2d; font-size: 16px; margin: 30px 0 10px;">Thank you for using our platform!</p>
