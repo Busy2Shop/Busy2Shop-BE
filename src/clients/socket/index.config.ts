@@ -170,11 +170,22 @@ export default class SocketConfig {
             });
 
             // Leave order chat room
-            socket.on('leave-order-chat', (orderId) => {
-                const roomName = `order:${orderId}`;
-                socket.leave(roomName);
-                socket.to(roomName).emit('user-left', socket.data.user);
-                logger.info(`User ${socket.data.user.id} left chat for order ${orderId}`);
+            socket.on('leave-order-chat', async (orderId) => {
+                try {
+                    const user = socket.data.user;
+                    const roomName = `order:${orderId}`;
+
+                    socket.leave(roomName);
+                    socket.to(roomName).emit('user-left', socket.data.user);
+
+                    // Notify other participants that this user left the chat
+                    await ChatService.notifyUserLeftChat(orderId, user);
+
+                    logger.info(`User ${user.id} left chat for order ${orderId}`);
+                } catch (error) {
+                    logger.error('Error leaving order chat:', error);
+                    socket.emit('error', { message: 'Failed to leave chat' });
+                }
             });
 
             // Handle the new message
@@ -191,7 +202,7 @@ export default class SocketConfig {
                         return;
                     }
 
-                    // Save message to the database
+                    // Save a message to the database (now handles notification creation)
                     const savedMessage = await ChatService.saveMessage({
                         orderId,
                         senderId: user.id,
@@ -231,7 +242,7 @@ export default class SocketConfig {
                     const user = socket.data.user;
                     const roomName = `order:${orderId}`;
 
-                    // Activate chat
+                    // Activate chat (now handles notification creation)
                     const activationData = {
                         orderId,
                         activatedBy: {

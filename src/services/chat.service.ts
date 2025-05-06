@@ -1,9 +1,13 @@
-import { Op,  Transaction  } from 'sequelize';
+import { Op, Transaction } from 'sequelize';
 import { Database } from '../models';
 import ChatMessage, { SenderType } from '../models/chatMessage.model';
 import User from '../models/user.model';
 import { redisClient } from '../utils/redis';
 import { ChatMessageType } from 'clients/socket/types';
+import NotificationService from './notification.service';
+import { NotificationTypes } from '../utils/interface';
+import Order from '../models/order.model';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface ChatActivationType {
     orderId: string;
@@ -22,12 +26,126 @@ interface IMessageData {
     imageUrl?: string;
 }
 
+// Instead of extending Order, define an interface for the result of findByPk
+interface OrderWithRelations {
+    id: string;
+    customer?: {
+        id: string;
+        firstName?: string;
+        lastName?: string;
+    };
+    agent?: {
+        id: string;
+        firstName?: string;
+        lastName?: string;
+    };
+}
+
+// Function to validate order data at runtime
+function validateOrderWithRelations(data: unknown): OrderWithRelations {
+    if (!data || typeof data !== 'object') {
+        throw new Error('Invalid order data: not an object');
+    }
+
+    // Use type assertion after basic validation
+    const order = data as {
+        id?: unknown;
+        customer?: unknown;
+        agent?: unknown;
+    };
+
+    if (typeof order.id !== 'string') {
+        throw new Error('Invalid order data: missing or invalid id');
+    }
+
+    // Create the result object that we'll build up
+    const result: OrderWithRelations = {
+        id: order.id,
+    };
+
+    if (order.customer !== undefined) {
+        if (typeof order.customer !== 'object' || order.customer === null) {
+            throw new Error('Invalid order data: customer is not an object');
+        }
+
+        // Type assertion for customer
+        const customer = order.customer as {
+            id?: unknown;
+            firstName?: unknown;
+            lastName?: unknown;
+        };
+
+        if (typeof customer.id !== 'string') {
+            throw new Error('Invalid order data: customer.id is missing or not a string');
+        }
+
+        // Add validated customer to result
+        result.customer = {
+            id: customer.id,
+        };
+
+        // Optional fields with validation
+        if (customer.firstName !== undefined) {
+            if (typeof customer.firstName !== 'string') {
+                throw new Error('Invalid order data: customer.firstName is not a string');
+            }
+            result.customer.firstName = customer.firstName;
+        }
+
+        if (customer.lastName !== undefined) {
+            if (typeof customer.lastName !== 'string') {
+                throw new Error('Invalid order data: customer.lastName is not a string');
+            }
+            result.customer.lastName = customer.lastName;
+        }
+    }
+
+    if (order.agent !== undefined) {
+        if (typeof order.agent !== 'object' || order.agent === null) {
+            throw new Error('Invalid order data: agent is not an object');
+        }
+
+        // Type assertion for agent
+        const agent = order.agent as {
+            id?: unknown;
+            firstName?: unknown;
+            lastName?: unknown;
+        };
+
+        if (typeof agent.id !== 'string') {
+            throw new Error('Invalid order data: agent.id is missing or not a string');
+        }
+
+        // Add validated agent to result
+        result.agent = {
+            id: agent.id,
+        };
+
+        // Optional fields with validation
+        if (agent.firstName !== undefined) {
+            if (typeof agent.firstName !== 'string') {
+                throw new Error('Invalid order data: agent.firstName is not a string');
+            }
+            result.agent.firstName = agent.firstName;
+        }
+
+        if (agent.lastName !== undefined) {
+            if (typeof agent.lastName !== 'string') {
+                throw new Error('Invalid order data: agent.lastName is not a string');
+            }
+            result.agent.lastName = agent.lastName;
+        }
+    }
+
+    return result;
+}
+
 export class ChatService {
     static async saveMessage(messageData: IMessageData): Promise<ChatMessageType> {
         const { orderId, senderId, senderType, message, imageUrl } = messageData;
 
         return await Database.transaction(async (transaction: Transaction) => {
-            // Create message
+            // Create a message
             const newMessage = await ChatMessage.create({
                 orderId,
                 senderId,
@@ -38,7 +156,7 @@ export class ChatService {
             } as ChatMessage, { transaction });
 
             // Get sender info
-            await User.findByPk(senderId, {
+            const sender = await User.findByPk(senderId, {
                 attributes: ['id', 'firstName', 'lastName', 'displayImage'],
                 transaction,
             });
@@ -56,8 +174,87 @@ export class ChatService {
                 updatedAt: newMessage.updatedAt,
             };
 
+            // Create a notification for the recipients (anyone associated with the order except the sender)
+            try {
+                // First, get recipients who should be notified
+                const recipients = await this.getOrderParticipantsExcept(orderId, senderId, transaction);
+
+                if (recipients.length > 0) {
+                    const senderName = sender ? `${sender.firstName} ${sender.lastName}` : senderType;
+
+                    // Create a notification for each recipient - generate UUIDs for each notification
+                    const notifications = recipients.map(recipient => ({
+                        id: uuidv4(), // Generate UUID using uuid package
+                        title: NotificationTypes.CHAT_MESSAGE_RECEIVED,
+                        message: message.length > 50 ? `${message.substring(0, 47)}...` : message,
+                        heading: `New message from ${senderName}`,
+                        read: false,
+                        resource: orderId, // The orderId is used as the resource to link to the specific chat
+                        userId: recipient.id,
+                        actorId: senderId,
+                    }));
+
+                    // Add notifications in bulk
+                    await NotificationService.addNotifications(notifications, transaction);
+                }
+            } catch (error) {
+                console.error('Error creating chat message notifications:', error);
+                // Don't fail the transaction if notifications fail
+            }
+
             return formattedMessage;
         });
+    }
+
+    // Helper method to get all participants in an order chat except the specified user
+    private static async getOrderParticipantsExcept(
+        orderId: string,
+        excludeUserId: string,
+        transaction?: Transaction
+    ): Promise<{id: string, type: string}[]> {
+        try {
+            // Fetch the order with customer and agent
+            const orderData = await Order.findByPk(orderId, {
+                include: [
+                    { model: User, as: 'customer' },
+                    { model: User, as: 'agent' },
+                ],
+                transaction,
+                raw: true, // Get raw data to avoid issues with model instances
+                nest: true, // Nest the joined models
+            });
+
+            try {
+                // Validate the order data with our helper function
+                const order = validateOrderWithRelations(orderData);
+
+                const participants = [];
+
+                // Add a customer if not excluded and exists
+                if (order.customer && order.customer.id !== excludeUserId) {
+                    participants.push({
+                        id: order.customer.id,
+                        type: 'customer',
+                    });
+                }
+
+                // Add agent if not excluded and exists
+                if (order.agent && order.agent.id !== excludeUserId) {
+                    participants.push({
+                        id: order.agent.id,
+                        type: 'agent',
+                    });
+                }
+
+                return participants;
+            } catch (validationError) {
+                console.error('Order validation failed:', validationError);
+                return [];
+            }
+        } catch (error) {
+            console.error('Error getting order participants:', error);
+            return [];
+        }
     }
 
     static async getMessagesByOrderId(orderId: string): Promise<ChatMessageType[]> {
@@ -74,7 +271,7 @@ export class ChatService {
         });
 
         // Format messages for response
-        const formattedMessages: ChatMessageType[] = messages.map((message) => ({
+        return messages.map((message) => ({
             id: message.id,
             orderId: message.orderId,
             senderId: message.senderId,
@@ -85,8 +282,6 @@ export class ChatService {
             createdAt: message.createdAt,
             updatedAt: message.updatedAt,
         }));
-
-        return formattedMessages;
     }
 
     static async markMessagesAsRead(orderId: string, userId: string): Promise<number> {
@@ -100,6 +295,34 @@ export class ChatService {
                 },
             }
         );
+
+        // If messages were marked as read, also mark related notifications as read
+        if (updatedCount > 0) {
+            try {
+                // Get all unread chat message notifications for this user and order
+                const notifications = await Database.models.Notification.findAll({
+                    where: {
+                        userId,
+                        title: NotificationTypes.CHAT_MESSAGE_RECEIVED,
+                        resource: orderId,
+                        read: false,
+                    },
+                    raw: true, // Get raw data
+                });
+
+                // Update each notification one by one
+                for (const notification of notifications) {
+                    // Type assertion to access id property
+                    const notificationId = (notification as unknown as { id: string }).id;
+                    await NotificationService.updateSingleNotification(
+                        notificationId,
+                        { read: true }
+                    );
+                }
+            } catch (error) {
+                console.error('Error updating chat notification status:', error);
+            }
+        }
 
         return updatedCount;
     }
@@ -134,7 +357,7 @@ export class ChatService {
             raw: true,
         }) as unknown as UnreadMessageCount[];
 
-        // Initialize the result object
+        // Initialise the result object
         const byOrder: Record<string, number> = {};
         let total = 0;
 
@@ -164,6 +387,29 @@ export class ChatService {
 
             // Set expiration separately
             await redisClient.expire(chatKey, 86400); // 24 hours
+
+            // Create a notification for all participants except the activator
+            try {
+                const participants = await this.getOrderParticipantsExcept(orderId, activatedBy.id);
+
+                if (participants.length > 0) {
+                    const notifications = participants.map(participant => ({
+                        id: uuidv4(), // Generate UUID using uuid package
+                        title: NotificationTypes.CHAT_ACTIVATED,
+                        message: `Chat for order ${orderId} has been activated by ${activatedBy.name}`,
+                        heading: 'Chat Activated',
+                        read: false,
+                        resource: orderId,
+                        userId: participant.id,
+                        actorId: activatedBy.id,
+                    }));
+
+                    await NotificationService.addNotifications(notifications);
+                }
+            } catch (error) {
+                console.error('Error creating chat activation notifications:', error);
+                // Don't fail the operation if notifications fail
+            }
 
             return true;
         } catch (error) {
@@ -200,6 +446,40 @@ export class ChatService {
             return !!chatData;
         } catch (error) {
             console.error('Error checking if chat is active:', error);
+            return false;
+        }
+    }
+
+
+    static async notifyUserLeftChat(
+        orderId: string,
+        user: { id: string, type: SenderType, name: string }
+    ): Promise<boolean> {
+        try {
+            // Get all participants except the user who left
+            const participants = await this.getOrderParticipantsExcept(orderId, user.id);
+
+            if (participants.length > 0) {
+                // Create notifications for remaining participants
+                const notifications = participants.map(participant => ({
+                    id: uuidv4(), // Generate UUID for each notification
+                    title: NotificationTypes.USER_LEFT_CHAT,
+                    message: `${user.name} (${user.type}) has left the chat for order ${orderId}`,
+                    heading: 'User Left Chat',
+                    read: false,
+                    resource: orderId,
+                    userId: participant.id,
+                    actorId: user.id,
+                }));
+
+                // Add notifications to the database
+                await NotificationService.addNotifications(notifications);
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            console.error('Error creating user left chat notifications:', error);
             return false;
         }
     }
