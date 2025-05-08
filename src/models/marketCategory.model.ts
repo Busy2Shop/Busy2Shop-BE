@@ -1,6 +1,13 @@
 import {
-    Table, Column, Model, DataType, ForeignKey,
-    IsUUID, PrimaryKey, Default, BelongsTo,
+    Table,
+    Column,
+    Model,
+    DataType,
+    ForeignKey,
+    IsUUID,
+    PrimaryKey,
+    Default,
+    BelongsTo,
 } from 'sequelize-typescript';
 import Market from './market.model';
 import Category from './category.model';
@@ -11,23 +18,23 @@ export default class MarketCategory extends Model<MarketCategory | IMarketCatego
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @IsUUID(4)
     @ForeignKey(() => Market)
     @Column
-        marketId: string;
+    marketId: string;
 
     @IsUUID(4)
     @ForeignKey(() => Category)
     @Column
-        categoryId: string;
+    categoryId: string;
 
     @BelongsTo(() => Market)
-        market: Market;
+    market: Market;
 
     @BelongsTo(() => Category)
-        category: Category;
+    category: Category;
 }
 
 export interface IMarketCategory {

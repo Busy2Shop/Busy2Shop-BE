@@ -25,7 +25,9 @@ export default class CategoryService {
         return await Category.create({ ...categoryData });
     }
 
-    static async viewCategories(queryData?: IViewCategoriesQuery): Promise<{ categories: Category[], count: number, totalPages?: number }> {
+    static async viewCategories(
+        queryData?: IViewCategoriesQuery,
+    ): Promise<{ categories: Category[]; count: number; totalPages?: number }> {
         const { page, size, q: query, isPinned } = queryData || {};
 
         const where: Record<string | symbol, unknown> = {};
@@ -102,7 +104,9 @@ export default class CategoryService {
             });
 
             if (existing) {
-                throw new BadRequestError(`Category with name '${dataToUpdate.name}' already exists`);
+                throw new BadRequestError(
+                    `Category with name '${dataToUpdate.name}' already exists`,
+                );
             }
         }
 
@@ -125,7 +129,10 @@ export default class CategoryService {
         return category;
     }
 
-    static async getMarketsByCategory(categoryId: string, pagination?: { page: number, size: number }): Promise<{ markets: Market[], count: number, totalPages?: number }> {
+    static async getMarketsByCategory(
+        categoryId: string,
+        pagination?: { page: number; size: number },
+    ): Promise<{ markets: Market[]; count: number; totalPages?: number }> {
         await this.viewSingleCategory(categoryId);
 
         const queryOptions: FindAndCountOptions<Market> = {

@@ -1,5 +1,17 @@
 // Import necessary modules and dependencies
-import { Table, Column, Model, DataType, IsUUID, PrimaryKey, Default, BeforeCreate, BeforeUpdate, BelongsTo, ForeignKey } from 'sequelize-typescript';
+import {
+    Table,
+    Column,
+    Model,
+    DataType,
+    IsUUID,
+    PrimaryKey,
+    Default,
+    BeforeCreate,
+    BeforeUpdate,
+    BelongsTo,
+    ForeignKey,
+} from 'sequelize-typescript';
 import User from './user.model';
 import bcrypt from 'bcrypt';
 
@@ -11,25 +23,25 @@ export default class Password extends Model<Password | IPassword> {
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({ type: DataType.STRING, allowNull: false })
-        password: string;  
-        
+    password: string;
+
     @Column({ type: DataType.STRING, allowNull: true })
-        transactionPin: string;
-    
+    transactionPin: string;
+
     // === ASSOCIATIONS, HOOKS, METHODS ===
-        
+
     // Define an association between this model and the "User" model
     @BelongsTo(() => User)
-        user: User;
-    
+    user: User;
+
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column
-        userId: string;
-    
+    userId: string;
+
     @BeforeCreate
     static hashPasswordBeforeCreate(instance: Password) {
         if (instance.password) {
@@ -37,7 +49,10 @@ export default class Password extends Model<Password | IPassword> {
         }
 
         if (instance.transactionPin) {
-            instance.transactionPin = bcrypt.hashSync(instance.transactionPin, bcrypt.genSaltSync(10));
+            instance.transactionPin = bcrypt.hashSync(
+                instance.transactionPin,
+                bcrypt.genSaltSync(10),
+            );
         }
     }
 
@@ -49,7 +64,10 @@ export default class Password extends Model<Password | IPassword> {
         }
 
         if (instance.transactionPin) {
-            instance.transactionPin = bcrypt.hashSync(instance.transactionPin, bcrypt.genSaltSync(10));
+            instance.transactionPin = bcrypt.hashSync(
+                instance.transactionPin,
+                bcrypt.genSaltSync(10),
+            );
         }
     }
 
@@ -71,12 +89,10 @@ export default class Password extends Model<Password | IPassword> {
         delete values.password;
         return values;
     }
-
 }
 
-
 export interface IPassword {
-    password?: string; 
+    password?: string;
     transactionPin?: string;
     userId: string;
 }

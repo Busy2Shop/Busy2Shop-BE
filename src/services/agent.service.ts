@@ -10,7 +10,6 @@ import Pagination, { IPaging } from '../utils/pagination';
 import { Database } from '../models';
 import AgentLocation, { IAgentLocation } from '../models/agentLocation.model';
 
-
 export interface IViewAgentsQuery {
     page?: number;
     size?: number;
@@ -23,13 +22,14 @@ export interface IViewAgentsQuery {
 
 export type AgentStatus = 'available' | 'busy' | 'away' | 'offline';
 
-
 interface UserWithLocations extends User {
     locations?: AgentLocation[];
 }
 
 export default class AgentService {
-    static async getAgents(queryData?: IViewAgentsQuery): Promise<{ agents: User[], count: number, totalPages?: number }> {
+    static async getAgents(
+        queryData?: IViewAgentsQuery,
+    ): Promise<{ agents: User[]; count: number; totalPages?: number }> {
         const { page, size, q: query, isActive } = queryData || {};
 
         const where: any = {
@@ -89,8 +89,12 @@ export default class AgentService {
                 // Fix the ambiguous status column by specifying the table
                 [Op.and]: [
                     Sequelize.where(
-                        Sequelize.fn('jsonb_extract_path_text', Sequelize.col('"User"."status"'), 'userType'),
-                        'agent'
+                        Sequelize.fn(
+                            'jsonb_extract_path_text',
+                            Sequelize.col('"User"."status"'),
+                            'userType',
+                        ),
+                        'agent',
                     ),
                 ],
             },
@@ -153,10 +157,12 @@ export default class AgentService {
             where: { agentId },
             distinct: true,
             col: 'shoppingList.marketId',
-            include: [{
-                model: ShoppingList,
-                attributes: [],
-            }],
+            include: [
+                {
+                    model: ShoppingList,
+                    attributes: [],
+                },
+            ],
         });
 
         return {
@@ -176,7 +182,7 @@ export default class AgentService {
      */
     static async getAvailableAgentsForOrder(
         shoppingListId: string,
-        excludeAgentIds: string[] = []
+        excludeAgentIds: string[] = [],
     ): Promise<User[]> {
         // First, get the shopping list to get the market ID
         const shoppingList = await ShoppingList.findByPk(shoppingListId);
@@ -194,7 +200,9 @@ export default class AgentService {
         if (!market || !market.location) {
             // Instead of throwing an error, return an empty array if no market location
             // This allows the code to continue and try other methods to find agents
-            console.warn(`Market ${shoppingList.marketId} not found or has no location. Returning empty agent list.`);
+            console.warn(
+                `Market ${shoppingList.marketId} not found or has no location. Returning empty agent list.`,
+            );
             return [];
         }
 
@@ -218,10 +226,10 @@ export default class AgentService {
     static async findNearestAgent(
         latitude: number,
         longitude: number,
-        excludeAgentIds: string[] = []
+        excludeAgentIds: string[] = [],
     ): Promise<User | undefined> {
         // Get all available agents with their locations
-        const availableAgents = await User.findAll({
+        const availableAgents = (await User.findAll({
             where: {
                 'status.userType': 'agent',
                 'status.availability': 'available',
@@ -239,7 +247,7 @@ export default class AgentService {
                     required: true,
                 },
             ],
-        }) as UserWithLocations[];
+        })) as UserWithLocations[];
 
         if (availableAgents.length === 0) {
             return undefined;
@@ -258,7 +266,7 @@ export default class AgentService {
                     latitude,
                     longitude,
                     location.latitude,
-                    location.longitude
+                    location.longitude,
                 );
             });
 
@@ -312,11 +320,14 @@ export default class AgentService {
             }
 
             // Update the order
-            await order.update({
-                agentId,
-                status: 'accepted',
-                acceptedAt: new Date(),
-            }, { transaction });
+            await order.update(
+                {
+                    agentId,
+                    status: 'accepted',
+                    acceptedAt: new Date(),
+                },
+                { transaction },
+            );
 
             // Also update the shopping list
             await ShoppingList.update(
@@ -327,7 +338,7 @@ export default class AgentService {
                 {
                     where: { id: order.shoppingListId },
                     transaction,
-                }
+                },
             );
 
             // Update agent status to busy
@@ -343,7 +354,10 @@ export default class AgentService {
      * @param documents Document data (NIN or images)
      * @returns Updated agent
      */
-    static async updateAgentDocuments(agentId: string, documents: Partial<IAgentMeta>): Promise<User> {
+    static async updateAgentDocuments(
+        agentId: string,
+        documents: Partial<IAgentMeta>,
+    ): Promise<User> {
         return await Database.transaction(async (transaction: Transaction) => {
             // First check if agent exists
             const agent = await User.findOne({
@@ -351,10 +365,12 @@ export default class AgentService {
                     id: agentId,
                     'status.userType': 'agent',
                 },
-                include: [{
-                    model: UserSettings,
-                    as: 'settings',
-                }],
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                    },
+                ],
                 transaction,
             });
 
@@ -377,20 +393,22 @@ export default class AgentService {
                             Sequelize.fn(
                                 'COALESCE',
                                 Sequelize.col('agentMetaData'),
-                                Sequelize.literal(`'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`)
+                                Sequelize.literal(
+                                    `'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`,
+                                ),
                             ),
                             // Path to the property
-                            Sequelize.literal('\'{nin}\''),
+                            Sequelize.literal("'{nin}'"),
                             // Value to set
                             Sequelize.literal(`'"${documents.nin}"'`),
                             // Create if it doesn't exist
-                            true
+                            true,
                         ),
                     },
                     {
                         where: { userId: agentId },
                         transaction,
-                    }
+                    },
                 );
             }
 
@@ -404,28 +422,30 @@ export default class AgentService {
                             Sequelize.fn(
                                 'COALESCE',
                                 Sequelize.col('agentMetaData'),
-                                Sequelize.literal(`'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`)
+                                Sequelize.literal(
+                                    `'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`,
+                                ),
                             ),
                             // Path to the image property
-                            Sequelize.literal('\'{images}\''),
+                            Sequelize.literal("'{images}'"),
                             // If images are missing, initialize with an empty array
                             Sequelize.fn(
                                 'COALESCE',
                                 Sequelize.fn(
                                     'jsonb_extract_path',
                                     Sequelize.col('agentMetaData'),
-                                    'images'
+                                    'images',
                                 ),
-                                Sequelize.literal('\'[]\'::jsonb')
+                                Sequelize.literal("'[]'::jsonb"),
                             ),
                             // Create if it doesn't exist
-                            true
+                            true,
                         ),
                     },
                     {
                         where: { userId: agentId },
                         transaction,
-                    }
+                    },
                 );
 
                 // Now append the new images to the existing images array
@@ -442,13 +462,13 @@ export default class AgentService {
                                         '[]'::jsonb
                                     ) || '"${imageUrl}"'::jsonb
                                 )
-                            )`
+                            )`,
                             ),
                         },
                         {
                             where: { userId: agentId },
                             transaction,
-                        }
+                        },
                     );
                 }
             }
@@ -459,17 +479,18 @@ export default class AgentService {
                     id: agentId,
                     'status.userType': 'agent',
                 },
-                include: [{
-                    model: UserSettings,
-                    as: 'settings',
-                }],
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                    },
+                ],
                 transaction,
             });
 
             return updatedAgent!;
         });
     }
-
 
     /**
      * Update an agent's status
@@ -478,14 +499,16 @@ export default class AgentService {
         userId: string,
         status: 'available' | 'busy' | 'away' | 'offline',
         isAcceptingOrders: boolean = true,
-        transaction?: Transaction
+        transaction?: Transaction,
     ): Promise<User> {
         // Check if the user exists
         const user = await User.findByPk(userId, {
-            include: [{
-                model: UserSettings,
-                as: 'settings',
-            }],
+            include: [
+                {
+                    model: UserSettings,
+                    as: 'settings',
+                },
+            ],
             transaction,
         });
 
@@ -500,7 +523,7 @@ export default class AgentService {
         const currentTime = new Date().toISOString();
 
         // Create a transaction if one wasn't provided
-        const txn = transaction || await Database.transaction();
+        const txn = transaction || (await Database.transaction());
 
         try {
             // Use jsonb_set to update status-related fields while preserving others
@@ -530,7 +553,7 @@ export default class AgentService {
                 {
                     where: { userId: userId },
                     transaction: txn,
-                }
+                },
             );
 
             // Only commit if we created our own transaction
@@ -539,13 +562,15 @@ export default class AgentService {
             }
 
             // Fetch and return the updated user
-            return await User.findByPk(userId, {
-                include: [{
-                    model: UserSettings,
-                    as: 'settings',
-                }],
+            return (await User.findByPk(userId, {
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                    },
+                ],
                 transaction,
-            }) as User;
+            })) as User;
         } catch (error) {
             // Only rollback if we created our own transaction
             if (!transaction) {
@@ -558,13 +583,18 @@ export default class AgentService {
     /**
      * Update an agent's accepting orders status
      */
-    static async updateAgentAcceptingOrders(userId: string, isAcceptingOrders: boolean): Promise<User> {
+    static async updateAgentAcceptingOrders(
+        userId: string,
+        isAcceptingOrders: boolean,
+    ): Promise<User> {
         // Check if the user exists
         const user = await User.findByPk(userId, {
-            include: [{
-                model: UserSettings,
-                as: 'settings',
-            }],
+            include: [
+                {
+                    model: UserSettings,
+                    as: 'settings',
+                },
+            ],
         });
 
         if (!user) {
@@ -601,26 +631,32 @@ export default class AgentService {
                 {
                     where: { userId: userId },
                     transaction,
-                }
+                },
             );
 
             // Fetch and return the updated user
-            return await User.findByPk(userId, {
-                include: [{
-                    model: UserSettings,
-                    as: 'settings',
-                }],
+            return (await User.findByPk(userId, {
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                    },
+                ],
                 transaction,
-            }) as User;
+            })) as User;
         });
     }
 
     /**
      * Set agent as busy with a specific order
      */
-    static async setAgentBusy(agentId: string, orderId: string, transaction?: Transaction): Promise<User> {
+    static async setAgentBusy(
+        agentId: string,
+        orderId: string,
+        transaction?: Transaction,
+    ): Promise<User> {
         // Use the provided transaction or create a new one
-        const txn = transaction || await Database.transaction();
+        const txn = transaction || (await Database.transaction());
 
         try {
             const agent = await User.findOne({
@@ -628,10 +664,12 @@ export default class AgentService {
                     id: agentId,
                     'status.userType': 'agent',
                 },
-                include: [{
-                    model: UserSettings,
-                    as: 'settings',
-                }],
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                    },
+                ],
                 transaction: txn,
             });
 
@@ -672,7 +710,7 @@ export default class AgentService {
                 {
                     where: { userId: agentId },
                     transaction: txn,
-                }
+                },
             );
 
             // Only commit if we created our own transaction
@@ -681,17 +719,19 @@ export default class AgentService {
             }
 
             // Fetch the updated agent to return
-            return await User.findOne({
+            return (await User.findOne({
                 where: {
                     id: agentId,
                     'status.userType': 'agent',
                 },
-                include: [{
-                    model: UserSettings,
-                    as: 'settings',
-                }],
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                    },
+                ],
                 transaction: txn,
-            }) as User;
+            })) as User;
         } catch (error) {
             // Only rollback if we created our own transaction
             if (!transaction) {
@@ -722,39 +762,43 @@ export default class AgentService {
         return {
             status: agent.settings?.agentMetaData?.currentStatus ?? 'offline',
             isAcceptingOrders: agent.settings?.agentMetaData?.isAcceptingOrders || false,
-            lastStatusUpdate: agent.settings?.agentMetaData?.lastStatusUpdate ?? new Date().toISOString(),
+            lastStatusUpdate:
+                agent.settings?.agentMetaData?.lastStatusUpdate ?? new Date().toISOString(),
         };
     }
 
     /**
-         * Get all available agents
-         */
+     * Get all available agents
+     */
     static async getAvailableAgents(): Promise<User[]> {
         return await User.findAll({
             where: {
                 'status.userType': 'agent',
             },
-            include: [{
-                model: UserSettings,
-                as: 'settings',
-                where: {
-                    agentMetaData: {
-                        [Op.and]: [
-                            { currentStatus: 'available' },
-                            { isAcceptingOrders: true },
-                        ],
+            include: [
+                {
+                    model: UserSettings,
+                    as: 'settings',
+                    where: {
+                        agentMetaData: {
+                            [Op.and]: [{ currentStatus: 'available' }, { isAcceptingOrders: true }],
+                        },
                     },
                 },
-            }],
+            ],
         });
     }
 
     /**
-    * Add a new preferred location for an agent
-    */
-    static async addAgentLocation(agentId: string, locationData: Partial<IAgentLocation>, transaction?: Transaction): Promise<AgentLocation> {
+     * Add a new preferred location for an agent
+     */
+    static async addAgentLocation(
+        agentId: string,
+        locationData: Partial<IAgentLocation>,
+        transaction?: Transaction,
+    ): Promise<AgentLocation> {
         // Use the provided transaction or create a new one
-        const txn = transaction || await Database.transaction();
+        const txn = transaction || (await Database.transaction());
 
         try {
             const agent = await User.findByPk(agentId, { transaction: txn });
@@ -767,15 +811,18 @@ export default class AgentService {
             }
 
             // Create a new location with the required fields
-            const newLocation = await AgentLocation.create({
-                agentId,
-                latitude: locationData.latitude ?? 0,
-                longitude: locationData.longitude ?? 0,
-                radius: locationData.radius ?? 5.0,
-                isActive: locationData.isActive !== undefined ? locationData.isActive : true,
-                name: locationData.name,
-                address: locationData.address,
-            } as IAgentLocation, { transaction: txn });
+            const newLocation = await AgentLocation.create(
+                {
+                    agentId,
+                    latitude: locationData.latitude ?? 0,
+                    longitude: locationData.longitude ?? 0,
+                    radius: locationData.radius ?? 5.0,
+                    isActive: locationData.isActive !== undefined ? locationData.isActive : true,
+                    name: locationData.name,
+                    address: locationData.address,
+                } as IAgentLocation,
+                { transaction: txn },
+            );
 
             // Only commit if we created our own transaction
             if (!transaction) {
@@ -795,9 +842,14 @@ export default class AgentService {
     /**
      * Update an agent's location
      */
-    static async updateAgentLocation(agentId: string, locationId: string, locationData: Partial<IAgentLocation>, transaction?: Transaction): Promise<AgentLocation> {
+    static async updateAgentLocation(
+        agentId: string,
+        locationId: string,
+        locationData: Partial<IAgentLocation>,
+        transaction?: Transaction,
+    ): Promise<AgentLocation> {
         // Use the provided transaction or create a new one
-        const txn = transaction || await Database.transaction();
+        const txn = transaction || (await Database.transaction());
 
         try {
             const location = await AgentLocation.findOne({
@@ -847,7 +899,10 @@ export default class AgentService {
     /**
      * Get all locations for an agent
      */
-    static async getAgentLocations(agentId: string, transaction?: Transaction): Promise<AgentLocation[]> {
+    static async getAgentLocations(
+        agentId: string,
+        transaction?: Transaction,
+    ): Promise<AgentLocation[]> {
         return await AgentLocation.findAll({
             where: {
                 agentId,
@@ -865,7 +920,7 @@ export default class AgentService {
         initialRadius: number = 5,
         maxRadius: number = 20,
         radiusIncrement: number = 5,
-        limit: number = 10
+        limit: number = 10,
     ): Promise<User[]> {
         // Start with a small radius and gradually expand if no agents are found
         let currentRadius = initialRadius;
@@ -873,7 +928,7 @@ export default class AgentService {
 
         while (currentRadius <= maxRadius && agents.length === 0) {
             // Find agents within the current radius
-            const nearbyAgents = await User.findAll({
+            const nearbyAgents = (await User.findAll({
                 where: {
                     'status.userType': 'agent',
                 },
@@ -887,17 +942,17 @@ export default class AgentService {
                                     Sequelize.fn(
                                         'jsonb_extract_path_text',
                                         Sequelize.col('"settings"."agentMetaData"'),
-                                        'currentStatus'
+                                        'currentStatus',
                                     ),
-                                    'available'
+                                    'available',
                                 ),
                                 Sequelize.where(
                                     Sequelize.fn(
                                         'jsonb_extract_path_text',
                                         Sequelize.col('"settings"."agentMetaData"'),
-                                        'isAcceptingOrders'
+                                        'isAcceptingOrders',
                                     ),
-                                    'true'
+                                    'true',
                                 ),
                             ],
                         },
@@ -911,7 +966,7 @@ export default class AgentService {
                         required: true,
                     },
                 ],
-            }) as UserWithLocations[];
+            })) as UserWithLocations[];
 
             // Filter agents by distance
             agents = nearbyAgents.filter(agent => {
@@ -923,7 +978,7 @@ export default class AgentService {
                         latitude,
                         longitude,
                         location.latitude,
-                        location.longitude
+                        location.longitude,
                     );
                 });
 
@@ -940,12 +995,16 @@ export default class AgentService {
         // Sort agents by distance and limit the results
         return agents
             .sort((a, b) => {
-                const distanceA = Math.min(...(a.locations?.map(loc =>
-                    this.calculateDistance(latitude, longitude, loc.latitude, loc.longitude)
-                ) || [0]));
-                const distanceB = Math.min(...(b.locations?.map(loc =>
-                    this.calculateDistance(latitude, longitude, loc.latitude, loc.longitude)
-                ) || [0]));
+                const distanceA = Math.min(
+                    ...(a.locations?.map(loc =>
+                        this.calculateDistance(latitude, longitude, loc.latitude, loc.longitude),
+                    ) || [0]),
+                );
+                const distanceB = Math.min(
+                    ...(b.locations?.map(loc =>
+                        this.calculateDistance(latitude, longitude, loc.latitude, loc.longitude),
+                    ) || [0]),
+                );
                 return distanceA - distanceB;
             })
             .slice(0, limit);
@@ -971,23 +1030,27 @@ export default class AgentService {
         }
 
         // Use findNearbyAgents to find agents near the market
-        return await this.findNearbyAgents(
-            market.location.latitude,
-            market.location.longitude
-        );
+        return await this.findNearbyAgents(market.location.latitude, market.location.longitude);
     }
 
     /**
      * Calculate the distance between two points using the Haversine formula
      */
-    private static calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    private static calculateDistance(
+        lat1: number,
+        lon1: number,
+        lat2: number,
+        lon2: number,
+    ): number {
         const R = 6371; // Radius of the earth in km
         const dLat = this.deg2rad(lat2 - lat1);
         const dLon = this.deg2rad(lon2 - lon1);
         const a =
             Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(lat2)) *
-            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            Math.cos(this.deg2rad(lat1)) *
+                Math.cos(this.deg2rad(lat2)) *
+                Math.sin(dLon / 2) *
+                Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c; // Distance in km
     }

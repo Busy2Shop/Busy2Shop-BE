@@ -3,7 +3,6 @@ import winston, { format } from 'winston';
 // import { PROJECT_ID, NODE_ENV } from '../utils/constants';
 import * as util from 'util';
 
-
 declare module 'winston' {
     interface Logger {
         payload: winston.LeveledLogMethod;
@@ -15,7 +14,7 @@ declare module 'winston' {
 }
 
 const { printf } = format;
-const logFormat = printf((info) => {
+const logFormat = printf(info => {
     let logMessage = `${info.level}:`;
 
     if (info.message) {
@@ -75,23 +74,20 @@ const colorScheme = {
 const logger = winston.createLogger({
     levels: customLevels,
     transports: [
-        new winston.transports.Console({ // Log to console in production
+        new winston.transports.Console({
+            // Log to console in production
             level: 'info',
             format: winston.format.combine(
                 winston.format.colorize({
                     colors: colorScheme,
                 }),
                 winston.format.simple(),
-                logFormat
+                logFormat,
             ),
         }),
         // ...(loggingWinston ? [loggingWinston] : []), // Log to Google Cloud Logging in production
     ],
-    format: format.combine(
-        format.json(),
-        format.prettyPrint()
-    ),
+    format: format.combine(format.json(), format.prettyPrint()),
 });
-
 
 export { logger };

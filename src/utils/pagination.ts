@@ -12,12 +12,15 @@ export interface IPaginationQuery {
 }
 
 export default class Pagination {
-    static readonly getPagination = ({ page, size }: IPaging): { limit: number | null; offset: number | null } => {
+    static readonly getPagination = ({
+        page,
+        size,
+    }: IPaging): { limit: number | null; offset: number | null } => {
         const limit = size ?? null;
         let offset = null;
 
         if (limit !== null) {
-            offset = (page && page > 1) ? (page - 1) * limit : 0;
+            offset = page && page > 1 ? (page - 1) * limit : 0;
         }
 
         return { limit, offset };

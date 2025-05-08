@@ -24,7 +24,7 @@ export default class NotificationController {
 
         // Determine the read status or leave it undefined if not specified
         await Database.transaction(async (transaction: Transaction) => {
-            let paginationQuery: { q?: string, page?: number, size?: number } = {
+            let paginationQuery: { q?: string; page?: number; size?: number } = {
                 ...(read && { q: read }),
             };
             let paginate = false;
@@ -35,16 +35,31 @@ export default class NotificationController {
                     page: Number(page),
                     size: Number(size),
                 };
-                paginate = !!(paginationQuery.page && paginationQuery.size && paginationQuery.page > 0 && paginationQuery.size > 0);
+                paginate = !!(
+                    paginationQuery.page &&
+                    paginationQuery.size &&
+                    paginationQuery.page > 0 &&
+                    paginationQuery.size > 0
+                );
             }
 
             console.log('paginate', paginate);
             // Fetch notifications based on read status
-            const notifications = await NotificationService.viewNotifications(req.user.id, paginationQuery, transaction);
-            const getNotificationStats = await NotificationService.getNotificationStats(req.user.id, transaction);
+            const notifications = await NotificationService.viewNotifications(
+                req.user.id,
+                paginationQuery,
+                transaction,
+            );
+            const getNotificationStats = await NotificationService.getNotificationStats(
+                req.user.id,
+                transaction,
+            );
             let totalPages = {};
             if (paginate && notifications.length > 0) {
-                totalPages = Pagination.estimateTotalPage({ count: getNotificationStats.total, limit: Number(size) } as IPaging);
+                totalPages = Pagination.estimateTotalPage({
+                    count: getNotificationStats.total,
+                    limit: Number(size),
+                } as IPaging);
                 console.log(totalPages, 'totalPages');
             }
             res.status(200).json({
@@ -67,7 +82,9 @@ export default class NotificationController {
             throw new BadRequestError('Notification ID is required');
         }
         // const notification = await WeavyClientConfig.getNotification(req.user, notificationId as string);
-        const notification = await NotificationService.viewSingleNotificationById(notificationId as string);
+        const notification = await NotificationService.viewSingleNotificationById(
+            notificationId as string,
+        );
         res.status(200).json({
             status: 'success',
             message: 'Notification retrieved successfully',
@@ -93,8 +110,11 @@ export default class NotificationController {
             if (!notificationId) {
                 throw new BadRequestError('Notification ID is required');
             }
-            await NotificationService.updateSingleNotification(notificationId as string, { read: true } as INotification);
+            await NotificationService.updateSingleNotification(
+                notificationId as string,
+                { read: true } as INotification,
+            );
             res.status(200).json({ status: 'success', message: 'Notification marked as read' });
         }
-    }    
+    }
 }

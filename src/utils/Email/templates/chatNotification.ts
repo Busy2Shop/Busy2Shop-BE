@@ -16,21 +16,21 @@ export const chatNotificationTemplate = (data: {
 
     // Set the appropriate heading based on the notification type
     switch (notificationType) {
-    case NotificationTypes.CHAT_MESSAGE_RECEIVED:
-        subject = 'New Chat Message';
-        notificationHeading = 'You have a new message';
-        break;
-    case NotificationTypes.CHAT_ACTIVATED:
-        subject = 'Chat Activated';
-        notificationHeading = 'Chat has been activated';
-        break;
-    case NotificationTypes.USER_LEFT_CHAT:
-        subject = 'User Left Chat';
-        notificationHeading = 'A user has left the chat';
-        break;
-    default:
-        subject = 'Chat Notification';
-        notificationHeading = 'You have a new notification';
+        case NotificationTypes.CHAT_MESSAGE_RECEIVED:
+            subject = 'New Chat Message';
+            notificationHeading = 'You have a new message';
+            break;
+        case NotificationTypes.CHAT_ACTIVATED:
+            subject = 'Chat Activated';
+            notificationHeading = 'Chat has been activated';
+            break;
+        case NotificationTypes.USER_LEFT_CHAT:
+            subject = 'User Left Chat';
+            notificationHeading = 'A user has left the chat';
+            break;
+        default:
+            subject = 'Chat Notification';
+            notificationHeading = 'You have a new notification';
     }
 
     return `

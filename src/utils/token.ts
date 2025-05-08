@@ -1,13 +1,31 @@
 import jwt from 'jsonwebtoken';
-import { JWT_SECRET, JWT_ACCESS_SECRET, JWT_ADMIN_ACCESS_SECRET, JWT_REFRESH_SECRET } from './constants';
+import {
+    JWT_SECRET,
+    JWT_ACCESS_SECRET,
+    JWT_ADMIN_ACCESS_SECRET,
+    JWT_REFRESH_SECRET,
+} from './constants';
 import { v4 as uuidv4 } from 'uuid';
 import { redisClient } from './redis';
 import { UnauthorizedError, TokenExpiredError, JsonWebTokenError } from './customErrors';
-import { AuthToken, CompareTokenData, CompareAdminTokenData, DecodedTokenData, DeleteToken, ENCRYPTEDTOKEN, GenerateCodeData, GenerateTokenData, SaveTokenToCache, GenerateAdminTokenData } from './interface';
+import {
+    AuthToken,
+    CompareTokenData,
+    CompareAdminTokenData,
+    DecodedTokenData,
+    DeleteToken,
+    ENCRYPTEDTOKEN,
+    GenerateCodeData,
+    GenerateTokenData,
+    SaveTokenToCache,
+    GenerateAdminTokenData,
+} from './interface';
 
 class TokenCacheUtil {
     static saveTokenToCache({ key, token, expiry }: SaveTokenToCache) {
-        const response = expiry ? redisClient.setex(key, expiry, token) : redisClient.set(key, token);
+        const response = expiry
+            ? redisClient.setex(key, expiry, token)
+            : redisClient.set(key, token);
         return response;
     }
 
@@ -20,7 +38,6 @@ class TokenCacheUtil {
 
         return response;
     }
-
 
     static async saveAuthTokenToCache({ key, token, expiry }: SaveTokenToCache) {
         // Save token and state as an array [token, state] in Redis
@@ -44,7 +61,7 @@ class TokenCacheUtil {
         const { token, state } = JSON.parse(dataString);
 
         if (state !== 'active') {
-            throw new UnauthorizedError('Unauthorized token');  
+            throw new UnauthorizedError('Unauthorized token');
         }
 
         // Save updated state along with the existing token and remaining TTL
@@ -58,7 +75,7 @@ class TokenCacheUtil {
         const tokenString = await redisClient.get(key);
         if (!tokenString) {
             return null;
-        }            
+        }
         return tokenString;
     }
 
@@ -72,21 +89,20 @@ class TokenCacheUtil {
 }
 
 class AuthUtil {
-
-    static getSecretKeyForTokenType(type: ENCRYPTEDTOKEN): { secretKey: string, expiry: number } {
+    static getSecretKeyForTokenType(type: ENCRYPTEDTOKEN): { secretKey: string; expiry: number } {
         switch (type) {
-        case 'access':
-            // 30day
-            return { secretKey: JWT_ACCESS_SECRET, expiry: 60 * 60 * 24 * 30 }; 
-        case 'refresh':
-            // 90days
-            return { secretKey: JWT_REFRESH_SECRET, expiry: 60 * 60 * 24 * 90 };
-        case 'admin':
-            // 7days
-            return { secretKey: JWT_ADMIN_ACCESS_SECRET, expiry: 60 * 60 * 24 * 7 };
-        default:
-            // 20min
-            return { secretKey: JWT_SECRET, expiry: 60 * 20 };
+            case 'access':
+                // 30day
+                return { secretKey: JWT_ACCESS_SECRET, expiry: 60 * 60 * 24 * 30 };
+            case 'refresh':
+                // 90days
+                return { secretKey: JWT_REFRESH_SECRET, expiry: 60 * 60 * 24 * 90 };
+            case 'admin':
+                // 7days
+                return { secretKey: JWT_ADMIN_ACCESS_SECRET, expiry: 60 * 60 * 24 * 7 };
+            default:
+                // 20min
+                return { secretKey: JWT_SECRET, expiry: 60 * 20 };
         }
     }
 
@@ -125,7 +141,7 @@ class AuthUtil {
 
     static async generateCode({ type, identifier, expiry }: GenerateCodeData) {
         const tokenKey = `${type}_code:${identifier}`;
-        let token:number | string;
+        let token: number | string;
         if (type === 'passwordreset') {
             token = uuidv4();
         } else {
@@ -156,7 +172,6 @@ class AuthUtil {
         try {
             const { secretKey } = this.getSecretKeyForTokenType(type);
             return jwt.verify(token, secretKey);
-
         } catch (error) {
             if (error instanceof jwt.TokenExpiredError) {
                 throw new TokenExpiredError('Token expired');
@@ -174,7 +189,6 @@ class AuthUtil {
         try {
             const { secretKey } = this.getSecretKeyForTokenType(type);
             return jwt.verify(token, secretKey);
-
         } catch (error) {
             if (error instanceof jwt.TokenExpiredError) {
                 throw new TokenExpiredError('Token expired');
@@ -192,7 +206,6 @@ class AuthUtil {
         const tokenKey = `${tokenType}_${tokenClass}:${user.id}`;
         await TokenCacheUtil.deleteTokenFromCache(tokenKey);
     }
-
 }
 
 export { AuthUtil, TokenCacheUtil };

@@ -1,7 +1,17 @@
 // Import necessary modules and dependencies
 import {
-    Table, Column, Model, DataType, ForeignKey, DefaultScope, Scopes,
-    BelongsTo, IsUUID, Unique, PrimaryKey, Default,
+    Table,
+    Column,
+    Model,
+    DataType,
+    ForeignKey,
+    DefaultScope,
+    Scopes,
+    BelongsTo,
+    IsUUID,
+    Unique,
+    PrimaryKey,
+    Default,
 } from 'sequelize-typescript';
 import User from './user.model'; // Adjust the import path as necessary
 
@@ -22,65 +32,63 @@ export interface IBlockMeta {
         attributes: { exclude: [] }, // Include all attributes
     },
 }))
-
-
 @Table({ timestamps: false })
 export default class UserSettings extends Model<UserSettings | IUserSettings> {
     @IsUUID(4)
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({ type: DataType.DATEONLY })
-        joinDate: string;
+    joinDate: string;
 
     @Column({ type: DataType.DATE })
-        lastLogin: Date | null;
+    lastLogin: Date | null;
 
     @Column({
         type: DataType.BOOLEAN,
         defaultValue: false,
         allowNull: false,
     })
-        isKycVerified: boolean;
+    isKycVerified: boolean;
 
     @Column({
         type: DataType.BOOLEAN,
         defaultValue: false,
         allowNull: false,
     })
-        isBlocked: boolean;
+    isBlocked: boolean;
 
     @Column({
         type: DataType.BOOLEAN,
         defaultValue: false,
         allowNull: false,
     })
-        isDeactivated: boolean;
+    isDeactivated: boolean;
 
     @Column({
         type: DataType.JSONB,
         defaultValue: null,
         allowNull: true,
     })
-        meta: IBlockMeta | null;
+    meta: IBlockMeta | null;
 
     @Column({
         type: DataType.JSONB,
         defaultValue: null,
         allowNull: true,
     })
-        agentMetaData: IAgentMeta | null;
+    agentMetaData: IAgentMeta | null;
 
     @IsUUID(4)
     @Unique
     @ForeignKey(() => User)
     @Column
-        userId: string;
+    userId: string;
 
     @BelongsTo(() => User)
-        user: User;
+    user: User;
 }
 
 export interface IUserSettings {

@@ -1,13 +1,27 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { v2 as cloudinary } from 'cloudinary';
-import { CLOUDINARY_API_SECRET, CLOUDINARY_API_KEY, CLOUDINARY_CLOUD_NAME } from '../utils/constants';
+import {
+    CLOUDINARY_API_SECRET,
+    CLOUDINARY_API_KEY,
+    CLOUDINARY_CLOUD_NAME,
+} from '../utils/constants';
 export type uploadType = {
     message: string;
     url?: string;
     error?: any;
 };
 export default class CloudinaryClientConfig {
-    static async uploadtoCloudinary({ fileBuffer, id, name, type }: { fileBuffer: Buffer, id: string, name: string, type: string }): Promise<uploadType> {
+    static async uploadtoCloudinary({
+        fileBuffer,
+        id,
+        name,
+        type,
+    }: {
+        fileBuffer: Buffer;
+        id: string;
+        name: string;
+        type: string;
+    }): Promise<uploadType> {
         try {
             cloudinary.config({
                 cloud_name: CLOUDINARY_CLOUD_NAME,
@@ -41,7 +55,9 @@ export default class CloudinaryClientConfig {
         }
     }
 
-    static async deleteFromCloudinary(secureUrl: string): Promise<{ message: string; error?: any }> {
+    static async deleteFromCloudinary(
+        secureUrl: string,
+    ): Promise<{ message: string; error?: any }> {
         try {
             cloudinary.config({
                 cloud_name: CLOUDINARY_CLOUD_NAME,
@@ -75,5 +91,4 @@ export default class CloudinaryClientConfig {
             return { message: 'error', error };
         }
     }
-
 }

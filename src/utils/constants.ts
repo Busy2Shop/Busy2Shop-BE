@@ -22,7 +22,7 @@ export const DB_CONFIG = {
     USER: process.env.PG_USERNAME as string,
     PASS: process.env.PG_PASSWORD as string,
     PORT: parseInt(process.env.PG_PORT as string),
-    DIALECT: (process.env.PG_DIALECT ?? 'postgres' ) as 'postgres',
+    DIALECT: (process.env.PG_DIALECT ?? 'postgres') as 'postgres',
     HOST: process.env.PG_HOST as string,
     URL: process.env.PG_URL as string,
 };
@@ -40,12 +40,12 @@ export const EMAIL_HOST = process.env.EMAIL_HOST as string,
     ZOHO_USERNAME = process.env.ZOHO_USERNAME as string,
     ZOHO_PASSWORD = process.env.ZOHO_PASSWORD as string;
 
-
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY as string;
 
 export const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY as string;
 
-export const WEBSITE_URL = NODE_ENV === 'production' ? process.env.WEBSITE_URL as string : 'http://localhost:5173';
+export const WEBSITE_URL =
+    NODE_ENV === 'production' ? (process.env.WEBSITE_URL as string) : 'http://localhost:5173';
 
 export const DOCUMENTATION_URL = process.env.DOCUMENTATION_URL as string;
 

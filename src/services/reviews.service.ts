@@ -20,8 +20,8 @@ export interface IViewReviewsQuery {
 export interface IReviewableItemsQuery {
     page?: number;
     size?: number;
-    marketType?: string;    // Optional filter by market type
-    productName?: string;   // Optional search by product name
+    marketType?: string; // Optional filter by market type
+    productName?: string; // Optional search by product name
 }
 
 export default class ReviewService {
@@ -32,7 +32,10 @@ export default class ReviewService {
         }
 
         // Validate that either marketId or productId is provided, but not both
-        if ((!reviewData.marketId && !reviewData.productId) || (reviewData.marketId && reviewData.productId)) {
+        if (
+            (!reviewData.marketId && !reviewData.productId) ||
+            (reviewData.marketId && reviewData.productId)
+        ) {
             throw new BadRequestError('Either market ID or product ID must be provided (not both)');
         }
 
@@ -84,7 +87,9 @@ export default class ReviewService {
         return await Review.create({ ...reviewData });
     }
 
-    static async viewReviews(queryData?: IViewReviewsQuery): Promise<{ reviews: Review[], count: number, totalPages?: number }> {
+    static async viewReviews(
+        queryData?: IViewReviewsQuery,
+    ): Promise<{ reviews: Review[]; count: number; totalPages?: number }> {
         const { page, size, rating, marketId, productId, reviewerId } = queryData || {};
 
         const where: Record<string, unknown> = {};
@@ -182,7 +187,11 @@ export default class ReviewService {
         return review;
     }
 
-    static async updateReview(id: string, reviewerId: string, dataToUpdate: Partial<IReview>): Promise<Review> {
+    static async updateReview(
+        id: string,
+        reviewerId: string,
+        dataToUpdate: Partial<IReview>,
+    ): Promise<Review> {
         const review = await this.getReview(id);
 
         // Check if the user is the reviewer
@@ -216,12 +225,12 @@ export default class ReviewService {
         await review.destroy();
     }
 
-    static async getMarketAverageRating(marketId: string): Promise<{ averageRating: number, totalReviews: number }> {
+    static async getMarketAverageRating(
+        marketId: string,
+    ): Promise<{ averageRating: number; totalReviews: number }> {
         const result = await Review.findAndCountAll({
             where: { marketId },
-            attributes: [
-                [fn('AVG', col('rating')), 'averageRating'],
-            ],
+            attributes: [[fn('AVG', col('rating')), 'averageRating']],
         });
 
         return {
@@ -230,12 +239,12 @@ export default class ReviewService {
         };
     }
 
-    static async getProductAverageRating(productId: string): Promise<{ averageRating: number, totalReviews: number }> {
+    static async getProductAverageRating(
+        productId: string,
+    ): Promise<{ averageRating: number; totalReviews: number }> {
         const result = await Review.findAndCountAll({
             where: { productId },
-            attributes: [
-                [fn('AVG', col('rating')), 'averageRating'],
-            ],
+            attributes: [[fn('AVG', col('rating')), 'averageRating']],
         });
 
         return {
@@ -312,14 +321,14 @@ export default class ReviewService {
 
     static async getUserReviewableItems(
         customerId: string,
-        queryData?: IReviewableItemsQuery
+        queryData?: IReviewableItemsQuery,
     ): Promise<{
-        markets: Market[],
-        products: Product[],
-        marketCount: number,
-        productCount: number,
-        marketTotalPages?: number,
-        productTotalPages?: number
+        markets: Market[];
+        products: Product[];
+        marketCount: number;
+        productCount: number;
+        marketTotalPages?: number;
+        productTotalPages?: number;
     }> {
         const { page, size, marketType, productName } = queryData || {};
 
@@ -336,13 +345,15 @@ export default class ReviewService {
         const marketIds = completedShoppingLists.map(list => list.marketId);
 
         // Find markets that haven't been reviewed yet
-        const reviewedMarketIds = (await Review.findAll({
-            where: {
-                reviewerId: customerId,
-                marketId: { [Op.in]: marketIds },
-            },
-            attributes: ['marketId'],
-        })).map(review => review.marketId);
+        const reviewedMarketIds = (
+            await Review.findAll({
+                where: {
+                    reviewerId: customerId,
+                    marketId: { [Op.in]: marketIds },
+                },
+                attributes: ['marketId'],
+            })
+        ).map(review => review.marketId);
 
         const reviewableMarketIds = marketIds.filter(id => !reviewedMarketIds.includes(id));
 
@@ -370,7 +381,8 @@ export default class ReviewService {
         }
 
         // Get paginated reviewable markets
-        const { rows: markets, count: marketCount } = await Market.findAndCountAll(marketQueryOptions);
+        const { rows: markets, count: marketCount } =
+            await Market.findAndCountAll(marketQueryOptions);
 
         // Prepare product query options
         const productWhere: Record<string, unknown> = {
@@ -406,7 +418,8 @@ export default class ReviewService {
         }
 
         // Get all products and count
-        const { rows: allProducts, count: productCount } = await Product.findAndCountAll(productQueryOptions);
+        const { rows: allProducts, count: productCount } =
+            await Product.findAndCountAll(productQueryOptions);
 
         // Filter out products that have already been reviewed
         const reviewableProducts = allProducts.filter(product => !product.reviews?.length);

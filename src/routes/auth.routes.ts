@@ -5,8 +5,6 @@ import { uploadMiddleware, UploadType } from '../middlewares/uploadMiddleware';
 // import { rateLimiter } from '../middlewares/rateLimiter';
 import passport from 'passport';
 
-
-
 const router: Router = express.Router();
 
 //Configure the upload middleware for single file upload
@@ -22,10 +20,23 @@ router
     .post('/resetpassword', AuthController.resetPassword)
 
     //.post('/setpassword', basicAuth('setpassword'), AuthenticatedController(AuthController.setPassword))
-    .post('/changepassword', basicAuth('access'), AuthenticatedController(AuthController.changePassword))
+    .post(
+        '/changepassword',
+        basicAuth('access'),
+        AuthenticatedController(AuthController.changePassword),
+    )
     .get('/logout', basicAuth('access'), AuthenticatedController(AuthController.logout))
-    .get('/loggeduser', basicAuth('access'), AuthenticatedController(AuthController.getLoggedUserData))
-    .patch('/update-profile', basicAuth('access'), upload, AuthenticatedController(AuthController.updateUser))
+    .get(
+        '/loggeduser',
+        basicAuth('access'),
+        AuthenticatedController(AuthController.getLoggedUserData),
+    )
+    .patch(
+        '/update-profile',
+        basicAuth('access'),
+        upload,
+        AuthenticatedController(AuthController.updateUser),
+    )
     .get('/authtoken', basicAuth('refresh'));
 
 // Google authentication route
@@ -38,6 +49,5 @@ router.get(
     }),
     AuthenticatedController(AuthController.googleSignIn),
 );
-
 
 export default router;

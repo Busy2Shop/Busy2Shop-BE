@@ -1,6 +1,14 @@
 import {
-    Table, Column, Model, DataType, ForeignKey, BelongsTo, HasMany,
-    IsUUID, PrimaryKey, Default,
+    Table,
+    Column,
+    Model,
+    DataType,
+    ForeignKey,
+    BelongsTo,
+    HasMany,
+    IsUUID,
+    PrimaryKey,
+    Default,
 } from 'sequelize-typescript';
 import User from './user.model';
 import Market from './market.model';
@@ -12,63 +20,63 @@ export default class ShoppingList extends Model<ShoppingList | IShoppingList> {
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: false,
     })
-        name: string;
+    name: string;
 
     @Column({
         type: DataType.TEXT,
         allowNull: true,
     })
-        notes: string;
+    notes: string;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: true, // Null for local markets where we don't display estimates
     })
-        estimatedTotal: number;
+    estimatedTotal: number;
 
     @Column({
         type: DataType.ENUM('draft', 'pending', 'accepted', 'processing', 'completed', 'cancelled'),
         defaultValue: 'draft',
     })
-        status: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled';
+    status: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled';
 
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column
-        customerId: string;
+    customerId: string;
 
     @BelongsTo(() => User, 'customerId')
-        customer: User;
+    customer: User;
 
     @IsUUID(4)
     @ForeignKey(() => Market)
     @Column({
         allowNull: true, // Can be null if the user hasn't selected a market yet
     })
-        marketId: string;
+    marketId: string;
 
     @BelongsTo(() => Market)
-        market: Market;
+    market: Market;
 
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column({
         allowNull: true, // Null until an agent accepts the order
     })
-        agentId: string;
+    agentId: string;
 
     @BelongsTo(() => User, 'agentId')
-        agent: User;
+    agent: User;
 
     // Relationships
     @HasMany(() => ShoppingListItem)
-        items: ShoppingListItem[];
+    items: ShoppingListItem[];
 }
 
 export interface IShoppingList {
@@ -81,4 +89,3 @@ export interface IShoppingList {
     marketId?: string;
     agentId?: string;
 }
-

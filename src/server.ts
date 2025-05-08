@@ -7,7 +7,6 @@ import SocketConfig from './clients/socket/index.config';
 import { NODE_ENV, PORT } from './utils/constants';
 import queues from './queues';
 
-
 // Create the HTTP server
 const server = http.createServer(app);
 
@@ -30,14 +29,17 @@ async function startServer(): Promise<void> {
             queues.initializeRecurringJobs(app);
 
             const address = server.address();
-            const host = typeof address === 'string' ? 'localhost' : address?.address ?? 'localhost';
+            const host =
+                typeof address === 'string' ? 'localhost' : (address?.address ?? 'localhost');
             const protocol = NODE_ENV === 'production' ? 'https' : 'http';
             const hostname = host === '::' ? 'localhost' : host;
 
             logger.info(`Server is running in ${NODE_ENV} mode`);
             logger.info(`Server is running on Port ${port}`);
             logger.info(`Server URL: ${protocol}://${hostname}:${port}`);
-            logger.info(`Swagger documentation available at: ${protocol}://${hostname}:${port}/api-docs`);
+            logger.info(
+                `Swagger documentation available at: ${protocol}://${hostname}:${port}/api-docs`,
+            );
         });
 
         // Handle server errors
@@ -57,7 +59,6 @@ async function startServer(): Promise<void> {
                 process.exit(0);
             });
         });
-
     } catch (err) {
         logger.error('Server startup error:', err);
 

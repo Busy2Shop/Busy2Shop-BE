@@ -20,7 +20,7 @@ export default class ShoppingListController {
                 customerId: req.user.id,
                 status: 'draft',
             },
-            items || []
+            items || [],
         );
 
         res.status(201).json({
@@ -45,7 +45,7 @@ export default class ShoppingListController {
 
         const shoppingLists = await ShoppingListService.viewUserShoppingLists(
             req.user.id,
-            queryParams
+            queryParams,
         );
 
         res.status(200).json({
@@ -74,7 +74,7 @@ export default class ShoppingListController {
 
         const shoppingLists = await ShoppingListService.viewAgentAssignedLists(
             req.user.id,
-            queryParams
+            queryParams,
         );
 
         res.status(200).json({
@@ -114,7 +114,7 @@ export default class ShoppingListController {
         const updatedList = await ShoppingListService.updateShoppingList(
             id,
             req.user.id,
-            updateData
+            updateData,
         );
 
         res.status(200).json({
@@ -144,19 +144,15 @@ export default class ShoppingListController {
             throw new BadRequestError('Item name is required');
         }
 
-        const newItem = await ShoppingListService.addItemToList(
-            listId,
-            req.user.id,
-            {
-                name,
-                quantity: quantity || 1,
-                unit,
-                notes,
-                estimatedPrice,
-                productId,
-                shoppingListId: listId,
-            }
-        );
+        const newItem = await ShoppingListService.addItemToList(listId, req.user.id, {
+            name,
+            quantity: quantity || 1,
+            unit,
+            notes,
+            estimatedPrice,
+            productId,
+            shoppingListId: listId,
+        });
 
         res.status(201).json({
             status: 'success',
@@ -181,7 +177,7 @@ export default class ShoppingListController {
             listId,
             itemId,
             req.user.id,
-            updateData
+            updateData,
         );
 
         res.status(200).json({

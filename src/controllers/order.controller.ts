@@ -5,7 +5,6 @@ import ShoppingListService from '../services/shoppingList.service';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 
 export default class OrderController {
-
     /**
      * Extracts and processes standard query parameters from request query object
      *
@@ -39,7 +38,6 @@ export default class OrderController {
         return queryParams;
     }
 
-
     static async createOrder(req: AuthenticatedRequest, res: Response) {
         const { shoppingListId, deliveryAddress, customerNotes } = req.body;
 
@@ -51,11 +49,14 @@ export default class OrderController {
         const shoppingList = await ShoppingListService.getShoppingList(shoppingListId);
 
         if (shoppingList.customerId !== req.user.id) {
-            throw new ForbiddenError('You are not authorized to create an order from this shopping list');
+            throw new ForbiddenError(
+                'You are not authorized to create an order from this shopping list',
+            );
         }
 
         // Calculate totals for the order
-        const { totalAmount, serviceFee, deliveryFee } = await OrderService.calculateTotals(shoppingListId);
+        const { totalAmount, serviceFee, deliveryFee } =
+            await OrderService.calculateTotals(shoppingListId);
 
         // Create the order
         const order = await OrderService.createOrder({

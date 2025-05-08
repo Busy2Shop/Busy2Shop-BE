@@ -146,14 +146,17 @@ export class ChatService {
 
         return await Database.transaction(async (transaction: Transaction) => {
             // Create a message
-            const newMessage = await ChatMessage.create({
-                orderId,
-                senderId,
-                senderType,
-                message,
-                imageUrl: imageUrl ?? null,
-                isRead: false,
-            } as ChatMessage, { transaction });
+            const newMessage = await ChatMessage.create(
+                {
+                    orderId,
+                    senderId,
+                    senderType,
+                    message,
+                    imageUrl: imageUrl ?? null,
+                    isRead: false,
+                } as ChatMessage,
+                { transaction },
+            );
 
             // Get sender info
             const sender = await User.findByPk(senderId, {
@@ -177,10 +180,16 @@ export class ChatService {
             // Create a notification for the recipients (anyone associated with the order except the sender)
             try {
                 // First, get recipients who should be notified
-                const recipients = await this.getOrderParticipantsExcept(orderId, senderId, transaction);
+                const recipients = await this.getOrderParticipantsExcept(
+                    orderId,
+                    senderId,
+                    transaction,
+                );
 
                 if (recipients.length > 0) {
-                    const senderName = sender ? `${sender.firstName} ${sender.lastName}` : senderType;
+                    const senderName = sender
+                        ? `${sender.firstName} ${sender.lastName}`
+                        : senderType;
 
                     // Create a notification for each recipient - generate UUIDs for each notification
                     const notifications = recipients.map(recipient => ({
@@ -210,8 +219,8 @@ export class ChatService {
     private static async getOrderParticipantsExcept(
         orderId: string,
         excludeUserId: string,
-        transaction?: Transaction
-    ): Promise<{id: string, type: string}[]> {
+        transaction?: Transaction,
+    ): Promise<{ id: string; type: string }[]> {
         try {
             // Fetch the order with customer and agent
             const orderData = await Order.findByPk(orderId, {
@@ -271,7 +280,7 @@ export class ChatService {
         });
 
         // Format messages for response
-        return messages.map((message) => ({
+        return messages.map(message => ({
             id: message.id,
             orderId: message.orderId,
             senderId: message.senderId,
@@ -293,7 +302,7 @@ export class ChatService {
                     senderId: { [Op.ne]: userId },
                     isRead: false,
                 },
-            }
+            },
         );
 
         // If messages were marked as read, also mark related notifications as read
@@ -314,10 +323,9 @@ export class ChatService {
                 for (const notification of notifications) {
                     // Type assertion to access id property
                     const notificationId = (notification as unknown as { id: string }).id;
-                    await NotificationService.updateSingleNotification(
-                        notificationId,
-                        { read: true }
-                    );
+                    await NotificationService.updateSingleNotification(notificationId, {
+                        read: true,
+                    });
                 }
             } catch (error) {
                 console.error('Error updating chat notification status:', error);
@@ -327,7 +335,10 @@ export class ChatService {
         return updatedCount;
     }
 
-    static async getUnreadMessageCount(userId: string, orderId?: string): Promise<{ total: number; byOrder?: Record<string, number> }> {
+    static async getUnreadMessageCount(
+        userId: string,
+        orderId?: string,
+    ): Promise<{ total: number; byOrder?: Record<string, number> }> {
         // If orderId is provided, just get the count for that order
         if (orderId) {
             const count = await ChatMessage.count({
@@ -347,7 +358,7 @@ export class ChatService {
             count: string | number;
         }
 
-        const unreadMessages = await ChatMessage.findAll({
+        const unreadMessages = (await ChatMessage.findAll({
             where: {
                 senderId: { [Op.ne]: userId },
                 isRead: false,
@@ -355,7 +366,7 @@ export class ChatService {
             attributes: ['orderId', [Database.fn('COUNT', Database.col('id')), 'count']],
             group: ['orderId'],
             raw: true,
-        }) as unknown as UnreadMessageCount[];
+        })) as unknown as UnreadMessageCount[];
 
         // Initialise the result object
         const byOrder: Record<string, number> = {};
@@ -363,7 +374,8 @@ export class ChatService {
 
         // Process the results
         unreadMessages.forEach((message: { orderId: string; count: string | number }) => {
-            const count = typeof message.count === 'string' ? parseInt(message.count, 10) : message.count;
+            const count =
+                typeof message.count === 'string' ? parseInt(message.count, 10) : message.count;
             byOrder[message.orderId] = count;
             total += count;
         });
@@ -382,7 +394,7 @@ export class ChatService {
                 JSON.stringify({
                     activatedAt: new Date().toISOString(),
                     activatedBy,
-                })
+                }),
             );
 
             // Set expiration separately
@@ -450,10 +462,9 @@ export class ChatService {
         }
     }
 
-
     static async notifyUserLeftChat(
         orderId: string,
-        user: { id: string, type: SenderType, name: string }
+        user: { id: string; type: SenderType; name: string },
     ): Promise<boolean> {
         try {
             // Get all participants except the user who left

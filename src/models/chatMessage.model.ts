@@ -1,5 +1,13 @@
 import {
-    Table, Column, Model, DataType, ForeignKey, BelongsTo, IsUUID, PrimaryKey, Default,
+    Table,
+    Column,
+    Model,
+    DataType,
+    ForeignKey,
+    BelongsTo,
+    IsUUID,
+    PrimaryKey,
+    Default,
 } from 'sequelize-typescript';
 import User, { userTypeValues } from './user.model';
 import Order from './order.model';
@@ -15,48 +23,48 @@ export default class ChatMessage extends Model<ChatMessage> {
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @IsUUID(4)
     @ForeignKey(() => Order)
     @Column
-        orderId: string;
+    orderId: string;
 
     @BelongsTo(() => Order, 'orderId')
-        order: Order;
+    order: Order;
 
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column
-        senderId: string;
+    senderId: string;
 
     @BelongsTo(() => User, 'senderId')
-        sender: User;
+    sender: User;
 
     @Column({
         type: DataType.ENUM('agent', 'customer', 'admin'),
         allowNull: false,
     })
-        senderType: SenderType;
+    senderType: SenderType;
 
     @Column({
         type: DataType.TEXT,
         allowNull: false,
     })
-        message: string;
+    message: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: true,
     })
-        imageUrl: string | null;
+    imageUrl: string | null;
 
     @Column({
         type: DataType.BOOLEAN,
         allowNull: false,
         defaultValue: false,
     })
-        isRead: boolean;
+    isRead: boolean;
 }
 
 export interface IChatMessage {

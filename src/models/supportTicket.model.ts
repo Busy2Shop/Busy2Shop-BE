@@ -1,7 +1,17 @@
 /* eslint-disable no-unused-vars */
 import {
-    Table, Column, Model, DataType, PrimaryKey, Default, CreatedAt, UpdatedAt, IsUUID,
-    AllowNull, ForeignKey, BelongsTo,
+    Table,
+    Column,
+    Model,
+    DataType,
+    PrimaryKey,
+    Default,
+    CreatedAt,
+    UpdatedAt,
+    IsUUID,
+    AllowNull,
+    ForeignKey,
+    BelongsTo,
 } from 'sequelize-typescript';
 
 import User from './user.model';
@@ -26,45 +36,48 @@ export default class SupportTicket extends Model<SupportTicket | ISupportTicket>
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({ type: DataType.STRING, allowNull: false })
-        email: string;
+    email: string;
 
     @Column({ type: DataType.STRING, allowNull: false })
-        name: string;
+    name: string;
 
     @Column({ type: DataType.TEXT, allowNull: false })
-        message: string;
+    message: string;
 
     @Column({ type: DataType.STRING, allowNull: false })
-        subject: string;
+    subject: string;
 
     @Column({ type: DataType.ENUM, values: Object.values(TicketType), allowNull: false })
-        type: TicketType;
+    type: TicketType;
 
-    @Column({ type: DataType.ENUM, values: Object.values(TicketState), defaultValue: TicketState.Pending })
-        state: TicketState;
+    @Column({
+        type: DataType.ENUM,
+        values: Object.values(TicketState),
+        defaultValue: TicketState.Pending,
+    })
+    state: TicketState;
 
     @Column({ type: DataType.STRING, allowNull: true })
-        adminKey: string;
-    
+    adminKey: string;
+
     @CreatedAt
-        createdAt: Date;
+    createdAt: Date;
 
     @UpdatedAt
-        updatedAt: Date;
-    
+    updatedAt: Date;
+
     // Optional foreign key to User model
     @IsUUID(4)
     @AllowNull(true)
     @ForeignKey(() => User)
     @Column
-        userId: string;
+    userId: string;
 
     @BelongsTo(() => User)
-        user: User;
-
+    user: User;
 }
 
 export interface ISupportTicket {
@@ -74,6 +87,6 @@ export interface ISupportTicket {
     subject: string;
     type: TicketType;
     state?: TicketState;
-    adminKey?: string;   
+    adminKey?: string;
     userId?: string | null;
 }

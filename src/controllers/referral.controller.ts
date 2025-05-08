@@ -5,7 +5,6 @@ import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { IReferral, ReferralStatus } from '../models/referral.model';
 
 export default class ReferralController {
-
     static async getAllReferrals(req: Request, res: Response) {
         const { page, size, refereeId, referredId, status } = req.query;
 

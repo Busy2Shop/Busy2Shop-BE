@@ -22,17 +22,17 @@ function checkAllConnected() {
 }
 
 // Handle connection errors
-redisClient.on('error', (error) => {
+redisClient.on('error', error => {
     connectionStatus.main = false;
     logger.error('Redis client error:', error);
 });
 
-redisPubClient.on('error', (error) => {
+redisPubClient.on('error', error => {
     connectionStatus.pub = false;
     logger.error('Redis pub client error:', error);
 });
 
-redisSubClient.on('error', (error) => {
+redisSubClient.on('error', error => {
     connectionStatus.sub = false;
     logger.error('Redis sub client error:', error);
 });

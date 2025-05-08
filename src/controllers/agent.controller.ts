@@ -29,7 +29,7 @@ export default class AgentController {
             const agents = await AgentService.findNearbyAgents(
                 Number(lat),
                 Number(lng),
-                queryParams.distance ? Number(queryParams.distance) : undefined
+                queryParams.distance ? Number(queryParams.distance) : undefined,
             );
 
             res.status(200).json({
@@ -134,8 +134,8 @@ export default class AgentController {
     }
 
     /**
- * Add a new preferred location for an agent
- */
+     * Add a new preferred location for an agent
+     */
     static async addLocation(req: AuthenticatedRequest, res: Response) {
         const { latitude, longitude, radius, name, address } = req.body;
         const location = await AgentService.addAgentLocation(req.user.id, {
@@ -187,11 +187,7 @@ export default class AgentController {
      */
     static async updateStatus(req: AuthenticatedRequest, res: Response) {
         const { status, isAcceptingOrders } = req.body;
-        const agent = await AgentService.updateAgentStatus(
-            req.user.id,
-            status,
-            isAcceptingOrders
-        );
+        const agent = await AgentService.updateAgentStatus(req.user.id, status, isAcceptingOrders);
         res.json(agent);
     }
 
@@ -211,7 +207,7 @@ export default class AgentController {
         const agents = await AgentService.findNearbyAgents(
             Number(latitude),
             Number(longitude),
-            maxRadius ? Number(maxRadius) : undefined
+            maxRadius ? Number(maxRadius) : undefined,
         );
         res.json(agents);
     }

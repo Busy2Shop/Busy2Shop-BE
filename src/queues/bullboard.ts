@@ -7,7 +7,7 @@ import { Queue } from 'bullmq';
 import { BULL_BOARD_USER, BULL_BOARD_PASS } from '../utils/constants';
 
 export interface QueueConfig {
-	[key: string]: Queue;
+    [key: string]: Queue;
 }
 
 export class BullBoardConfig {

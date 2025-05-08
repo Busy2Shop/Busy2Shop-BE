@@ -154,4 +154,3 @@ export interface InitializeTransactionResponseData {
     access_code: string;
     reference: string;
 }
-

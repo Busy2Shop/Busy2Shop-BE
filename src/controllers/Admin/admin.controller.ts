@@ -29,13 +29,17 @@ export default class AdminController {
             firstName = checkAdmin.name.split(' ')[0];
         }
 
-        const otpCode = await AuthUtil.generateCode({ type: 'adminlogin', identifier: emailToUse, expiry: 60 * 10 });
+        const otpCode = await AuthUtil.generateCode({
+            type: 'adminlogin',
+            identifier: emailToUse,
+            expiry: 60 * 10,
+        });
 
         const templateData = {
             otpCode,
             name: firstName,
         };
-        
+
         // Send email with OTP
         await emailService.send({
             email: emailToUse,
@@ -44,10 +48,12 @@ export default class AdminController {
             html: await new EmailTemplate().adminLogin({ otpCode, name: firstName }),
             isPostmarkTemplate: true,
             postMarkTemplateAlias: 'verify-email',
-            postmarkInfo: [{
-                postMarkTemplateData: templateData,
-                recipientEmail: email,
-            }],
+            postmarkInfo: [
+                {
+                    postMarkTemplateData: templateData,
+                    recipientEmail: email,
+                },
+            ],
         });
 
         res.status(200).json({
@@ -67,13 +73,20 @@ export default class AdminController {
             adminData = checkAdmin;
         }
 
-        const validCode = await AuthUtil.compareAdminCode({ identifier: emailToUse, tokenType: 'adminlogin', token: otpCode });
+        const validCode = await AuthUtil.compareAdminCode({
+            identifier: emailToUse,
+            tokenType: 'adminlogin',
+            token: otpCode,
+        });
         if (!validCode) {
             throw new BadRequestError('Invalid verification code');
         }
 
         // Generate admin token
-        const adminToken = await AuthUtil.generateAdminToken({ type: 'admin', identifier: emailToUse });
+        const adminToken = await AuthUtil.generateAdminToken({
+            type: 'admin',
+            identifier: emailToUse,
+        });
 
         res.status(200).json({
             status: 'success',
@@ -111,7 +124,6 @@ export default class AdminController {
             page,
             size,
         };
-
 
         if (q) queryParams.q = q as string;
 
@@ -155,20 +167,23 @@ export default class AdminController {
         }
 
         const user = await UserService.viewSingleUser(userId);
-        
+
         // Check if the user is already blocked
         if (user.settings.isBlocked) {
             throw new BadRequestError('User is already blocked');
         }
 
         // Update user settings to block the user
-        const blockMeta: IBlockMeta = user.settings.meta || { blockHistory: [], unblockHistory: [] };
-        
+        const blockMeta: IBlockMeta = user.settings.meta || {
+            blockHistory: [],
+            unblockHistory: [],
+        };
+
         // Add block entry to history
         const blockDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
         blockMeta.blockHistory.push({ [blockDate]: reason || 'Blocked by admin' });
 
-        await UserService.updateUserSettings(userId, { 
+        await UserService.updateUserSettings(userId, {
             isBlocked: true,
             meta: blockMeta,
         });
@@ -187,20 +202,23 @@ export default class AdminController {
         }
 
         const user = await UserService.viewSingleUser(userId);
-        
+
         // Check if the user is already unblocked
         if (!user.settings.isBlocked) {
             throw new BadRequestError('User is not blocked');
         }
 
         // Update user settings to unblock the user
-        const blockMeta: IBlockMeta = user.settings.meta || { blockHistory: [], unblockHistory: [] };
-        
+        const blockMeta: IBlockMeta = user.settings.meta || {
+            blockHistory: [],
+            unblockHistory: [],
+        };
+
         // Add unblock entry to history
         const unblockDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
         blockMeta.unblockHistory.push({ [unblockDate]: reason || 'Unblocked by admin' });
 
-        await UserService.updateUserSettings(userId, { 
+        await UserService.updateUserSettings(userId, {
             isBlocked: false,
             meta: blockMeta,
         });
@@ -219,7 +237,7 @@ export default class AdminController {
         }
 
         const user = await UserService.viewSingleUser(userId);
-        
+
         // Check if the user is already deactivated
         if (user.settings.isDeactivated) {
             throw new BadRequestError('User is already deactivated');
@@ -242,7 +260,7 @@ export default class AdminController {
         }
 
         const user = await UserService.viewSingleUser(userId);
-        
+
         // Check if the user is already activated
         if (!user.settings.isDeactivated) {
             throw new BadRequestError('User is already activated');

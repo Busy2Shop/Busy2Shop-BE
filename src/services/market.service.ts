@@ -41,7 +41,9 @@ export default class MarketService {
         return newMarket;
     }
 
-    static async viewMarkets(queryData?: IViewMarketsQuery): Promise<{ markets: Market[], count: number, totalPages?: number }> {
+    static async viewMarkets(
+        queryData?: IViewMarketsQuery,
+    ): Promise<{ markets: Market[]; count: number; totalPages?: number }> {
         const { page, size, q: query, categoryId, marketType, isPinned } = queryData || {};
 
         const where: Record<string | symbol, unknown> = {};
@@ -139,7 +141,7 @@ export default class MarketService {
                     model: Product,
                     as: 'products',
                     separate: true, // Lazy load to avoid large responses
-                    limit: 10,      // Only get the first few products
+                    limit: 10, // Only get the first few products
                 },
             ],
         });

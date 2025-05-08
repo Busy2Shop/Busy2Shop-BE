@@ -9,7 +9,6 @@ import Admin from '../models/admin.model';
 import AdminService from '../services/AdminServices/admin.service';
 import { ADMIN_EMAIL } from '../utils/constants';
 
-
 export interface AuthenticatedRequest extends Request {
     user: User;
 }
@@ -21,17 +20,27 @@ export interface AdminAuthenticatedRequest extends Request {
 }
 
 // eslint-disable-next-line no-unused-vars
-export type AuthenticatedAsyncController<T = AuthenticatedRequest> = (req: T, res: Response, next: NextFunction) => Promise<void>;
+export type AuthenticatedAsyncController<T = AuthenticatedRequest> = (
+    req: T,
+    res: Response,
+    next: NextFunction,
+) => Promise<void>;
 
 export function AuthenticatedController<T = AuthenticatedRequest>(
-    controller: AuthenticatedAsyncController<T>
+    controller: AuthenticatedAsyncController<T>,
 ) {
     return async (req: Request, res: Response, next: NextFunction) => {
         return controller(req as T, res, next);
     };
 }
 
-export const AdminAuthenticatedController = (controller: (req: AdminAuthenticatedRequest, res: Response, next: NextFunction) => Promise<void>) => {
+export const AdminAuthenticatedController = (
+    controller: (
+        req: AdminAuthenticatedRequest,
+        res: Response,
+        next: NextFunction,
+    ) => Promise<void>,
+) => {
     return async (req: Request, res: Response, next: NextFunction) => {
         try {
             await controller(req as AdminAuthenticatedRequest, res, next);
@@ -49,7 +58,10 @@ export const basicAuth = function (tokenType: AuthToken) {
 
         const jwtToken = authHeader.split(' ')[1];
         if (req.method === 'GET' && req.path === '/authtoken') {
-            const payload = (AuthUtil.verifyToken(jwtToken, tokenType)) as unknown as DecodedTokenData;
+            const payload = AuthUtil.verifyToken(
+                jwtToken,
+                tokenType,
+            ) as unknown as DecodedTokenData;
             const user: User | null = await UserService.viewSingleUser(payload.user.id);
             const accessToken = await AuthUtil.generateToken({ type: 'access', user });
 
@@ -90,7 +102,9 @@ export const basicAuth = function (tokenType: AuthToken) {
         }
 
         if (user.settings.isDeactivated) {
-            throw new ForbiddenError('Oops! This account has been deactivated by the owner. Please contact support');
+            throw new ForbiddenError(
+                'Oops! This account has been deactivated by the owner. Please contact support',
+            );
         }
 
         (req as AuthenticatedRequest).user = user;
@@ -137,7 +151,6 @@ export const adminAuth = function (tokenType: ENCRYPTEDTOKEN) {
 
         (req as AdminAuthenticatedRequest).email = emailToUse;
 
-
         logger.authorized('User authorized');
 
         next();
@@ -147,7 +160,11 @@ export const adminAuth = function (tokenType: ENCRYPTEDTOKEN) {
 // Add custom middleware to allow optional authentication
 export const optionalAuth = (req: Request, res: Response, next: NextFunction) => {
     // check if the request has an authorization header and it is not an iAdmin request
-    if (req.headers.authorization && !req.headers['x-iadmin-access'] && req.headers['x-iadmin-access'] !== 'true') {
+    if (
+        req.headers.authorization &&
+        !req.headers['x-iadmin-access'] &&
+        req.headers['x-iadmin-access'] !== 'true'
+    ) {
         return basicAuth('access')(req, res, next);
     }
     return next();

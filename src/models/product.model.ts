@@ -1,6 +1,13 @@
 import {
-    Table, Column, Model, DataType, ForeignKey, BelongsTo,
-    IsUUID, PrimaryKey, Default,
+    Table,
+    Column,
+    Model,
+    DataType,
+    ForeignKey,
+    BelongsTo,
+    IsUUID,
+    PrimaryKey,
+    Default,
     HasMany,
 } from 'sequelize-typescript';
 import Market from './market.model';
@@ -12,78 +19,78 @@ export default class Product extends Model<Product | IProduct> {
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: false,
     })
-        name: string;
+    name: string;
 
     @Column({
         type: DataType.TEXT,
         allowNull: true,
     })
-        description: string;
+    description: string;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: false,
     })
-        price: number;
+    price: number;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: true,
     })
-        discountPrice: number;
+    discountPrice: number;
 
     @Column({
         type: DataType.ARRAY(DataType.STRING),
         allowNull: true,
     })
-        images: string[];
+    images: string[];
 
     @Column({
         type: DataType.STRING,
         allowNull: true,
     })
-        barcode: string;
+    barcode: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: true,
     })
-        sku: string; // Stock Keeping Unit
+    sku: string; // Stock Keeping Unit
 
     @Column({
         type: DataType.INTEGER,
         defaultValue: 0,
     })
-        stockQuantity: number;
+    stockQuantity: number;
 
     @Column({
         type: DataType.JSONB,
         allowNull: true,
     })
-        attributes: object;
+    attributes: object;
 
     @Column({
         type: DataType.BOOLEAN,
         defaultValue: true,
     })
-        isAvailable: boolean;
+    isAvailable: boolean;
 
     @IsUUID(4)
     @ForeignKey(() => Market)
     @Column
-        marketId: string;
+    marketId: string;
 
     @BelongsTo(() => Market)
-        market: Market;
+    market: Market;
 
-    @HasMany(() => Review, 'productId')  // Change 'reviewerId' to 'productId'
-        reviews: Review[];
+    @HasMany(() => Review, 'productId') // Change 'reviewerId' to 'productId'
+    reviews: Review[];
 }
 
 export interface IProduct {

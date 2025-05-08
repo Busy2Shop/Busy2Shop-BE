@@ -15,7 +15,6 @@ interface IGroupedNotification extends INotification {
 }
 
 export default class NotificationService {
-
     // Adding this new method to handle email notifications
     static async sendEmailNotification(notification: INotification): Promise<void> {
         try {
@@ -34,7 +33,9 @@ export default class NotificationService {
             const user = await User.findByPk(notification.userId);
 
             if (!user?.email) {
-                logger.warn(`Cannot send email notification: No email found for user ${notification.userId}`);
+                logger.warn(
+                    `Cannot send email notification: No email found for user ${notification.userId}`,
+                );
                 return;
             }
 
@@ -48,23 +49,23 @@ export default class NotificationService {
             }
 
             // Send email notification
-            await emailService.sendChatNotificationEmail(
-                user.email,
-                {
-                    recipientName: `${user.firstName} ${user.lastName}`.trim(),
-                    senderName: actorName,
-                    message: notification.message,
-                    notificationType: notification.title,
-                    resourceId: notification.resource ?? '',
-                }
-            );
+            await emailService.sendChatNotificationEmail(user.email, {
+                recipientName: `${user.firstName} ${user.lastName}`.trim(),
+                senderName: actorName,
+                message: notification.message,
+                notificationType: notification.title,
+                resourceId: notification.resource ?? '',
+            });
         } catch (error) {
             logger.error('Error sending email notification:', error);
             // Don't throw the error, just log it
         }
     }
 
-    static async addNotification(notificationData: INotification, transaction?: Transaction): Promise<Notification> {
+    static async addNotification(
+        notificationData: INotification,
+        transaction?: Transaction,
+    ): Promise<Notification> {
         const [notification, created] = await Notification.findOrCreate({
             where: {
                 title: notificationData.title,
@@ -83,7 +84,10 @@ export default class NotificationService {
             try {
                 const userIds = [notificationData.userId];
 
-                const result = await NotificationUtil.sendNotificationToUser(userIds, notificationData);
+                const result = await NotificationUtil.sendNotificationToUser(
+                    userIds,
+                    notificationData,
+                );
 
                 if (result === 'success') {
                     console.log('Push notification sent successfully');
@@ -101,7 +105,10 @@ export default class NotificationService {
         return notification;
     }
 
-    static async addNotifications(notificationsData: INotification[], transaction?: Transaction): Promise<Notification[]> {
+    static async addNotifications(
+        notificationsData: INotification[],
+        transaction?: Transaction,
+    ): Promise<Notification[]> {
         // Find existing notifications
         const whereClauses = notificationsData.map(({ title, userId, resource }) => ({
             title,
@@ -163,7 +170,7 @@ export default class NotificationService {
 
                         return NotificationUtil.sendNotificationToUser(
                             [userId],
-                            latestNotification
+                            latestNotification,
                         );
                     });
 
@@ -188,14 +195,18 @@ export default class NotificationService {
         return [...existingNotifications, ...newNotifications];
     }
 
-    static async viewNotifications(userId: string, queryData?: IPaginationQuery, transaction?: Transaction): Promise<IGroupedNotification[]> {
+    static async viewNotifications(
+        userId: string,
+        queryData?: IPaginationQuery,
+        transaction?: Transaction,
+    ): Promise<IGroupedNotification[]> {
         const { page, size } = queryData as IPaginationQuery;
 
         // Get pagination parameters
         const { limit, offset } = Pagination.getPagination({ page, size } as IPaging);
 
         // Step 1: Get the latest notification IDs and their counts using Sequelize aggregation
-        const subQueryResults = await Notification.findAll({
+        const subQueryResults = (await Notification.findAll({
             attributes: [
                 'title',
                 'resource',
@@ -209,7 +220,7 @@ export default class NotificationService {
             offset: offset ?? undefined,
             transaction,
             raw: true, // Ensures we get raw data
-        }) as unknown as IGroupedNotification[];
+        })) as unknown as IGroupedNotification[];
 
         // Ensure that we have results
         if (!subQueryResults || subQueryResults.length === 0) {
@@ -230,28 +241,44 @@ export default class NotificationService {
             transaction,
         });
         // Step 3: Map the notifications to include the count and ensure only the most recent notification is included
-        const groupedNotificationsMap: { [key: string]: IGroupedNotification } = latestNotifications.reduce((acc, notification) => {
-            const key = `${notification.title}-${notification.resource}`;
-            const countData = subQueryResults.find(result => result.latest_id === notification.id);
+        const groupedNotificationsMap: { [key: string]: IGroupedNotification } =
+            latestNotifications.reduce(
+                (acc, notification) => {
+                    const key = `${notification.title}-${notification.resource}`;
+                    const countData = subQueryResults.find(
+                        result => result.latest_id === notification.id,
+                    );
 
-            if (!acc[key] || (new Date(notification.createdAt) > new Date(acc[key].latest_date))) {
-                acc[key] = {
-                    ...notification.get({ plain: true }),
-                    count: countData ? Number(countData.count) : 1,
-                    latest_id: notification.id,
-                    latest_date: notification.createdAt,
-                };
-            }
+                    if (
+                        !acc[key] ||
+                        new Date(notification.createdAt) > new Date(acc[key].latest_date)
+                    ) {
+                        acc[key] = {
+                            ...notification.get({ plain: true }),
+                            count: countData ? Number(countData.count) : 1,
+                            latest_id: notification.id,
+                            latest_date: notification.createdAt,
+                        };
+                    }
 
-            return acc;
-        }, {} as { [key: string]: IGroupedNotification });
+                    return acc;
+                },
+                {} as { [key: string]: IGroupedNotification },
+            );
 
         // Convert the map to an array
         return Object.values(groupedNotificationsMap);
     }
 
-    static async viewNotificationByEntityId(entityId: string, page?: number, limit?: number): Promise<Notification[]> {
-        const query = page && limit ? { where: { entityId }, limit, offset: (page - 1) * limit } : { where: { entityId } };
+    static async viewNotificationByEntityId(
+        entityId: string,
+        page?: number,
+        limit?: number,
+    ): Promise<Notification[]> {
+        const query =
+            page && limit
+                ? { where: { entityId }, limit, offset: (page - 1) * limit }
+                : { where: { entityId } };
         return await Notification.findAll(query);
     }
 
@@ -262,7 +289,10 @@ export default class NotificationService {
         return notification;
     }
 
-    static async updateSingleNotification(id: string, data: Partial<INotification>): Promise<Notification | null> {
+    static async updateSingleNotification(
+        id: string,
+        data: Partial<INotification>,
+    ): Promise<Notification | null> {
         const notification = await this.viewSingleNotificationById(id);
         if (!notification) return null;
 
@@ -274,20 +304,33 @@ export default class NotificationService {
     static async markAllNotificationsAsRead(userId: string): Promise<number> {
         const [updatedCount] = await Notification.update(
             { read: true },
-            { where: { userId, read: false } }
+            { where: { userId, read: false } },
         );
         return updatedCount;
     }
 
     static async getUnreadNotifications(userId: string): Promise<Notification[]> {
-        return await Notification.findAll({ where:{ userId, read: false } });
+        return await Notification.findAll({ where: { userId, read: false } });
     }
 
-    static async getNotificationStats(userId: string, transaction?: Transaction): Promise<{ total: number, read: number, unread: number }> {
+    static async getNotificationStats(
+        userId: string,
+        transaction?: Transaction,
+    ): Promise<{ total: number; read: number; unread: number }> {
         const stats = await Notification.findAll({
             attributes: [
-                [Sequelize.literal('COUNT(DISTINCT CONCAT("title", "userId", "resource", "heading", "message"))'), 'total'],
-                [Sequelize.literal('COUNT(DISTINCT CASE WHEN "read" = false THEN CONCAT("title", "userId", "resource", "heading", "message") END)'), 'unread'],
+                [
+                    Sequelize.literal(
+                        'COUNT(DISTINCT CONCAT("title", "userId", "resource", "heading", "message"))',
+                    ),
+                    'total',
+                ],
+                [
+                    Sequelize.literal(
+                        'COUNT(DISTINCT CASE WHEN "read" = false THEN CONCAT("title", "userId", "resource", "heading", "message") END)',
+                    ),
+                    'unread',
+                ],
             ],
             where: { userId },
             transaction,
@@ -310,13 +353,13 @@ export default class NotificationService {
         await Notification.destroy({
             where: {
                 createdAt: {
-                    [Op.lt]: Sequelize.literal('CURRENT_TIMESTAMP - INTERVAL \'30 days\''),
+                    [Op.lt]: Sequelize.literal("CURRENT_TIMESTAMP - INTERVAL '30 days'"),
                 },
             },
         });
 
         // Step 2: Find and delete duplicate notifications, keeping only the latest
-        const duplicates = await Notification.findAll({
+        const duplicates = (await Notification.findAll({
             attributes: [
                 'title',
                 'message',
@@ -329,7 +372,7 @@ export default class NotificationService {
             group: ['title', 'message', 'heading', 'resource', 'userId'],
             having: Sequelize.literal('COUNT(id) > 1'),
             raw: true,
-        }) as unknown as IGroupedNotification[];
+        })) as unknown as IGroupedNotification[];
 
         let deleteCount = 0;
 
@@ -368,5 +411,4 @@ export default class NotificationService {
 
         return deleteCount;
     }
-
 }

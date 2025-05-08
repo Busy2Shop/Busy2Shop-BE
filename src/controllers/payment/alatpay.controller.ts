@@ -103,20 +103,21 @@ export default class AlatPayController {
 
             // Log webhook receipt
             logger.info('Received ALATPay webhook', {
-                payloadSummary: payload?.Value?.Data ? {
-                    transactionId: payload.Value.Data.Id,
-                    status: payload.Value.Data.Status,
-                    amount: payload.Value.Data.Amount,
-                    orderId: payload.Value.Data.OrderId
-                } : 'Invalid payload structure'
+                payloadSummary: payload?.Value?.Data
+                    ? {
+                          transactionId: payload.Value.Data.Id,
+                          status: payload.Value.Data.Status,
+                          amount: payload.Value.Data.Amount,
+                          orderId: payload.Value.Data.OrderId,
+                      }
+                    : 'Invalid payload structure',
             });
 
             // Process the webhook asynchronously
             // We don't want to keep ALATPay waiting for a response
-            AlatPayService.processWebhook({ payload })
-                .catch(error => {
-                    logger.error('Error processing webhook:', error);
-                });
+            AlatPayService.processWebhook({ payload }).catch(error => {
+                logger.error('Error processing webhook:', error);
+            });
 
             // Always respond with 200 to acknowledge receipt
             // This prevents ALATPay from retrying the webhook
@@ -160,8 +161,12 @@ export default class AlatPayController {
             }
 
             // Calculate total amount
-            const totalAmount = shoppingList.estimatedTotal ||
-                shoppingList.items.reduce((acc, item) => acc + (item.estimatedPrice || 0) * item.quantity, 0);
+            const totalAmount =
+                shoppingList.estimatedTotal ||
+                shoppingList.items.reduce(
+                    (acc, item) => acc + (item.estimatedPrice || 0) * item.quantity,
+                    0,
+                );
 
             // Generate virtual account
             const response = await AlatPayService.generateVirtualAccount({
@@ -235,18 +240,20 @@ export default class AlatPayController {
      */
     static async reconcileTransactions(req: AuthenticatedRequest, res: Response) {
         try {
-            const startDate = req.query.startDate ? new Date(req.query.startDate as string) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Default to 7 days ago
+            const startDate = req.query.startDate
+                ? new Date(req.query.startDate as string)
+                : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Default to 7 days ago
             const endDate = req.query.endDate ? new Date(req.query.endDate as string) : new Date(); // Default to now
 
             const results = await AlatPayService.reconcileTransactions({
                 startDate,
-                endDate
+                endDate,
             });
 
             res.status(200).json({
                 status: 'success',
                 message: 'Transaction reconciliation completed',
-                data: results
+                data: results,
             });
         } catch (error) {
             logger.error('Error reconciling transactions:', error);
@@ -265,7 +272,7 @@ export default class AlatPayController {
             res.status(200).json({
                 status: 'success',
                 message: 'Expired transactions check completed',
-                data: results
+                data: results,
             });
         } catch (error) {
             logger.error('Error checking expired transactions:', error);

@@ -6,11 +6,16 @@ import { CustomAPIError } from '../utils/customErrors';
 import { logger } from '../utils/logger';
 
 class Middlewares {
-    static errorHandler(err: Error | any, req: Request, res: Response, next: NextFunction ): Response {
+    static errorHandler(
+        err: Error | any,
+        req: Request,
+        res: Response,
+        next: NextFunction,
+    ): Response {
         logger.error('Error handler');
         logger.error(err);
         console.log(err);
-        
+
         const customError = {
             // set default
             status: 'error',
@@ -33,7 +38,7 @@ class Middlewares {
         }
         if (err.code && err.code === 11000) {
             customError.message = `Duplicate value entered for ${Object.keys(
-                err.keyValue
+                err.keyValue,
             )} field, please choose another value`;
             customError.statusCode = 400;
         }
@@ -65,10 +70,11 @@ class Middlewares {
 
         // end of block for dev-related errors. //
 
-
         // if the error is not one of the specific types above, return a generic internal server error
         if (customError.statusCode === 500) {
-            return res.status(500).json({ status: 'error', error: true, message: 'Ops, Something went wrong' });
+            return res
+                .status(500)
+                .json({ status: 'error', error: true, message: 'Ops, Something went wrong' });
         }
 
         return res.status(customError.statusCode).json({
@@ -76,7 +82,6 @@ class Middlewares {
             error: customError.error,
             message: customError.message,
         });
-        
     }
 
     static notFound(req: Request, res: Response): Response {

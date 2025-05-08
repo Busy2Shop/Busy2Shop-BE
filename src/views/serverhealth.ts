@@ -6,7 +6,13 @@ interface ServerHealth {
     client: string;
     admin: string;
 }
-export const serverHealth = ({ serverStatus, message, documentation, client, admin }: ServerHealth) => {
+export const serverHealth = ({
+    serverStatus,
+    message,
+    documentation,
+    client,
+    admin,
+}: ServerHealth) => {
     return `
 <!DOCTYPE html >
 <html lang="en">
@@ -67,18 +73,18 @@ export const serverHealth = ({ serverStatus, message, documentation, client, adm
 </head>
 <body>
     <header>
-        <img class="logo" src=${ LOGO } alt="logo">
+        <img class="logo" src=${LOGO} alt="logo">
         <h1>Server Health Check</h1>
     </header>
 
     <div class="content">
         <p class="status">Status: ${serverStatus}</p>
-        <p class="message">${ message }</p>
+        <p class="message">${message}</p>
 
         <div class="button-container">
-            <a href=${ documentation } class="button">Documentation</a>
-            <a href=${ client } class="button">Client Side Live Website</a>
-            <a href=${ admin } class="button">Admin Dashboard</a>
+            <a href=${documentation} class="button">Documentation</a>
+            <a href=${client} class="button">Client Side Live Website</a>
+            <a href=${admin} class="button">Admin Dashboard</a>
         </div>
     </div>
 </body>

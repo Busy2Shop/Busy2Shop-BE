@@ -16,7 +16,6 @@ export async function getServerHealth(req: Request, res: Response): Promise<void
     try {
         const html = serverHealth(data);
         res.send(html);
-
     } catch (error) {
         console.error(error);
         handleError(res);

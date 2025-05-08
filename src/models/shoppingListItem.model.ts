@@ -1,11 +1,16 @@
 import {
-    Table, Column, Model, DataType, ForeignKey, BelongsTo, IsUUID, PrimaryKey, Default,
+    Table,
+    Column,
+    Model,
+    DataType,
+    ForeignKey,
+    BelongsTo,
+    IsUUID,
+    PrimaryKey,
+    Default,
 } from 'sequelize-typescript';
 import Product from './product.model';
 import ShoppingList from './shoppingList.model';
-
-
-
 
 @Table
 export default class ShoppingListItem extends Model<ShoppingListItem | IShoppingListItem> {
@@ -13,61 +18,61 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: false,
     })
-        name: string;
+    name: string;
 
     @Column({
         type: DataType.INTEGER,
         defaultValue: 1,
     })
-        quantity: number;
+    quantity: number;
 
     @Column({
         type: DataType.STRING,
         allowNull: true,
     })
-        unit: string; // e.g., kg, pcs, etc.
+    unit: string; // e.g., kg, pcs, etc.
 
     @Column({
         type: DataType.TEXT,
         allowNull: true,
     })
-        notes: string;
+    notes: string;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: true, // Null for local markets or when the price is unknown
     })
-        estimatedPrice: number;
+    estimatedPrice: number;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: true, // Actual price added by agent when purchased
     })
-        actualPrice: number;
+    actualPrice: number;
 
     @IsUUID(4)
     @ForeignKey(() => ShoppingList)
     @Column
-        shoppingListId: string;
+    shoppingListId: string;
 
     @BelongsTo(() => ShoppingList)
-        shoppingList: ShoppingList;
+    shoppingList: ShoppingList;
 
     @IsUUID(4)
     @ForeignKey(() => Product)
     @Column({
         allowNull: true, // Can be null if the item isn't linked to a specific product
     })
-        productId: string;
+    productId: string;
 
     @BelongsTo(() => Product)
-        product: Product;
+    product: Product;
 }
 
 export interface IShoppingListItem {

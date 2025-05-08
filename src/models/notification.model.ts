@@ -6,7 +6,8 @@ import {
     DataType,
     IsUUID,
     PrimaryKey,
-    BelongsTo, Default,
+    BelongsTo,
+    Default,
     ForeignKey,
 } from 'sequelize-typescript';
 import User from './user.model';
@@ -18,47 +19,45 @@ export default class Notification extends Model<INotification | Notification> {
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({ type: DataType.STRING, values: Object.values(NotificationTypes), allowNull: false })
-        title: NotificationTypes;
+    title: NotificationTypes;
 
     @Column({ type: DataType.TEXT, allowNull: false })
-        message: string;
+    message: string;
 
     @Column({ type: DataType.STRING, allowNull: false })
-        heading: string;
+    heading: string;
 
     @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
-        read: boolean;
+    read: boolean;
 
     @Column({ type: DataType.STRING, allowNull: true })
-        resource: string;
+    resource: string;
 
     // @Column({ type: DataType.STRING, allowNull: true })
     //     pointer: string;
-    
+
     @Column({ type: DataType.STRING, allowNull: true })
-        icon: string;
-    
+    icon: string;
+
     @ForeignKey(() => User)
     @IsUUID(4)
     @Column({ type: DataType.STRING, allowNull: false })
-        userId: string;
+    userId: string;
 
     @BelongsTo(() => User, 'userId')
-        user: User;
+    user: User;
 
     @ForeignKey(() => User)
     @IsUUID(4)
     @Column({ type: DataType.STRING, allowNull: true })
-        actorId: string;
+    actorId: string;
 
     @BelongsTo(() => User, 'actorId')
-        actor: User;
-
+    actor: User;
 }
-
 
 export interface INotification {
     id: string;
@@ -70,5 +69,5 @@ export interface INotification {
     resource?: string;
     // pointer?: string;
     userId: string;
-    actorId?: string; 
+    actorId?: string;
 }

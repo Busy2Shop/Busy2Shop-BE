@@ -1,7 +1,14 @@
 import {
     BeforeSave,
-    BelongsTo, Column, DataType, Default, ForeignKey,
-    IsUUID, Model, PrimaryKey, Table,
+    BelongsTo,
+    Column,
+    DataType,
+    Default,
+    ForeignKey,
+    IsUUID,
+    Model,
+    PrimaryKey,
+    Table,
 } from 'sequelize-typescript';
 import User from './user.model';
 import Market from './market.model';
@@ -14,10 +21,10 @@ export default class Review extends Model<Review | IReview> {
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({ type: DataType.TEXT })
-        comment: string;
+    comment: string;
 
     @Column({
         type: DataType.INTEGER,
@@ -26,53 +33,56 @@ export default class Review extends Model<Review | IReview> {
             max: 5,
         },
     })
-        rating: number;
+    rating: number;
 
     @Column({
         type: DataType.ARRAY(DataType.STRING),
         allowNull: true,
     })
-        images: string[];
+    images: string[];
 
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column
-        reviewerId: string;
+    reviewerId: string;
 
     @BelongsTo(() => User, 'reviewerId')
-        reviewer: User;
+    reviewer: User;
 
     @IsUUID(4)
     @ForeignKey(() => Market)
     @Column({
         allowNull: true, // Can be null if this is a product review
     })
-        marketId: string;
+    marketId: string;
 
     @BelongsTo(() => Market)
-        market: Market;
+    market: Market;
 
     @IsUUID(4)
     @ForeignKey(() => Product)
     @Column({
         allowNull: true, // Can be null if this is a market review
     })
-        productId: string;
+    productId: string;
 
     @BelongsTo(() => Product)
-        product: Product;
-    
+    product: Product;
+
     // Before save check if the market or product id is present and set the other to null
     @BeforeSave
     static async checkMasterclassOrMentorshipId(instance: Review) {
         if (instance.marketId && instance.productId) {
-            throw new BadRequestError('Review Record cannot be associated to both a market and a product.');
+            throw new BadRequestError(
+                'Review Record cannot be associated to both a market and a product.',
+            );
         }
         if (!instance.marketId && !instance.productId) {
-            throw new BadRequestError('A Review Record must be associated to either a market or a product.');
+            throw new BadRequestError(
+                'A Review Record must be associated to either a market or a product.',
+            );
         }
     }
-    
 }
 
 export interface IReview {

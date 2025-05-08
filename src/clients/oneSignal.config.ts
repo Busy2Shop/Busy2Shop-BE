@@ -1,8 +1,11 @@
 import { logger } from '../utils/logger';
-import { ONESIGNAL_USER_AUTH_KEY, ONESIGNAL_REST_API_KEY, ONESIGNAL_APP_ID } from '../utils/constants';
+import {
+    ONESIGNAL_USER_AUTH_KEY,
+    ONESIGNAL_REST_API_KEY,
+    ONESIGNAL_APP_ID,
+} from '../utils/constants';
 import { INotification } from '../models/notification.model';
 import * as OneSignal from '@onesignal/node-onesignal';
-
 
 // export class NotificationUtil {
 //     private static client = new OneSignal.DefaultApi(OneSignal.createConfiguration({
@@ -45,21 +48,25 @@ import * as OneSignal from '@onesignal/node-onesignal';
 
 // export default NotificationUtil;
 
-
 class NotificationUtil {
-    private static client = new OneSignal.DefaultApi(OneSignal.createConfiguration({
-        restApiKey: ONESIGNAL_REST_API_KEY,
-        userAuthKey: ONESIGNAL_USER_AUTH_KEY,
-    }));
+    private static client = new OneSignal.DefaultApi(
+        OneSignal.createConfiguration({
+            restApiKey: ONESIGNAL_REST_API_KEY,
+            userAuthKey: ONESIGNAL_USER_AUTH_KEY,
+        }),
+    );
 
-    static async sendNotificationToUser(userIds: string[], notification: INotification): Promise<'success' | null> {
+    static async sendNotificationToUser(
+        userIds: string[],
+        notification: INotification,
+    ): Promise<'success' | null> {
         console.log('push notification', notification);
         // userids is the array of external_ids of the users and is limited to 2000 entries per request
         try {
             const oneSignalNotification = new OneSignal.Notification();
             oneSignalNotification.contents = { en: notification.message };
             oneSignalNotification.headings = { en: notification.heading || notification.title };
-            oneSignalNotification.include_aliases = { 'external_id': userIds };
+            oneSignalNotification.include_aliases = { external_id: userIds };
             // For email only
             oneSignalNotification.target_channel = 'email';
             oneSignalNotification.app_id = ONESIGNAL_APP_ID;
@@ -68,7 +75,9 @@ class NotificationUtil {
             await this.client.createNotification(oneSignalNotification);
             return 'success';
         } catch (error: unknown) {
-            logger.error('Error sending notification to users', { meta: { error: (error as Error).stack } });
+            logger.error('Error sending notification to users', {
+                meta: { error: (error as Error).stack },
+            });
             return null;
         }
     }

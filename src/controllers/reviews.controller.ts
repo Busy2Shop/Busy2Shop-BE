@@ -11,13 +11,15 @@ export default class ReviewController {
         const { comment, rating } = req.body;
 
         // More comprehensive handling of empty/null values
-        const productId = !req.body.productId || req.body.productId === '' || req.body.productId === 'null'
-            ? null
-            : req.body.productId;
+        const productId =
+            !req.body.productId || req.body.productId === '' || req.body.productId === 'null'
+                ? null
+                : req.body.productId;
 
-        const marketId = !req.body.marketId || req.body.marketId === '' || req.body.marketId === 'null'
-            ? null
-            : req.body.marketId;
+        const marketId =
+            !req.body.marketId || req.body.marketId === '' || req.body.marketId === 'null'
+                ? null
+                : req.body.marketId;
 
         // Replace the values in the request or use these variables directly
         req.body.productId = productId;
@@ -36,12 +38,16 @@ export default class ReviewController {
         if (marketId) {
             const canReview = await ReviewService.canUserReviewMarket(req.user.id, marketId);
             if (!canReview) {
-                throw new BadRequestError('You are not eligible to review this market. You must have completed an order from this market and not reviewed it yet.');
+                throw new BadRequestError(
+                    'You are not eligible to review this market. You must have completed an order from this market and not reviewed it yet.',
+                );
             }
         } else if (productId) {
             const canReview = await ReviewService.canUserReviewProduct(req.user.id, productId);
             if (!canReview) {
-                throw new BadRequestError('You are not eligible to review this product. You must have completed an order from this product\'s market and not reviewed it yet.');
+                throw new BadRequestError(
+                    "You are not eligible to review this product. You must have completed an order from this product's market and not reviewed it yet.",
+                );
             }
         }
 

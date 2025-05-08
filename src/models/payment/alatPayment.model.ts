@@ -1,7 +1,17 @@
 /* eslint-disable no-unused-vars */
 import {
-    Table, Column, Model, DataType, ForeignKey, BelongsTo, IsUUID, PrimaryKey, Default,
-    CreatedAt, UpdatedAt, Index
+    Table,
+    Column,
+    Model,
+    DataType,
+    ForeignKey,
+    BelongsTo,
+    IsUUID,
+    PrimaryKey,
+    Default,
+    CreatedAt,
+    UpdatedAt,
+    Index,
 } from 'sequelize-typescript';
 import User from '../user.model';
 import Order from '../order.model';
@@ -11,7 +21,7 @@ export enum AlatPayStatus {
     PENDING = 'pending',
     COMPLETED = 'completed',
     FAILED = 'failed',
-    EXPIRED = 'expired'
+    EXPIRED = 'expired',
 }
 
 @Table({
@@ -21,7 +31,7 @@ export enum AlatPayStatus {
         { fields: ['user_id'] },
         { fields: ['order_id'] },
         { fields: ['status'] },
-    ]
+    ],
 })
 export default class AlatPayment extends Model<AlatPayment | IAlatPayment> {
     @IsUUID(4)
@@ -34,7 +44,7 @@ export default class AlatPayment extends Model<AlatPayment | IAlatPayment> {
         type: DataType.STRING,
         allowNull: false,
         unique: true,
-        field: 'transaction_id'
+        field: 'transaction_id',
     })
     transactionId: string;
 
@@ -54,14 +64,14 @@ export default class AlatPayment extends Model<AlatPayment | IAlatPayment> {
     @Column({
         type: DataType.STRING,
         allowNull: false,
-        field: 'virtual_bank_account_number'
+        field: 'virtual_bank_account_number',
     })
     virtualBankAccountNumber: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: false,
-        field: 'virtual_bank_code'
+        field: 'virtual_bank_code',
     })
     virtualBankCode: string;
 
@@ -75,14 +85,14 @@ export default class AlatPayment extends Model<AlatPayment | IAlatPayment> {
     @Column({
         type: DataType.DATE,
         allowNull: false,
-        field: 'expired_at'
+        field: 'expired_at',
     })
     expiredAt: Date;
 
     @Column({
         type: DataType.DATE,
         allowNull: true,
-        field: 'paid_at'
+        field: 'paid_at',
     })
     paidAt: Date;
 
@@ -103,7 +113,7 @@ export default class AlatPayment extends Model<AlatPayment | IAlatPayment> {
     @ForeignKey(() => User)
     @Column({
         allowNull: false,
-        field: 'user_id'
+        field: 'user_id',
     })
     userId: string;
 
@@ -111,7 +121,7 @@ export default class AlatPayment extends Model<AlatPayment | IAlatPayment> {
     @ForeignKey(() => Order)
     @Column({
         allowNull: true,
-        field: 'order_id'
+        field: 'order_id',
     })
     orderId: string;
 
@@ -119,20 +129,20 @@ export default class AlatPayment extends Model<AlatPayment | IAlatPayment> {
     @ForeignKey(() => ShoppingList)
     @Column({
         allowNull: true,
-        field: 'shopping_list_id'
+        field: 'shopping_list_id',
     })
     shoppingListId: string;
 
     // Timestamps
     @CreatedAt
     @Column({
-        field: 'created_at'
+        field: 'created_at',
     })
     createdAt: Date;
 
     @UpdatedAt
     @Column({
-        field: 'updated_at'
+        field: 'updated_at',
     })
     updatedAt: Date;
 

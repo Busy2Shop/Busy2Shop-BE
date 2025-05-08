@@ -18,7 +18,6 @@ export interface IViewShoppingListsQuery {
 }
 
 export default class ShoppingListService {
-
     /**
      * Executes a paginated query for shopping lists and formats the results
      *
@@ -28,8 +27,8 @@ export default class ShoppingListService {
      */
     private static async executePaginatedListQuery(
         queryOptions: FindAndCountOptions<ShoppingList>,
-        queryData?: IViewShoppingListsQuery
-    ): Promise<{ lists: ShoppingList[], count: number, totalPages?: number }> {
+        queryData?: IViewShoppingListsQuery,
+    ): Promise<{ lists: ShoppingList[]; count: number; totalPages?: number }> {
         const { page, size } = queryData || {};
 
         // Handle pagination
@@ -50,7 +49,10 @@ export default class ShoppingListService {
         }
     }
 
-    static async createShoppingList(listData: IShoppingList, items: IShoppingListItem[] = []): Promise<ShoppingList> {
+    static async createShoppingList(
+        listData: IShoppingList,
+        items: IShoppingListItem[] = [],
+    ): Promise<ShoppingList> {
         // Validate required fields
         if (!listData.name || !listData.customerId) {
             throw new BadRequestError('Shopping list name and user ID are required');
@@ -64,15 +66,18 @@ export default class ShoppingListService {
             // Add items if provided
             if (items.length > 0) {
                 for (const item of items) {
-                    await ShoppingListItem.create({
-                        ...item,
-                        shoppingListId: newList.id,
-                    }, { transaction });
+                    await ShoppingListItem.create(
+                        {
+                            ...item,
+                            shoppingListId: newList.id,
+                        },
+                        { transaction },
+                    );
                 }
             }
 
             // Return the newly created list with its items
-            return await ShoppingList.findByPk(newList.id, {
+            return (await ShoppingList.findByPk(newList.id, {
                 include: [
                     {
                         model: ShoppingListItem,
@@ -80,11 +85,14 @@ export default class ShoppingListService {
                     },
                 ],
                 transaction,
-            }) as ShoppingList;
+            })) as ShoppingList;
         });
     }
 
-    static async viewUserShoppingLists(customerId: string, queryData?: IViewShoppingListsQuery): Promise<{ lists: ShoppingList[], count: number, totalPages?: number }> {
+    static async viewUserShoppingLists(
+        customerId: string,
+        queryData?: IViewShoppingListsQuery,
+    ): Promise<{ lists: ShoppingList[]; count: number; totalPages?: number }> {
         const { status, marketId } = queryData || {};
 
         const where: Record<string, unknown> = { customerId };
@@ -124,10 +132,12 @@ export default class ShoppingListService {
 
         // Handle pagination
         return this.executePaginatedListQuery(queryOptions, queryData);
-
     }
 
-    static async viewAgentAssignedLists(agentId: string, queryData?: IViewShoppingListsQuery): Promise<{ lists: ShoppingList[], count: number, totalPages?: number }> {
+    static async viewAgentAssignedLists(
+        agentId: string,
+        queryData?: IViewShoppingListsQuery,
+    ): Promise<{ lists: ShoppingList[]; count: number; totalPages?: number }> {
         const { status } = queryData || {};
 
         const where: Record<string, unknown> = {
@@ -205,7 +215,11 @@ export default class ShoppingListService {
         return list;
     }
 
-    static async updateShoppingList(id: string, customerId: string, updateData: Partial<IShoppingList>): Promise<ShoppingList> {
+    static async updateShoppingList(
+        id: string,
+        customerId: string,
+        updateData: Partial<IShoppingList>,
+    ): Promise<ShoppingList> {
         const list = await this.getShoppingList(id);
 
         // Check if the user is the owner of the list
@@ -248,7 +262,11 @@ export default class ShoppingListService {
         });
     }
 
-    static async addItemToList(listId: string, customerId: string, itemData: IShoppingListItem): Promise<ShoppingListItem> {
+    static async addItemToList(
+        listId: string,
+        customerId: string,
+        itemData: IShoppingListItem,
+    ): Promise<ShoppingListItem> {
         const list = await this.getShoppingList(listId);
 
         // Check if the user is the owner of the list
@@ -283,7 +301,12 @@ export default class ShoppingListService {
         return newItem;
     }
 
-    static async updateListItem(listId: string, itemId: string, customerId: string, updateData: Partial<IShoppingListItem>): Promise<ShoppingListItem> {
+    static async updateListItem(
+        listId: string,
+        itemId: string,
+        customerId: string,
+        updateData: Partial<IShoppingListItem>,
+    ): Promise<ShoppingListItem> {
         const list = await this.getShoppingList(listId);
 
         // Check if the user is the owner of the list
@@ -315,7 +338,11 @@ export default class ShoppingListService {
         return item;
     }
 
-    static async removeItemFromList(listId: string, itemId: string, customerId: string): Promise<void> {
+    static async removeItemFromList(
+        listId: string,
+        itemId: string,
+        customerId: string,
+    ): Promise<void> {
         const list = await this.getShoppingList(listId);
 
         // Check if the user is the owner of the list
@@ -359,10 +386,7 @@ export default class ShoppingListService {
         }
 
         // Update the shopping list
-        await ShoppingList.update(
-            { estimatedTotal },
-            { where: { id: listId } }
-        );
+        await ShoppingList.update({ estimatedTotal }, { where: { id: listId } });
     }
 
     static async submitShoppingList(id: string, customerId: string): Promise<ShoppingList> {
@@ -398,12 +422,18 @@ export default class ShoppingListService {
         return await this.getShoppingList(id);
     }
 
-    static async createOrderFromShoppingList(listId: string, customerId: string, orderData: Partial<IOrder>): Promise<Order> {
+    static async createOrderFromShoppingList(
+        listId: string,
+        customerId: string,
+        orderData: Partial<IOrder>,
+    ): Promise<Order> {
         const list = await this.getShoppingList(listId);
 
         // Check if the user is the owner of the list
         if (list.customerId !== customerId) {
-            throw new ForbiddenError('You are not authorized to create an order from this shopping list');
+            throw new ForbiddenError(
+                'You are not authorized to create an order from this shopping list',
+            );
         }
 
         // Can only create orders from pending lists
@@ -446,10 +476,13 @@ export default class ShoppingListService {
             }
 
             // Update the agent and status
-            await list.update({
-                agentId: agentId,
-                status: 'accepted',
-            }, { transaction });
+            await list.update(
+                {
+                    agentId: agentId,
+                    status: 'accepted',
+                },
+                { transaction },
+            );
 
             // Update agent status to busy
             await AgentService.setAgentBusy(agentId, listId, transaction);
@@ -458,7 +491,11 @@ export default class ShoppingListService {
         });
     }
 
-    static async updateListStatus(listId: string, customerId: string, status: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled'): Promise<ShoppingList> {
+    static async updateListStatus(
+        listId: string,
+        customerId: string,
+        status: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled',
+    ): Promise<ShoppingList> {
         const list = await this.getShoppingList(listId);
 
         // Validate the status transition
@@ -480,17 +517,26 @@ export default class ShoppingListService {
 
             // Agents can only set certain statuses
             if (!['processing', 'completed'].includes(status)) {
-                throw new ForbiddenError('Agents can only update to processing or completed status');
+                throw new ForbiddenError(
+                    'Agents can only update to processing or completed status',
+                );
             }
         } else if (list.customerId === customerId) {
             // List owners can cancel or modify their own lists
             if (!['cancelled', 'draft'].includes(status)) {
-                throw new ForbiddenError('You can only cancel or revert to draft your shopping lists');
+                throw new ForbiddenError(
+                    'You can only cancel or revert to draft your shopping lists',
+                );
             }
 
             // Can't revert to draft if already accepted by an agent
-            if (status === 'draft' && ['accepted', 'processing', 'completed'].includes(list.status)) {
-                throw new BadRequestError('Cannot revert to draft a list that has been accepted or processed');
+            if (
+                status === 'draft' &&
+                ['accepted', 'processing', 'completed'].includes(list.status)
+            ) {
+                throw new BadRequestError(
+                    'Cannot revert to draft a list that has been accepted or processed',
+                );
             }
         } else {
             throw new ForbiddenError('You are not authorized to update this shopping list');
@@ -504,18 +550,22 @@ export default class ShoppingListService {
 
     private static isValidStatusTransition(currentStatus: string, newStatus: string): boolean {
         const validTransitions: Record<string, string[]> = {
-            'draft': ['pending', 'cancelled'],
-            'pending': ['accepted', 'draft', 'cancelled'],
-            'accepted': ['processing', 'cancelled'],
-            'processing': ['completed', 'cancelled'],
-            'completed': [],
-            'cancelled': ['draft'],
+            draft: ['pending', 'cancelled'],
+            pending: ['accepted', 'draft', 'cancelled'],
+            accepted: ['processing', 'cancelled'],
+            processing: ['completed', 'cancelled'],
+            completed: [],
+            cancelled: ['draft'],
         };
 
         return validTransitions[currentStatus]?.includes(newStatus) || false;
     }
 
-    static async updateActualPrices(listId: string, agentId: string, items: { itemId: string, actualPrice: number }[]): Promise<ShoppingList> {
+    static async updateActualPrices(
+        listId: string,
+        agentId: string,
+        items: { itemId: string; actualPrice: number }[],
+    ): Promise<ShoppingList> {
         const list = await this.getShoppingList(listId);
 
         // Check if the agent is assigned to this list
@@ -540,7 +590,9 @@ export default class ShoppingListService {
                 });
 
                 if (!item) {
-                    throw new NotFoundError(`Item with ID ${itemId} not found in this shopping list`);
+                    throw new NotFoundError(
+                        `Item with ID ${itemId} not found in this shopping list`,
+                    );
                 }
 
                 await item.update({ actualPrice }, { transaction });

@@ -38,7 +38,9 @@ export default class AlatPaymentRecordService {
     /**
      * Create a new payment record
      */
-    public static async createPaymentRecord(params: CreatePaymentRecordParams): Promise<AlatPayment> {
+    public static async createPaymentRecord(
+        params: CreatePaymentRecordParams,
+    ): Promise<AlatPayment> {
         const {
             transactionId,
             amount,
@@ -65,19 +67,22 @@ export default class AlatPaymentRecordService {
             }
 
             // Create the payment record
-            const paymentRecord = await AlatPayment.create({
-                transactionId,
-                amount,
-                virtualBankAccountNumber,
-                virtualBankCode,
-                expiredAt: new Date(expiredAt),
-                userId,
-                orderId,
-                shoppingListId,
-                metadata,
-                response,
-                status: AlatPayStatus.PENDING,
-            }, { transaction });
+            const paymentRecord = await AlatPayment.create(
+                {
+                    transactionId,
+                    amount,
+                    virtualBankAccountNumber,
+                    virtualBankCode,
+                    expiredAt: new Date(expiredAt),
+                    userId,
+                    orderId,
+                    shoppingListId,
+                    metadata,
+                    response,
+                    status: AlatPayStatus.PENDING,
+                },
+                { transaction },
+            );
 
             return paymentRecord;
         } catch (error) {
@@ -89,7 +94,9 @@ export default class AlatPaymentRecordService {
     /**
      * Update payment status
      */
-    public static async updatePaymentStatus(params: UpdatePaymentStatusParams): Promise<AlatPayment> {
+    public static async updatePaymentStatus(
+        params: UpdatePaymentStatusParams,
+    ): Promise<AlatPayment> {
         const { transactionId, status, paidAt, response, transaction } = params;
 
         try {

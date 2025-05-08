@@ -1,7 +1,20 @@
 import {
-    Table, Column, Model, DataType, HasOne, Default, BeforeFind, Scopes,
-    IsEmail, IsUUID, PrimaryKey, Index, BeforeCreate, BeforeUpdate,
-    HasMany, AfterCreate,
+    Table,
+    Column,
+    Model,
+    DataType,
+    HasOne,
+    Default,
+    BeforeFind,
+    Scopes,
+    IsEmail,
+    IsUUID,
+    PrimaryKey,
+    Index,
+    BeforeCreate,
+    BeforeUpdate,
+    HasMany,
+    AfterCreate,
 } from 'sequelize-typescript';
 import Password from './password.model';
 import UserSettings from './userSettings.model';
@@ -10,7 +23,6 @@ import Market from './market.model';
 import Review from './review.model';
 import ShoppingList from './shoppingList.model';
 import AgentLocation from './agentLocation.model';
-
 
 export type userTypeValues = 'agent' | 'customer';
 
@@ -26,7 +38,14 @@ export interface IUserStatus {
             {
                 model: UserSettings,
                 as: 'settings',
-                attributes: ['joinDate', 'isBlocked', 'isDeactivated', 'lastLogin', 'meta', 'agentMetaData'],
+                attributes: [
+                    'joinDate',
+                    'isBlocked',
+                    'isDeactivated',
+                    'lastLogin',
+                    'meta',
+                    'agentMetaData',
+                ],
             },
         ],
     },
@@ -37,12 +56,13 @@ export default class User extends Model<User | IUser> {
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @IsEmail
     @Index
     @Column({
-        type: DataType.STRING, allowNull: false,
+        type: DataType.STRING,
+        allowNull: false,
         get() {
             return this.getDataValue('email').trim().toLowerCase();
         },
@@ -50,7 +70,7 @@ export default class User extends Model<User | IUser> {
             this.setDataValue('email', value.trim().toLowerCase());
         },
     })
-        email: string;
+    email: string;
 
     @Index
     @Column({
@@ -60,7 +80,7 @@ export default class User extends Model<User | IUser> {
             this.setDataValue('firstName', User.capitalizeFirstLetter(value));
         },
     })
-        firstName: string;
+    firstName: string;
 
     @Index
     @Column({
@@ -70,7 +90,7 @@ export default class User extends Model<User | IUser> {
             this.setDataValue('lastName', User.capitalizeFirstLetter(value));
         },
     })
-        lastName: string;
+    lastName: string;
 
     @Column({
         type: DataType.STRING,
@@ -80,26 +100,26 @@ export default class User extends Model<User | IUser> {
             }
         },
     })
-        otherName: string;
+    otherName: string;
 
     @Column({ type: DataType.STRING })
-        gender: string;
+    gender: string;
 
     @Column({ type: DataType.STRING })
-        displayImage: string;
+    displayImage: string;
 
     @Column({
         type: DataType.JSONB,
         defaultValue: {},
         allowNull: false,
     })
-        status: IUserStatus;
+    status: IUserStatus;
 
     @Column({
         type: DataType.JSONB,
         allowNull: true,
     })
-        location: {
+    location: {
         country: string;
         city: string;
         address: string;
@@ -120,10 +140,10 @@ export default class User extends Model<User | IUser> {
             this.setDataValue('lastName', names.slice(1).join(' '));
         },
     })
-        fullName: string;
+    fullName: string;
 
     @Column({ type: DataType.JSONB })
-        phone: {
+    phone: {
         countryCode: string;
         number: string;
     };
@@ -132,7 +152,7 @@ export default class User extends Model<User | IUser> {
         type: DataType.STRING,
         allowNull: true,
     })
-        googleId: string;
+    googleId: string;
 
     @Column({
         type: DataType.DATEONLY,
@@ -145,19 +165,18 @@ export default class User extends Model<User | IUser> {
             },
         },
     })
-        dob: Date;
+    dob: Date;
 
     // Associations
     @HasOne(() => Password)
-        password: Password;
+    password: Password;
 
     @HasOne(() => UserSettings)
-        settings: UserSettings;
+    settings: UserSettings;
 
     // Association with AgentLocation model
     @HasMany(() => AgentLocation, 'agentId')
-        locations?: AgentLocation[];
-
+    locations?: AgentLocation[];
 
     @BeforeFind
     static beforeFindHook(options: FindOptions) {
@@ -199,26 +218,25 @@ export default class User extends Model<User | IUser> {
                         isAcceptingOrders: false,
                     },
                 });
-
             }
         }
     }
 
     // Markets owned by the user (for vendors/supermarket owners)
     @HasMany(() => Market)
-        ownedMarkets: Market[];
+    ownedMarkets: Market[];
 
     // Shopping lists created by the user
     @HasMany(() => ShoppingList)
-        shoppingLists: ShoppingList[];
+    shoppingLists: ShoppingList[];
 
     // Shopping lists assigned to the user as an agent
     @HasMany(() => ShoppingList, 'agentId')
-        assignedOrders: ShoppingList[];
+    assignedOrders: ShoppingList[];
 
     // Reviews written by the user
     @HasMany(() => Review, 'reviewerId')
-        reviews: Review[];
+    reviews: Review[];
 
     static capitalizeFirstLetter(str: string): string {
         return str.charAt(0).toUpperCase() + str.slice(1);
@@ -245,7 +263,7 @@ export interface IUser {
     fullName?: string;
     phone?: {
         countryCode: string;
-        number: string
+        number: string;
     };
     dob?: Date;
     gender?: string;

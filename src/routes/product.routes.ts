@@ -13,10 +13,32 @@ router.get('/:id', ProductController.getProduct);
 router.get('/market/:marketId', ProductController.getMarketProducts);
 
 // Protected routes
-router.post('/',  basicAuth('access'), upload, AuthenticatedController(ProductController.createProduct));
-router.put('/:id',  basicAuth('access'), upload, AuthenticatedController(ProductController.updateProduct));
-router.delete('/:id',  basicAuth('access'), AuthenticatedController(ProductController.deleteProduct));
-router.patch('/:id/toggle',  basicAuth('access'), AuthenticatedController(ProductController.toggleProductAvailability));
-router.post('/bulk',  basicAuth('access'), AuthenticatedController(ProductController.bulkCreateProducts));
+router.post(
+    '/',
+    basicAuth('access'),
+    upload,
+    AuthenticatedController(ProductController.createProduct),
+);
+router.put(
+    '/:id',
+    basicAuth('access'),
+    upload,
+    AuthenticatedController(ProductController.updateProduct),
+);
+router.delete(
+    '/:id',
+    basicAuth('access'),
+    AuthenticatedController(ProductController.deleteProduct),
+);
+router.patch(
+    '/:id/toggle',
+    basicAuth('access'),
+    AuthenticatedController(ProductController.toggleProductAvailability),
+);
+router.post(
+    '/bulk',
+    basicAuth('access'),
+    AuthenticatedController(ProductController.bulkCreateProducts),
+);
 
 export default router;

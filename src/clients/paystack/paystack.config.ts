@@ -1,7 +1,13 @@
 import axios, { AxiosError, Method } from 'axios';
 import {
-    PaystackResponse, InitializeTransactionResponseData, CustomerData, BankData,
-    AccountVerificationData, TransferRecipientData, TransferData, PaystackErrorResponse,
+    PaystackResponse,
+    InitializeTransactionResponseData,
+    CustomerData,
+    BankData,
+    AccountVerificationData,
+    TransferRecipientData,
+    TransferData,
+    PaystackErrorResponse,
 } from './paystack.types';
 
 import { BadRequestError, UnauthorizedError, NotFoundError } from '../../utils/customErrors';
@@ -15,7 +21,11 @@ export class PaystackConfigService {
     private static readonly BASE_URL = getPaystackBaseUrl();
     private static readonly SECRET_KEY = PAYSTACK_CONFIG.SECRET_KEY;
 
-    private static async makeApiRequest<T>(endpoint: string, method: Method, params: Record<string, string | number | boolean | object> = {}): Promise<PaystackResponse<T>> {
+    private static async makeApiRequest<T>(
+        endpoint: string,
+        method: Method,
+        params: Record<string, string | number | boolean | object> = {},
+    ): Promise<PaystackResponse<T>> {
         const url = `${this.BASE_URL}/${endpoint}`;
         const headers = {
             Authorization: `Bearer ${this.SECRET_KEY}`,
@@ -23,20 +33,24 @@ export class PaystackConfigService {
         };
 
         try {
-            const response = method === 'GET'
-                ? await axios.get(url, { params, headers })
-                : await axios.request({
-                    url,
-                    method,
-                    headers,
-                    data: params,
-                });
+            const response =
+                method === 'GET'
+                    ? await axios.get(url, { params, headers })
+                    : await axios.request({
+                          url,
+                          method,
+                          headers,
+                          data: params,
+                      });
 
             // Axios only returns successful responses in the try block
             return response.data;
         } catch (error) {
             const axiosError = error as AxiosError<PaystackErrorResponse>;
-            console.error(`Error in Paystack API request: ${endpoint}`, axiosError.response?.data || axiosError.message);
+            console.error(
+                `Error in Paystack API request: ${endpoint}`,
+                axiosError.response?.data || axiosError.message,
+            );
 
             // Now handle different error status codes here
             if (axiosError.response) {
@@ -65,8 +79,9 @@ export class PaystackConfigService {
         callback_url?: string;
         metadata?: string;
     }): Promise<PaystackResponse<InitializeTransactionResponseData>> {
-        const defaultChannels: Array<'card' | 'bank' | 'ussd' | 'qr' | 'mobile_money' | 'bank_transfer' | 'eft'> =
-            ['card', 'bank', 'ussd', 'bank_transfer'];
+        const defaultChannels: Array<
+            'card' | 'bank' | 'ussd' | 'qr' | 'mobile_money' | 'bank_transfer' | 'eft'
+        > = ['card', 'bank', 'ussd', 'bank_transfer'];
 
         const updatedParams = {
             ...params,
@@ -97,7 +112,7 @@ export class PaystackConfigService {
         return this.makeApiRequest('transfer', 'POST', params);
     }
 
-    static async getTransactionHistory(params: { from: string; to: string; }) {
+    static async getTransactionHistory(params: { from: string; to: string }) {
         return this.makeApiRequest('transaction', 'GET', params);
     }
 
@@ -122,11 +137,14 @@ export class PaystackConfigService {
         return this.makeApiRequest(`customer/${emailOrCode}`, 'GET');
     }
 
-    static async updateCustomer(code: string, params: {
-        first_name?: string;
-        last_name?: string;
-        phone?: string;
-    }): Promise<PaystackResponse<CustomerData>> {
+    static async updateCustomer(
+        code: string,
+        params: {
+            first_name?: string;
+            last_name?: string;
+            phone?: string;
+        },
+    ): Promise<PaystackResponse<CustomerData>> {
         return this.makeApiRequest(`customer/${code}`, 'PUT', params);
     }
 

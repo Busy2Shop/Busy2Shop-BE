@@ -1,6 +1,11 @@
 import axios, { AxiosError } from 'axios';
 import { logger } from '../utils/logger';
-import { ALATPAY_API_URL, ALATPAY_SUBSCRIPTION_KEY, ALATPAY_BUSINESS_ID, ALATPAY_MERCHANT_ID } from '../utils/constants';
+import {
+    ALATPAY_API_URL,
+    ALATPAY_SUBSCRIPTION_KEY,
+    ALATPAY_BUSINESS_ID,
+    ALATPAY_MERCHANT_ID,
+} from '../utils/constants';
 
 export interface AlatPayVirtualAccountRequest {
     businessId: string;
@@ -204,7 +209,13 @@ export default class AlatPayClient {
         };
     }
 
-    private async makeRequest(method: 'get' | 'post', url: string, data?: any, params?: any, retryCount = 0): Promise<any> {
+    private async makeRequest(
+        method: 'get' | 'post',
+        url: string,
+        data?: any,
+        params?: any,
+        retryCount = 0,
+    ): Promise<any> {
         try {
             const response = await axios({
                 method,
@@ -226,12 +237,15 @@ export default class AlatPayClient {
             });
 
             // Retry on network errors or 5xx server errors
-            if (retryCount < this.maxRetries &&
+            if (
+                retryCount < this.maxRetries &&
                 (axiosError.code === 'ECONNABORTED' ||
                     axiosError.code === 'ETIMEDOUT' ||
-                    (axiosError.response && axiosError.response.status >= 500))) {
-
-                logger.info(`Retrying ALATPay request (${retryCount + 1}/${this.maxRetries}): ${method.toUpperCase()} ${url}`);
+                    (axiosError.response && axiosError.response.status >= 500))
+            ) {
+                logger.info(
+                    `Retrying ALATPay request (${retryCount + 1}/${this.maxRetries}): ${method.toUpperCase()} ${url}`,
+                );
 
                 // Exponential backoff
                 const delay = this.retryDelay * Math.pow(2, retryCount);
@@ -244,7 +258,9 @@ export default class AlatPayClient {
         }
     }
 
-    public async generateVirtualAccount(request: Omit<AlatPayVirtualAccountRequest, 'businessId'>): Promise<AlatPayVirtualAccountResponse> {
+    public async generateVirtualAccount(
+        request: Omit<AlatPayVirtualAccountRequest, 'businessId'>,
+    ): Promise<AlatPayVirtualAccountResponse> {
         const finalRequest: AlatPayVirtualAccountRequest = {
             ...request,
             businessId: this.businessId,
@@ -253,18 +269,24 @@ export default class AlatPayClient {
         return this.makeRequest(
             'post',
             `${this.apiUrl}/bank-transfer/api/v1/bankTransfer/virtualAccount`,
-            finalRequest
+            finalRequest,
         );
     }
 
-    public async getTransactionStatus(transactionId: string): Promise<AlatPayTransactionStatusResponse> {
+    public async getTransactionStatus(
+        transactionId: string,
+    ): Promise<AlatPayTransactionStatusResponse> {
         return this.makeRequest(
             'get',
-            `${this.apiUrl}/bank-transfer/api/v1/bankTransfer/transactions/${transactionId}`
+            `${this.apiUrl}/bank-transfer/api/v1/bankTransfer/transactions/${transactionId}`,
         );
     }
 
-    public async getAllTransactions(page: number = 1, limit: number = 10, filters?: any): Promise<any> {
+    public async getAllTransactions(
+        page: number = 1,
+        limit: number = 10,
+        filters?: any,
+    ): Promise<any> {
         const params = {
             Page: page,
             Limit: limit,
@@ -276,14 +298,14 @@ export default class AlatPayClient {
             'get',
             `${this.apiUrl}/alatpaytransaction/api/v1/transactions`,
             undefined,
-            params
+            params,
         );
     }
 
     public async getSingleTransaction(id: string): Promise<any> {
         return this.makeRequest(
             'get',
-            `${this.apiUrl}/alatpaytransaction/api/v1/transactions/${id}`
+            `${this.apiUrl}/alatpaytransaction/api/v1/transactions/${id}`,
         );
     }
 
@@ -296,7 +318,7 @@ export default class AlatPayClient {
         const { BusinessId, MerchantId } = payload.Value.Data;
 
         // Verify this webhook is for your business
-        return (BusinessId === this.businessId && MerchantId === this.merchantId);
+        return BusinessId === this.businessId && MerchantId === this.merchantId;
     }
 
     // Add support for filtering transactions by date range
@@ -304,7 +326,7 @@ export default class AlatPayClient {
         startDate: Date,
         endDate: Date,
         page: number = 1,
-        limit: number = 10
+        limit: number = 10,
     ): Promise<any> {
         return this.getAllTransactions(page, limit, {
             StartAt: startDate.toISOString(),
@@ -316,7 +338,7 @@ export default class AlatPayClient {
     public async getTransactionsByStatus(
         status: string,
         page: number = 1,
-        limit: number = 10
+        limit: number = 10,
     ): Promise<any> {
         return this.getAllTransactions(page, limit, {
             Status: status,

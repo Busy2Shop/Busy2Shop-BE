@@ -71,15 +71,7 @@ export default class ProductController {
     }
 
     static async getAllProducts(req: Request, res: Response) {
-        const {
-            page,
-            size,
-            q,
-            marketId,
-            minPrice,
-            maxPrice,
-            isAvailable,
-        } = req.query;
+        const { page, size, q, marketId, minPrice, maxPrice, isAvailable } = req.query;
 
         const queryParams: Record<string, unknown> = {};
 
@@ -249,7 +241,9 @@ export default class ProductController {
         // Validate required fields for each product
         for (const product of products) {
             if (!product.name || !product.price || !product.marketId) {
-                throw new BadRequestError('Product name, price, and market ID are required for all products');
+                throw new BadRequestError(
+                    'Product name, price, and market ID are required for all products',
+                );
             }
         }
 

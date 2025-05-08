@@ -18,10 +18,20 @@ import { DecodedTokenData } from '../../utils/interface';
 import http from 'http';
 
 export default class SocketConfig {
-    private readonly io: Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
+    private readonly io: Server<
+        ClientToServerEvents,
+        ServerToClientEvents,
+        InterServerEvents,
+        SocketData
+    >;
 
     constructor(server: http.Server) {
-        this.io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(server, {
+        this.io = new Server<
+            ClientToServerEvents,
+            ServerToClientEvents,
+            InterServerEvents,
+            SocketData
+        >(server, {
             cors: {
                 origin: '*',
                 methods: ['*'],
@@ -89,7 +99,6 @@ export default class SocketConfig {
                         isSuperAdmin,
                     };
                     socket.data.token = jwtToken;
-
                 } else {
                     // Regular user authentication flow
                     const payload = AuthUtil.verifyToken(jwtToken, 'access');
@@ -115,7 +124,9 @@ export default class SocketConfig {
                     }
 
                     if (user.settings.isBlocked) {
-                        return next(new Error('Your account has been blocked. Please contact support'));
+                        return next(
+                            new Error('Your account has been blocked. Please contact support'),
+                        );
                     }
 
                     if (user.settings.isDeactivated) {
@@ -144,7 +155,7 @@ export default class SocketConfig {
             logger.info(`User connected: ${socket.data.user.id} (${socket.data.user.type})`);
 
             // Join order chat room
-            socket.on('join-order-chat', async (orderId) => {
+            socket.on('join-order-chat', async orderId => {
                 try {
                     const user = socket.data.user;
                     const roomName = `order:${orderId}`;
@@ -170,7 +181,7 @@ export default class SocketConfig {
             });
 
             // Leave order chat room
-            socket.on('leave-order-chat', async (orderId) => {
+            socket.on('leave-order-chat', async orderId => {
                 try {
                     const user = socket.data.user;
                     const roomName = `order:${orderId}`;
@@ -189,7 +200,7 @@ export default class SocketConfig {
             });
 
             // Handle the new message
-            socket.on('send-message', async (data) => {
+            socket.on('send-message', async data => {
                 try {
                     const { orderId, message, imageUrl } = data;
                     const user = socket.data.user;
@@ -222,7 +233,7 @@ export default class SocketConfig {
             });
 
             // Handle typing indicator
-            socket.on('typing', (data) => {
+            socket.on('typing', data => {
                 const { orderId, isTyping } = data;
                 const user = socket.data.user;
                 const roomName = `order:${orderId}`;
@@ -237,7 +248,7 @@ export default class SocketConfig {
             });
 
             // Handle chat activation
-            socket.on('activate-chat', async (orderId) => {
+            socket.on('activate-chat', async orderId => {
                 try {
                     const user = socket.data.user;
                     const roomName = `order:${orderId}`;
@@ -268,7 +279,7 @@ export default class SocketConfig {
             });
 
             // Handle mark messages as read
-            socket.on('mark-messages-read', async (orderId) => {
+            socket.on('mark-messages-read', async orderId => {
                 try {
                     const user = socket.data.user;
                     await ChatService.markMessagesAsRead(orderId, user.id);
@@ -287,7 +298,12 @@ export default class SocketConfig {
     }
 
     // Method to get the io instance (useful if needed elsewhere in the app)
-    public getIO(): Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData> {
+    public getIO(): Server<
+        ClientToServerEvents,
+        ServerToClientEvents,
+        InterServerEvents,
+        SocketData
+    > {
         return this.io;
     }
 }

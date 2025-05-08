@@ -35,7 +35,9 @@ export default class ProductService {
         return await Product.create({ ...productData });
     }
 
-    static async viewProducts(queryData?: IViewProductsQuery): Promise<{ products: Product[], count: number, totalPages?: number }> {
+    static async viewProducts(
+        queryData?: IViewProductsQuery,
+    ): Promise<{ products: Product[]; count: number; totalPages?: number }> {
         const { page, size, q: query, marketId, minPrice, maxPrice, isAvailable } = queryData || {};
 
         const where: Record<string | symbol, unknown> = {};
@@ -102,7 +104,10 @@ export default class ProductService {
         }
     }
 
-    static async viewMarketProducts(marketId: string, queryData?: IViewProductsQuery): Promise<{ products: Product[], count: number, totalPages?: number }> {
+    static async viewMarketProducts(
+        marketId: string,
+        queryData?: IViewProductsQuery,
+    ): Promise<{ products: Product[]; count: number; totalPages?: number }> {
         // Check if the market exists
         const market = await Market.findByPk(marketId);
         if (!market) {
@@ -136,7 +141,11 @@ export default class ProductService {
         return product;
     }
 
-    static async updateProduct(id: string, ownerId: string, dataToUpdate: Partial<IProduct>): Promise<Product> {
+    static async updateProduct(
+        id: string,
+        ownerId: string,
+        dataToUpdate: Partial<IProduct>,
+    ): Promise<Product> {
         const product = await this.getProduct(id);
 
         // Check if the market belongs to this owner
@@ -193,7 +202,9 @@ export default class ProductService {
         });
 
         if (ownedMarkets !== marketIds.length) {
-            throw new ForbiddenError('You do not have permission to add products to all the specified markets');
+            throw new ForbiddenError(
+                'You do not have permission to add products to all the specified markets',
+            );
         }
 
         // Ensure all marketType can have catalog products.

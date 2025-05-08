@@ -23,7 +23,10 @@ router.get('/status', AuthenticatedController(AgentController.getStatus));
 router.put('/status', AuthenticatedController(AgentController.updateStatus));
 
 // More specific static paths
-router.get('/available/:shoppingListId', AuthenticatedController(AgentController.getAvailableAgentsForOrder));
+router.get(
+    '/available/:shoppingListId',
+    AuthenticatedController(AgentController.getAvailableAgentsForOrder),
+);
 router.post('/assign/:orderId', AuthenticatedController(AgentController.assignOrderToAgent));
 
 // Generic parameter routes LAST

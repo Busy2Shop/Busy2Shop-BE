@@ -8,50 +8,50 @@ const router = Router();
 router.post(
     '/virtual-account',
     basicAuth('access'),
-    AuthenticatedController(AlatPayController.generateVirtualAccount)
+    AuthenticatedController(AlatPayController.generateVirtualAccount),
 );
 
 router.get(
     '/transaction/:transactionId',
     basicAuth('access'),
-    AuthenticatedController(AlatPayController.checkPaymentStatus)
+    AuthenticatedController(AlatPayController.checkPaymentStatus),
 );
 
 router.get(
     '/transactions',
     basicAuth('access'),
-    AuthenticatedController(AlatPayController.getTransactionHistory)
+    AuthenticatedController(AlatPayController.getTransactionHistory),
 );
 
 router.get(
     '/user-payments',
     basicAuth('access'),
-    AuthenticatedController(AlatPayController.getUserPayments)
+    AuthenticatedController(AlatPayController.getUserPayments),
 );
 
 router.post(
     '/shopping-list/:shoppingListId/payment',
     basicAuth('access'),
-    AuthenticatedController(AlatPayController.generatePaymentLink)
+    AuthenticatedController(AlatPayController.generatePaymentLink),
 );
 
 router.post(
     '/order/:orderId/payment',
     basicAuth('access'),
-    AuthenticatedController(AlatPayController.generateOrderPaymentLink)
+    AuthenticatedController(AlatPayController.generateOrderPaymentLink),
 );
 
 // Admin routes for transaction management
 router.get(
     '/reconcile',
     basicAuth('admin'),
-    AuthenticatedController(AlatPayController.reconcileTransactions)
+    AuthenticatedController(AlatPayController.reconcileTransactions),
 );
 
 router.get(
     '/check-expired',
     basicAuth('admin'),
-    AuthenticatedController(AlatPayController.checkExpiredTransactions)
+    AuthenticatedController(AlatPayController.checkExpiredTransactions),
 );
 
 // Webhook route - this doesn't require authentication as it's called by ALATPay

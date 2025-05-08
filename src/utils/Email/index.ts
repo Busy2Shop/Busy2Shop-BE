@@ -19,8 +19,8 @@ import { NotificationTypes } from '../interface';
 
 export type postmarkInfo = {
     postMarkTemplateData: Record<string, unknown>;
-    recipientEmail: string
-}
+    recipientEmail: string;
+};
 
 type EmailOptions = {
     email: string;
@@ -36,7 +36,7 @@ type EmailOptions = {
     //postmark
     isPostmarkTemplate?: boolean;
     postMarkTemplateAlias?: string;
-    postmarkInfo?: postmarkInfo[]
+    postmarkInfo?: postmarkInfo[];
 };
 
 // eslint-disable-next-line no-unused-vars
@@ -86,34 +86,36 @@ export default class EmailService {
             });
         }
 
-        return async (options) => {
+        return async options => {
             logger.info('options for sending', options);
 
             try {
-
                 // Use Promise.all to wait for all emails to send
-                await Promise.all((options.postmarkInfo ?? []).map(async (recipient) => {
-                    const mailOptions = {
-                        from: `Busy2Shop Accounts<${EMAIL_SERVICE === 'zoho' ? ZOHO_USERNAME : EMAIL_HOST_ADDRESS}>`,
-                        to: recipient.recipientEmail,
-                        subject: options.subject,
-                        html: options.html ?? undefined,
-                        attachments: options.attachments,
-                    };
+                await Promise.all(
+                    (options.postmarkInfo ?? []).map(async recipient => {
+                        const mailOptions = {
+                            from: `Busy2Shop Accounts<${EMAIL_SERVICE === 'zoho' ? ZOHO_USERNAME : EMAIL_HOST_ADDRESS}>`,
+                            to: recipient.recipientEmail,
+                            subject: options.subject,
+                            html: options.html ?? undefined,
+                            attachments: options.attachments,
+                        };
 
-                    try {
-                        await transporter.sendMail(mailOptions);
-                        logger.info(`Email sent to ${recipient.recipientEmail}`);
-                    } catch (error) {
-                        // Log the error without throwing it
-                        logger.error(`Error sending email to ${recipient.recipientEmail}: ${error}`);
-                    }
-                }));
+                        try {
+                            await transporter.sendMail(mailOptions);
+                            logger.info(`Email sent to ${recipient.recipientEmail}`);
+                        } catch (error) {
+                            // Log the error without throwing it
+                            logger.error(
+                                `Error sending email to ${recipient.recipientEmail}: ${error}`,
+                            );
+                        }
+                    }),
+                );
             } catch (error) {
                 logger.error('Error sending email:', error);
             }
         };
-
     }
 
     // Add this new method for chat notifications
@@ -125,23 +127,22 @@ export default class EmailService {
             message: string;
             notificationType: string;
             resourceId: string;
-        }
+        },
     ): Promise<boolean> {
         try {
             // Determine a subject based on the notification type
             let subject = 'Chat Notification';
             switch (data.notificationType) {
-            case NotificationTypes.CHAT_MESSAGE_RECEIVED:
-                subject = 'New Chat Message';
-                break;
-            case NotificationTypes.CHAT_ACTIVATED:
-                subject = 'Chat Activated';
-                break;
-            case NotificationTypes.USER_LEFT_CHAT:
-                subject = 'User Left Chat';
-                break;
+                case NotificationTypes.CHAT_MESSAGE_RECEIVED:
+                    subject = 'New Chat Message';
+                    break;
+                case NotificationTypes.CHAT_ACTIVATED:
+                    subject = 'Chat Activated';
+                    break;
+                case NotificationTypes.USER_LEFT_CHAT:
+                    subject = 'User Left Chat';
+                    break;
             }
-
 
             // Get the app URL from the environment or use a default
             const frontendUrl = process.env.WEBSITE_URL ?? 'http://localhost:5173';
@@ -157,10 +158,12 @@ export default class EmailService {
                 email: recipientEmail,
                 subject,
                 html,
-                postmarkInfo: [{
-                    recipientEmail,
-                    postMarkTemplateData: {},
-                }],
+                postmarkInfo: [
+                    {
+                        recipientEmail,
+                        postMarkTemplateData: {},
+                    },
+                ],
             });
 
             logger.info(`Chat notification email sent to ${recipientEmail}`);
@@ -170,7 +173,6 @@ export default class EmailService {
             return false;
         }
     }
-
 
     // static getSenderEmail(type: string) {
     //     switch (type) {
@@ -248,7 +250,6 @@ export default class EmailService {
     //         }
     //     };
     // }
-
 
     public send(options: EmailOptions): Promise<void | Error> {
         console.log('sending email');

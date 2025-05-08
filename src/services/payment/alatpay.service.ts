@@ -1,5 +1,10 @@
 import { Transaction } from 'sequelize';
-import AlatPayClient, { AlatPayVirtualAccountRequest, AlatPayVirtualAccountResponse, AlatPayTransactionStatusResponse, AlatPayWebhookPayload } from '../../clients/alatpay.client';
+import AlatPayClient, {
+    AlatPayVirtualAccountRequest,
+    AlatPayVirtualAccountResponse,
+    AlatPayTransactionStatusResponse,
+    AlatPayWebhookPayload,
+} from '../../clients/alatpay.client';
 import { logger } from '../../utils/logger';
 import { BadRequestError, NotFoundError } from '../../utils/customErrors';
 import OrderService from '../order.service';
@@ -36,7 +41,9 @@ export default class AlatPayService {
     /**
      * Generate a virtual account for payment
      */
-    public static async generateVirtualAccount(params: GenerateVirtualAccountParams): Promise<AlatPayVirtualAccountResponse> {
+    public static async generateVirtualAccount(
+        params: GenerateVirtualAccountParams,
+    ): Promise<AlatPayVirtualAccountResponse> {
         const { amount, orderId, description, user, currency = 'NGN', idempotencyKey } = params;
 
         try {
@@ -97,7 +104,9 @@ export default class AlatPayService {
                 logger.error('ALATPay API error details:', error.response.data);
 
                 if (error.response.status === 400) {
-                    throw new BadRequestError(`Invalid request: ${error.response.data.message || 'Bad request'}`);
+                    throw new BadRequestError(
+                        `Invalid request: ${error.response.data.message || 'Bad request'}`,
+                    );
                 } else if (error.response.status === 401 || error.response.status === 403) {
                     throw new BadRequestError('Authentication or authorization error with ALATPay');
                 }
@@ -110,34 +119,36 @@ export default class AlatPayService {
     /**
      * Check the status of a transaction
      */
-    public static async checkTransactionStatus(transactionId: string): Promise<AlatPayTransactionStatusResponse> {
+    public static async checkTransactionStatus(
+        transactionId: string,
+    ): Promise<AlatPayTransactionStatusResponse> {
         try {
             const response = await this.client.getTransactionStatus(transactionId);
 
             // Update our local records based on the status
             switch (response.data.status) {
-            case 'completed':
-                await AlatPaymentRecordService.updatePaymentStatus({
-                    transactionId,
-                    status: AlatPayStatus.COMPLETED,
-                    paidAt: new Date(),
-                    response: response.data,
-                });
-                break;
-            case 'failed':
-                await AlatPaymentRecordService.updatePaymentStatus({
-                    transactionId,
-                    status: AlatPayStatus.FAILED,
-                    response: response.data,
-                });
-                break;
-            case 'expired':
-                await AlatPaymentRecordService.updatePaymentStatus({
-                    transactionId,
-                    status: AlatPayStatus.EXPIRED,
-                    response: response.data,
-                });
-                break;
+                case 'completed':
+                    await AlatPaymentRecordService.updatePaymentStatus({
+                        transactionId,
+                        status: AlatPayStatus.COMPLETED,
+                        paidAt: new Date(),
+                        response: response.data,
+                    });
+                    break;
+                case 'failed':
+                    await AlatPaymentRecordService.updatePaymentStatus({
+                        transactionId,
+                        status: AlatPayStatus.FAILED,
+                        response: response.data,
+                    });
+                    break;
+                case 'expired':
+                    await AlatPaymentRecordService.updatePaymentStatus({
+                        transactionId,
+                        status: AlatPayStatus.EXPIRED,
+                        response: response.data,
+                    });
+                    break;
                 // Add any other status cases as needed
             }
 
@@ -189,7 +200,9 @@ export default class AlatPayService {
                 const transactionDetails = await this.client.getTransactionStatus(TransactionId);
 
                 if (!transactionDetails.status) {
-                    logger.warn('Transaction could not be verified with ALATPay', { TransactionId });
+                    logger.warn('Transaction could not be verified with ALATPay', {
+                        TransactionId,
+                    });
                     return;
                 }
 
@@ -202,15 +215,18 @@ export default class AlatPayService {
             // If the payment is complete, update the order status
             if (Status === 'completed') {
                 // Use a transaction if not provided
-                const useTransaction = transaction || await Database.transaction();
+                const useTransaction = transaction || (await Database.transaction());
 
                 try {
                     // Update our payment record
                     const alatPayStatus =
-                        Status === 'completed' ? AlatPayStatus.COMPLETED :
-                            Status === 'failed' ? AlatPayStatus.FAILED :
-                                Status === 'expired' ? AlatPayStatus.EXPIRED :
-                                    AlatPayStatus.PENDING;
+                        Status === 'completed'
+                            ? AlatPayStatus.COMPLETED
+                            : Status === 'failed'
+                              ? AlatPayStatus.FAILED
+                              : Status === 'expired'
+                                ? AlatPayStatus.EXPIRED
+                                : AlatPayStatus.PENDING;
 
                     await AlatPaymentRecordService.updatePaymentStatus({
                         transactionId: TransactionId,
@@ -234,25 +250,31 @@ export default class AlatPayService {
 
                     // Verify payment amount matches expected amount
                     if (order.totalAmount != Amount) {
-                        logger.warn(`Payment amount mismatch: expected ${order.totalAmount}, received ${Amount}`, {
-                            orderId: OrderId,
-                            transactionId: TransactionId,
-                        });
+                        logger.warn(
+                            `Payment amount mismatch: expected ${order.totalAmount}, received ${Amount}`,
+                            {
+                                orderId: OrderId,
+                                transactionId: TransactionId,
+                            },
+                        );
 
-                        // Handle amount discrepancy 
+                        // Handle amount discrepancy
                         // You might still want to accept the payment if amount is greater,
                         // or implement a policy for handling this
                     }
 
                     // Update order status
-                    await order.update({
-                        status: 'accepted',
-                        paymentStatus: 'paid',
-                        paymentReference: TransactionId,
-                        paymentMethod: 'bank_transfer',
-                        paidAt: new Date(),
-                        // Add any other fields as needed
-                    }, { transaction: useTransaction });
+                    await order.update(
+                        {
+                            status: 'accepted',
+                            paymentStatus: 'paid',
+                            paymentReference: TransactionId,
+                            paymentMethod: 'bank_transfer',
+                            paidAt: new Date(),
+                            // Add any other fields as needed
+                        },
+                        { transaction: useTransaction },
+                    );
 
                     // Find the shopping list associated with this order
                     if (order.shoppingListId) {
@@ -262,10 +284,13 @@ export default class AlatPayService {
 
                         if (shoppingList) {
                             // Update shopping list status
-                            await shoppingList.update({
-                                status: 'pending', // Or whatever status you use for paid orders
-                                paymentStatus: 'paid',
-                            }, { transaction: useTransaction });
+                            await shoppingList.update(
+                                {
+                                    status: 'pending', // Or whatever status you use for paid orders
+                                    paymentStatus: 'paid',
+                                },
+                                { transaction: useTransaction },
+                            );
                         }
                     }
 
@@ -277,7 +302,6 @@ export default class AlatPayService {
                     // Trigger any post-payment processes
                     // e.g., send confirmation emails, notify agents, etc.
                     // These should be done AFTER transaction commit and possibly asynchronously
-
                 } catch (error) {
                     // Rollback transaction if we started it
                     if (!transaction) await useTransaction.rollback();
@@ -301,7 +325,11 @@ export default class AlatPayService {
     /**
      * Get transaction history for a user
      */
-    public static async getTransactionHistory(page: number = 1, limit: number = 10, filters?: any): Promise<any> {
+    public static async getTransactionHistory(
+        page: number = 1,
+        limit: number = 10,
+        filters?: any,
+    ): Promise<any> {
         try {
             const response = await this.client.getAllTransactions(page, limit, filters);
             return response;
@@ -337,7 +365,7 @@ export default class AlatPayService {
                 startDate,
                 endDate,
                 1, // page
-                1000 // limit - adjust based on your needs
+                1000, // limit - adjust based on your needs
             );
 
             if (!alatPayTransactions.status || !alatPayTransactions.data) {
@@ -368,17 +396,22 @@ export default class AlatPayService {
 
                         // If it's a completed payment, we might want to create a record
                         if (transaction.status === 'completed') {
-                            logger.info(`Found completed transaction ${transaction.id} missing from local database`);
+                            logger.info(
+                                `Found completed transaction ${transaction.id} missing from local database`,
+                            );
 
                             // Create a record (simplified - you'd need to add more details)
                             // This assumes we can find the user by order ID
-                            const order = await Order.findOne({ where: { id: transaction.orderId } });
+                            const order = await Order.findOne({
+                                where: { id: transaction.orderId },
+                            });
 
                             if (order) {
                                 await AlatPaymentRecordService.createPaymentRecord({
                                     transactionId: transaction.id,
                                     amount: transaction.amount,
-                                    virtualBankAccountNumber: transaction.ngnVirtualBankAccountNumber || '',
+                                    virtualBankAccountNumber:
+                                        transaction.ngnVirtualBankAccountNumber || '',
                                     virtualBankCode: transaction.ngnVirtualBankCode || '',
                                     expiredAt: new Date(), // This would need to be set properly
                                     userId: order.customerId,
@@ -406,22 +439,31 @@ export default class AlatPayService {
 
                         // Update our record to match ALATPay
                         const alatPayStatus =
-                            transaction.status === 'completed' ? AlatPayStatus.COMPLETED :
-                                transaction.status === 'failed' ? AlatPayStatus.FAILED :
-                                    transaction.status === 'expired' ? AlatPayStatus.EXPIRED :
-                                        AlatPayStatus.PENDING;
+                            transaction.status === 'completed'
+                                ? AlatPayStatus.COMPLETED
+                                : transaction.status === 'failed'
+                                  ? AlatPayStatus.FAILED
+                                  : transaction.status === 'expired'
+                                    ? AlatPayStatus.EXPIRED
+                                    : AlatPayStatus.PENDING;
 
                         await AlatPaymentRecordService.updatePaymentStatus({
                             transactionId: transaction.id,
                             status: alatPayStatus,
-                            paidAt: transaction.status === 'completed' ? new Date(transaction.updatedAt) : undefined,
+                            paidAt:
+                                transaction.status === 'completed'
+                                    ? new Date(transaction.updatedAt)
+                                    : undefined,
                             response: transaction,
                         });
 
                         results.updated++;
                     }
                 } catch (error) {
-                    logger.error(`Error processing transaction ${transaction.id} during reconciliation:`, error);
+                    logger.error(
+                        `Error processing transaction ${transaction.id} during reconciliation:`,
+                        error,
+                    );
                     results.errors++;
                 }
             }
@@ -471,7 +513,10 @@ export default class AlatPayService {
                         logger.info(`Marked transaction ${transaction.transactionId} as expired`);
                     }
                 } catch (error) {
-                    logger.error(`Error checking expiration for transaction ${transaction.transactionId}:`, error);
+                    logger.error(
+                        `Error checking expiration for transaction ${transaction.transactionId}:`,
+                        error,
+                    );
                     results.errors++;
                 }
             }

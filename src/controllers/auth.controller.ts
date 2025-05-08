@@ -13,7 +13,6 @@ import { Transaction } from 'sequelize';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
 
 export default class AuthController {
-
     /**
      * Validates signup data for both customer and agent registrations
      * @param signupData The signup data to validate
@@ -44,7 +43,6 @@ export default class AuthController {
         }
     }
 
-
     static async customerSignup(req: Request, res: Response) {
         req.body.userType = 'customer';
 
@@ -53,19 +51,12 @@ export default class AuthController {
             lastName,
             dob,
             email,
-            location: {
-                country,
-                city,
-                address,
-            } = {},
+            location: { country, city, address } = {},
             password,
             otherName,
             displayImage,
             gender,
-            phone: {
-                countryCode,
-                number,
-            } = {},
+            phone: { countryCode, number } = {},
         } = req.body;
 
         AuthController.validateSignupData({ firstName, lastName, email, password });
@@ -86,15 +77,19 @@ export default class AuthController {
             //     images,
             // } : undefined,
             // Properly construct the location object
-            location: country ? {
-                country,
-                city,
-                address,
-            } : undefined,
-            phone: countryCode ? {
-                countryCode,
-                number,
-            } : undefined,
+            location: country
+                ? {
+                      country,
+                      city,
+                      address,
+                  }
+                : undefined,
+            phone: countryCode
+                ? {
+                      countryCode,
+                      number,
+                  }
+                : undefined,
             status: {
                 activated: false,
                 emailVerified: false,
@@ -102,9 +97,11 @@ export default class AuthController {
             },
         });
 
-
-        const otpCode = await AuthUtil.generateCode({ type: 'emailverification', identifier: newUser.id, expiry: 60 * 10 });
-
+        const otpCode = await AuthUtil.generateCode({
+            type: 'emailverification',
+            identifier: newUser.id,
+            expiry: 60 * 10,
+        });
 
         const templateData = {
             otpCode,
@@ -118,11 +115,16 @@ export default class AuthController {
             from: 'auth',
             isPostmarkTemplate: true,
             postMarkTemplateAlias: 'verify-email',
-            postmarkInfo: [{
-                postMarkTemplateData: templateData,
-                recipientEmail: email,
-            }],
-            html: await new EmailTemplate().accountActivation({ otpCode, name: firstName || 'User' }),
+            postmarkInfo: [
+                {
+                    postMarkTemplateData: templateData,
+                    recipientEmail: email,
+                },
+            ],
+            html: await new EmailTemplate().accountActivation({
+                otpCode,
+                name: firstName || 'User',
+            }),
         });
 
         // Create a new password for the user
@@ -136,7 +138,7 @@ export default class AuthController {
             },
         });
     }
-    
+
     static async agentSignup(req: Request, res: Response) {
         req.body.userType = 'agent';
 
@@ -149,15 +151,8 @@ export default class AuthController {
             otherName,
             displayImage,
             gender,
-            location: {
-                country,
-                city,
-                address,
-            } = {},
-            phone: {
-                countryCode,
-                number,
-            } = {},
+            location: { country, city, address } = {},
+            phone: { countryCode, number } = {},
         } = req.body;
 
         AuthController.validateSignupData({ firstName, lastName, email, password });
@@ -173,16 +168,20 @@ export default class AuthController {
             dob,
             gender,
             // Location data
-            location: country ? {
-                country,
-                city,
-                address,
-            } : undefined,
+            location: country
+                ? {
+                      country,
+                      city,
+                      address,
+                  }
+                : undefined,
             // Phone data
-            phone: countryCode ? {
-                countryCode,
-                number,
-            } : undefined,
+            phone: countryCode
+                ? {
+                      countryCode,
+                      number,
+                  }
+                : undefined,
             status: {
                 activated: false,
                 emailVerified: false,
@@ -208,10 +207,12 @@ export default class AuthController {
             from: 'auth',
             isPostmarkTemplate: true,
             postMarkTemplateAlias: 'verify-email',
-            postmarkInfo: [{
-                postMarkTemplateData: templateData,
-                recipientEmail: email,
-            }],
+            postmarkInfo: [
+                {
+                    postMarkTemplateData: templateData,
+                    recipientEmail: email,
+                },
+            ],
             html: await new EmailTemplate().accountActivation({
                 otpCode,
                 name: firstName ?? 'Agent',
@@ -231,21 +232,27 @@ export default class AuthController {
     }
 
     static async verifyEmail(req: Request, res: Response) {
-        const { otpCode, email }: { otpCode: string, email: string } = req.body;
+        const { otpCode, email }: { otpCode: string; email: string } = req.body;
 
         await Database.transaction(async (transaction: Transaction) => {
-
-
             const user = await UserService.viewSingleUserByEmail(email, transaction);
 
             if (user.status.emailVerified) throw new BadRequestError('Email already verified');
 
-            const validCode = await AuthUtil.compareCode({ user, tokenType: 'emailverification', token: otpCode });
+            const validCode = await AuthUtil.compareCode({
+                user,
+                tokenType: 'emailverification',
+                token: otpCode,
+            });
             if (!validCode) throw new BadRequestError('Invalid otp code');
 
             await user.update({ status: { ...user.status, emailVerified: true } }, { transaction });
 
-            await AuthUtil.deleteToken({ user, tokenType: 'emailverification', tokenClass: 'code' });
+            await AuthUtil.deleteToken({
+                user,
+                tokenType: 'emailverification',
+                tokenClass: 'code',
+            });
 
             const accessToken = await AuthUtil.generateToken({ type: 'access', user });
             const refreshToken = await AuthUtil.generateToken({ type: 'refresh', user });
@@ -271,7 +278,11 @@ export default class AuthController {
             throw new BadRequestError('Email already verified');
         }
 
-        const otpCode = await AuthUtil.generateCode({ type: 'emailverification', identifier: user.id, expiry: 60 * 10 });
+        const otpCode = await AuthUtil.generateCode({
+            type: 'emailverification',
+            identifier: user.id,
+            expiry: 60 * 10,
+        });
 
         const templateData = {
             otpCode,
@@ -285,10 +296,12 @@ export default class AuthController {
             from: 'auth',
             isPostmarkTemplate: true,
             postMarkTemplateAlias: 'verify-email',
-            postmarkInfo: [{
-                postMarkTemplateData: templateData,
-                recipientEmail: email,
-            }],
+            postmarkInfo: [
+                {
+                    postMarkTemplateData: templateData,
+                    recipientEmail: email,
+                },
+            ],
             html: await new EmailTemplate().accountActivation({ otpCode, name: user.firstName }),
         });
         res.status(200).json({
@@ -309,8 +322,12 @@ export default class AuthController {
             throw new BadRequestError('Oops User not found');
         }
 
-        const resetToken = await AuthUtil.generateCode({ type: 'passwordreset', identifier: user.id, expiry: 60 * 10 });
-        const redirectLink: string = redirectUrl ??  `${WEBSITE_URL}/reset-password`;
+        const resetToken = await AuthUtil.generateCode({
+            type: 'passwordreset',
+            identifier: user.id,
+            expiry: 60 * 10,
+        });
+        const redirectLink: string = redirectUrl ?? `${WEBSITE_URL}/reset-password`;
 
         const resetLink = `${redirectLink}?prst=${resetToken}&e=${encodeURIComponent(email)}`;
 
@@ -326,11 +343,16 @@ export default class AuthController {
             from: 'auth',
             isPostmarkTemplate: true,
             postMarkTemplateAlias: 'password-reset',
-            postmarkInfo: [{
-                postMarkTemplateData: templateData,
-                recipientEmail: email,
-            }],
-            html: await new EmailTemplate().forgotPassword({ link: resetLink, name: user.firstName }),
+            postmarkInfo: [
+                {
+                    postMarkTemplateData: templateData,
+                    recipientEmail: email,
+                },
+            ],
+            html: await new EmailTemplate().forgotPassword({
+                link: resetLink,
+                name: user.firstName,
+            }),
         });
 
         res.status(200).json({
@@ -341,7 +363,11 @@ export default class AuthController {
     }
 
     static async resetPassword(req: Request, res: Response) {
-        const { resetToken, email, newPassword }: { resetToken: string, email: string, newPassword: string } = req.body;
+        const {
+            resetToken,
+            email,
+            newPassword,
+        }: { resetToken: string; email: string; newPassword: string } = req.body;
 
         const validPassword = Validator.isValidPassword(newPassword);
         if (!validPassword) {
@@ -350,7 +376,11 @@ export default class AuthController {
 
         const user = await UserService.viewSingleUserByEmail(email);
 
-        const validCode = await AuthUtil.compareCode({ user, tokenType: 'passwordreset', token: resetToken });
+        const validCode = await AuthUtil.compareCode({
+            user,
+            tokenType: 'passwordreset',
+            token: resetToken,
+        });
 
         if (!validCode) {
             throw new BadRequestError('Invalid reset token');
@@ -384,7 +414,7 @@ export default class AuthController {
     }
 
     static async changePassword(req: AuthenticatedRequest, res: Response) {
-        const { oldPassword, newPassword }: { oldPassword: string, newPassword: string } = req.body;
+        const { oldPassword, newPassword }: { oldPassword: string; newPassword: string } = req.body;
 
         const validPassword = Validator.isValidPassword(newPassword);
         if (!validPassword) {
@@ -428,7 +458,11 @@ export default class AuthController {
         const user = await UserService.viewSingleUserDynamic(queryOptions);
 
         if (!user.status.emailVerified) {
-            const otpCode = await AuthUtil.generateCode({ type: 'emailverification', identifier: user.id, expiry: 60 * 10 });
+            const otpCode = await AuthUtil.generateCode({
+                type: 'emailverification',
+                identifier: user.id,
+                expiry: 60 * 10,
+            });
             // send email to user to verify email
             const templateData = {
                 otpCode,
@@ -442,18 +476,27 @@ export default class AuthController {
                 from: 'auth',
                 isPostmarkTemplate: true,
                 postMarkTemplateAlias: 'verify-email',
-                postmarkInfo: [{
-                    postMarkTemplateData: templateData,
-                    recipientEmail: user.email,
-                }],
-                html: await new EmailTemplate().accountActivation({ otpCode, name: user.firstName }),
+                postmarkInfo: [
+                    {
+                        postMarkTemplateData: templateData,
+                        recipientEmail: user.email,
+                    },
+                ],
+                html: await new EmailTemplate().accountActivation({
+                    otpCode,
+                    name: user.firstName,
+                }),
             });
-            throw new BadRequestError('An Email verification code has been sent to your email. Please verify your email');
+            throw new BadRequestError(
+                'An Email verification code has been sent to your email. Please verify your email',
+            );
         }
 
         const userPassword = await user.$get('password');
         if (!userPassword) {
-            throw new BadRequestError('Oops Please set a password, you can do that by clicking on the forgot password link');
+            throw new BadRequestError(
+                'Oops Please set a password, you can do that by clicking on the forgot password link',
+            );
         }
 
         const validPassword = userPassword.isValidPassword(password);
@@ -487,7 +530,6 @@ export default class AuthController {
     }
 
     static async logout(req: AuthenticatedRequest, res: Response) {
-
         await AuthUtil.deleteToken({ user: req.user, tokenType: 'access', tokenClass: 'token' });
         await AuthUtil.deleteToken({ user: req.user, tokenType: 'refresh', tokenClass: 'token' });
 
@@ -511,7 +553,8 @@ export default class AuthController {
     }
 
     static async updateUser(req: AuthenticatedRequest, res: Response) {
-        const { firstName, lastName, otherName, displayImage, location, gender, isDeactivated } = req.body;
+        const { firstName, lastName, otherName, displayImage, location, gender, isDeactivated } =
+            req.body;
 
         // eslint-disable-next-line no-undef
         const file = req.file;
@@ -577,30 +620,29 @@ export default class AuthController {
         try {
             // The user object is attached to the request by Passport
             const user = req.user;
-            
+
             if (!user) {
                 return res.redirect(`${WEBSITE_URL}/login?error=Authentication failed`);
             }
-            
+
             // Generate tokens for the user
             const accessToken = await AuthUtil.generateToken({
                 type: 'access',
                 user: user,
             });
-            
+
             const refreshToken = await AuthUtil.generateToken({
                 type: 'refresh',
                 user: user,
             });
-            
+
             // Redirect to the frontend with tokens
             return res.redirect(
-                `${WEBSITE_URL}/auth/social-callback?accessToken=${accessToken}&refreshToken=${refreshToken}`
+                `${WEBSITE_URL}/auth/social-callback?accessToken=${accessToken}&refreshToken=${refreshToken}`,
             );
         } catch (error) {
             logger.error('Google sign-in error:', error);
             return res.redirect(`${WEBSITE_URL}/login?error=Authentication failed`);
         }
     }
-
 }

@@ -22,7 +22,6 @@ export interface IDynamicQueryOptions {
 }
 
 export default class UserService {
-
     static async isEmailAndUsernameAvailable(email: string, username?: string): Promise<boolean> {
         const validEmail = Validator.isValidEmail(email);
         if (!validEmail) throw new BadRequestError('Invalid email');
@@ -32,9 +31,7 @@ export default class UserService {
         // Construct where condition based on the presence of username
         if (username) {
             whereCondition = {
-                [Op.or]: [
-                    { email: email },
-                ],
+                [Op.or]: [{ email: email }],
             };
         } else {
             whereCondition = { email: email };
@@ -67,11 +64,9 @@ export default class UserService {
         });
 
         return existingUser;
-
     }
 
     static async addUser(userData: IUser): Promise<User> {
-
         const _transaction = await User.create({ ...userData });
 
         await UserSettings.create({
@@ -82,7 +77,9 @@ export default class UserService {
         return _transaction;
     }
 
-    static async viewUsers(queryData?: IViewUsersQuery): Promise<{ users: User[], count: number, totalPages?: number }> {
+    static async viewUsers(
+        queryData?: IViewUsersQuery,
+    ): Promise<{ users: User[]; count: number; totalPages?: number }> {
         const { page, size, q: query, isBlocked, isDeactivated, userType } = queryData || {};
 
         const where: Record<string | symbol, unknown> = {};
@@ -93,7 +90,15 @@ export default class UserService {
                 { firstName: { [Op.iLike]: `%${query}%` } },
                 { lastName: { [Op.iLike]: `%${query}%` } },
                 { email: { [Op.iLike]: `%${query}%` } },
-                Sequelize.where(Sequelize.fn('concat', Sequelize.col('User.firstName'), ' ', Sequelize.col('User.lastName')), { [Op.iLike]: `%${query}%` }),
+                Sequelize.where(
+                    Sequelize.fn(
+                        'concat',
+                        Sequelize.col('User.firstName'),
+                        ' ',
+                        Sequelize.col('User.lastName'),
+                    ),
+                    { [Op.iLike]: `%${query}%` },
+                ),
             ];
         }
 
@@ -112,9 +117,7 @@ export default class UserService {
 
         // Use the model with the appropriate scope
         const UserSettingsModel =
-            userType === 'agent'
-                ? UserSettings.scope('withAgentMeta')
-                : UserSettings;
+            userType === 'agent' ? UserSettings.scope('withAgentMeta') : UserSettings;
 
         const queryOptions: FindAndCountOptions<User> = {
             where,
@@ -140,7 +143,10 @@ export default class UserService {
         const totalCount = (count as unknown as []).length;
 
         if (page && size && users.length > 0) {
-            const totalPages = Pagination.estimateTotalPage({ count: totalCount, limit: size } as IPaging);
+            const totalPages = Pagination.estimateTotalPage({
+                count: totalCount,
+                limit: size,
+            } as IPaging);
             return { users, count: totalCount, ...totalPages };
         } else {
             return { users, count: totalCount };
@@ -194,13 +200,16 @@ export default class UserService {
         return updatedUser;
     }
 
-    static async updateUserSettings(userId: string, settingsData: Partial<IUserSettings>): Promise<UserSettings> {
+    static async updateUserSettings(
+        userId: string,
+        settingsData: Partial<IUserSettings>,
+    ): Promise<UserSettings> {
         const userSettings = await UserSettings.findOne({ where: { userId } });
-        
+
         if (!userSettings) {
             throw new NotFoundError('User settings not found');
         }
-        
+
         await userSettings.update(settingsData);
         return userSettings;
     }
@@ -234,7 +243,7 @@ export default class UserService {
                     displayImage: profileData.displayImage ?? user.displayImage,
                 });
             }
-            
+
             // Update email verification status if not already verified
             if (!user.status.emailVerified) {
                 await user.update({
@@ -244,7 +253,7 @@ export default class UserService {
                     },
                 });
             }
-            
+
             return user;
         }
 

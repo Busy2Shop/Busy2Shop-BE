@@ -1,11 +1,21 @@
 /* eslint-disable no-unused-vars */
-import { Table, Column, Model, DataType, ForeignKey, BelongsTo, IsUUID, PrimaryKey, Default } from 'sequelize-typescript';
+import {
+    Table,
+    Column,
+    Model,
+    DataType,
+    ForeignKey,
+    BelongsTo,
+    IsUUID,
+    PrimaryKey,
+    Default,
+} from 'sequelize-typescript';
 import User from './user.model';
 
 export enum ReferralStatus {
     Pending = 'pending',
     Completed = 'completed',
-    Cancelled = 'cancelled'
+    Cancelled = 'cancelled',
 }
 
 @Table({
@@ -16,42 +26,40 @@ export enum ReferralStatus {
         },
     ],
 })
-
 export default class Referral extends Model<Referral | IReferral> {
     @IsUUID(4)
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @ForeignKey(() => User)
     @Column
-        refereeId: string;
+    refereeId: string;
 
     @BelongsTo(() => User, {
         foreignKey: 'refereeId',
         as: 'referee',
     })
-        referee: User;
+    referee: User;
 
     @ForeignKey(() => User)
     @Column
-        referredId: string;
+    referredId: string;
 
     @BelongsTo(() => User, {
         foreignKey: 'referredId',
         as: 'referred',
     })
-        referred: User;
+    referred: User;
 
     @Column({
         type: DataType.ENUM,
         values: Object.values(ReferralStatus),
         defaultValue: ReferralStatus.Pending,
     })
-        status: ReferralStatus;
+    status: ReferralStatus;
 }
-
 
 export interface IReferral {
     id?: string;

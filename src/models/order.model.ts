@@ -1,5 +1,13 @@
 import {
-    Table, Column, Model, DataType, ForeignKey, BelongsTo, IsUUID, PrimaryKey, Default,
+    Table,
+    Column,
+    Model,
+    DataType,
+    ForeignKey,
+    BelongsTo,
+    IsUUID,
+    PrimaryKey,
+    Default,
 } from 'sequelize-typescript';
 import User from './user.model';
 import ShoppingList from './shoppingList.model';
@@ -10,41 +18,60 @@ export default class Order extends Model<Order | IOrder> {
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: false,
         defaultValue: 'pending',
         validate: {
-            isIn: [['pending', 'accepted', 'in_progress', 'shopping', 'shopping_completed', 'delivery', 'completed', 'cancelled']],
+            isIn: [
+                [
+                    'pending',
+                    'accepted',
+                    'in_progress',
+                    'shopping',
+                    'shopping_completed',
+                    'delivery',
+                    'completed',
+                    'cancelled',
+                ],
+            ],
         },
     })
-        status: 'pending' | 'accepted' | 'in_progress' | 'shopping' | 'shopping_completed' | 'delivery' | 'completed' | 'cancelled';
+    status:
+        | 'pending'
+        | 'accepted'
+        | 'in_progress'
+        | 'shopping'
+        | 'shopping_completed'
+        | 'delivery'
+        | 'completed'
+        | 'cancelled';
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: false,
     })
-        totalAmount: number;
+    totalAmount: number;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: false,
     })
-        serviceFee: number;
+    serviceFee: number;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: false,
     })
-        deliveryFee: number;
+    deliveryFee: number;
 
     @Column({
         type: DataType.JSONB,
         allowNull: false,
     })
-        deliveryAddress: {
+    deliveryAddress: {
         latitude: number;
         longitude: number;
         address: string;
@@ -58,56 +85,56 @@ export default class Order extends Model<Order | IOrder> {
         type: DataType.TEXT,
         allowNull: true,
     })
-        customerNotes: string;
+    customerNotes: string;
 
     @Column({
         type: DataType.TEXT,
         allowNull: true,
     })
-        agentNotes: string;
+    agentNotes: string;
 
     @Column({
         type: DataType.DATE,
         allowNull: true,
     })
-        acceptedAt: Date;
+    acceptedAt: Date;
 
     @Column({
         type: DataType.DATE,
         allowNull: true,
     })
-        shoppingStartedAt: Date;
+    shoppingStartedAt: Date;
 
     @Column({
         type: DataType.DATE,
         allowNull: true,
     })
-        shoppingCompletedAt: Date;
+    shoppingCompletedAt: Date;
 
     @Column({
         type: DataType.DATE,
         allowNull: true,
     })
-        deliveryStartedAt: Date;
+    deliveryStartedAt: Date;
 
     @Column({
         type: DataType.DATE,
         allowNull: true,
     })
-        completedAt: Date;
+    completedAt: Date;
 
     @Column({
         type: DataType.DATE,
         allowNull: true,
     })
-        cancelledAt: Date;
+    cancelledAt: Date;
 
     @Column({
         type: DataType.JSONB,
         allowNull: true,
         defaultValue: [],
     })
-        rejectedAgents: {
+    rejectedAgents: {
         agentId: string;
         reason: string;
         rejectedAt: Date;
@@ -116,33 +143,41 @@ export default class Order extends Model<Order | IOrder> {
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column
-        customerId: string;
+    customerId: string;
 
     @BelongsTo(() => User, 'customerId')
-        customer: User;
+    customer: User;
 
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column({
         allowNull: true, // Null until an agent accepts the order
     })
-        agentId: string;
+    agentId: string;
 
     @BelongsTo(() => User, 'agentId')
-        agent: User;
+    agent: User;
 
     @IsUUID(4)
     @ForeignKey(() => ShoppingList)
     @Column
-        shoppingListId: string;
+    shoppingListId: string;
 
     @BelongsTo(() => ShoppingList)
-        shoppingList: ShoppingList;
+    shoppingList: ShoppingList;
 }
 
 export interface IOrder {
     id?: string;
-    status?: 'pending' | 'accepted' | 'in_progress' | 'shopping' | 'shopping_completed' | 'delivery' | 'completed' | 'cancelled';
+    status?:
+        | 'pending'
+        | 'accepted'
+        | 'in_progress'
+        | 'shopping'
+        | 'shopping_completed'
+        | 'delivery'
+        | 'completed'
+        | 'cancelled';
     totalAmount: number;
     serviceFee: number;
     deliveryFee: number;

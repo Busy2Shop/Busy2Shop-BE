@@ -12,9 +12,27 @@ router.get('/:id', CategoryController.getCategory);
 router.get('/:id/markets', CategoryController.getMarketsByCategory);
 
 // Protected routes
-router.post('/',  basicAuth('access'), upload, AuthenticatedController(CategoryController.createCategory));
-router.put('/:id',  basicAuth('access'), upload, AuthenticatedController(CategoryController.updateCategory));
-router.delete('/:id',  basicAuth('access'), AuthenticatedController(CategoryController.deleteCategory));
-router.patch('/:id/pin',  basicAuth('access'), AuthenticatedController(CategoryController.toggleCategoryPin));
+router.post(
+    '/',
+    basicAuth('access'),
+    upload,
+    AuthenticatedController(CategoryController.createCategory),
+);
+router.put(
+    '/:id',
+    basicAuth('access'),
+    upload,
+    AuthenticatedController(CategoryController.updateCategory),
+);
+router.delete(
+    '/:id',
+    basicAuth('access'),
+    AuthenticatedController(CategoryController.deleteCategory),
+);
+router.patch(
+    '/:id/pin',
+    basicAuth('access'),
+    AuthenticatedController(CategoryController.toggleCategoryPin),
+);
 
 export default router;

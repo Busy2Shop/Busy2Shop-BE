@@ -1,6 +1,14 @@
 import {
-    Table, Column, Model, DataType, ForeignKey, BelongsTo,
-    IsUUID, PrimaryKey, Default, Index,
+    Table,
+    Column,
+    Model,
+    DataType,
+    ForeignKey,
+    BelongsTo,
+    IsUUID,
+    PrimaryKey,
+    Default,
+    Index,
 } from 'sequelize-typescript';
 import User from './user.model';
 
@@ -21,52 +29,52 @@ export default class AgentLocation extends Model<AgentLocation | IAgentLocation>
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @IsUUID(4)
     @ForeignKey(() => User)
     @Index
     @Column
-        agentId: string;
+    agentId: string;
 
     @Column({
         type: DataType.DECIMAL(10, 8),
         allowNull: false,
     })
-        latitude: number;
+    latitude: number;
 
     @Column({
         type: DataType.DECIMAL(11, 8),
         allowNull: false,
     })
-        longitude: number;
+    longitude: number;
 
     @Column({
         type: DataType.DECIMAL(5, 2),
         allowNull: false,
         defaultValue: 5.0, // default 5km radius
     })
-        radius: number;
+    radius: number;
 
     @Column({
         type: DataType.BOOLEAN,
         allowNull: false,
         defaultValue: true,
     })
-        isActive: boolean;
+    isActive: boolean;
 
     @Column({
         type: DataType.STRING,
         allowNull: true,
     })
-        name?: string;
+    name?: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: true,
     })
-        address?: string;
+    address?: string;
 
     @BelongsTo(() => User)
-        agent: User;
-} 
+    agent: User;
+}

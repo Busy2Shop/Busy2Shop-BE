@@ -1,4 +1,15 @@
-export const certificate = ({ name, courseTitle, instructorName, date }: {name: string, courseTitle: string, instructorName: string, date: string}) => {return `
+export const certificate = ({
+    name,
+    courseTitle,
+    instructorName,
+    date,
+}: {
+    name: string;
+    courseTitle: string;
+    instructorName: string;
+    date: string;
+}) => {
+    return `
         <!DOCTYPE html>
         <html lang="en">
 

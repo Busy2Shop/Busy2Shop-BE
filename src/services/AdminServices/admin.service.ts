@@ -29,9 +29,7 @@ export interface IViewAdminsQuery {
     isSuperAdmin?: boolean;
 }
 
-
 export default class AdminService {
-
     static async createAdmin(adminData: IAdmin): Promise<Admin> {
         const existingAdmin = await Admin.findOne({ where: { email: adminData.email } });
         if (existingAdmin) {
@@ -41,7 +39,9 @@ export default class AdminService {
         return await Admin.create(adminData);
     }
 
-    static async getAllAdmins(queryData?: IViewAdminsQuery): Promise<{ admins: Admin[], count: number, totalPages?: number }> {
+    static async getAllAdmins(
+        queryData?: IViewAdminsQuery,
+    ): Promise<{ admins: Admin[]; count: number; totalPages?: number }> {
         const { page, size, q: query, isSuperAdmin } = queryData || {};
 
         const where: Record<string | symbol, unknown> = {};
@@ -83,15 +83,13 @@ export default class AdminService {
         }
     }
 
-
-    static async getAdminByEmail(email: string): Promise<Admin> {   
-
+    static async getAdminByEmail(email: string): Promise<Admin> {
         const admin: Admin | null = await Admin.findOne({ where: { email } });
-    
+
         if (!admin) {
             throw new NotFoundError('Admin not found');
         }
-    
+
         return admin;
     }
 
@@ -111,7 +109,10 @@ export default class AdminService {
         }
 
         const currentDate = moment().format('YYYY-MM-DD');
-        const updatedMeta: IBlockMeta = userSettings.meta || { blockHistory: [], unblockHistory: [] };
+        const updatedMeta: IBlockMeta = userSettings.meta || {
+            blockHistory: [],
+            unblockHistory: [],
+        };
 
         if (status) {
             // Blocking the user

@@ -2,54 +2,61 @@
 import User, { IUser } from '../models/user.model';
 
 export interface SaveTokenToCache {
-    key: string,
-    token: string,
-    expiry?: number
+    key: string;
+    token: string;
+    expiry?: number;
 }
 
-export type AuthToken = 'access' | 'refresh' | 'passwordreset' | 'emailverification' | 'setpassword' | 'adminlogin' | 'admin';
+export type AuthToken =
+    | 'access'
+    | 'refresh'
+    | 'passwordreset'
+    | 'emailverification'
+    | 'setpassword'
+    | 'adminlogin'
+    | 'admin';
 
-export type ENCRYPTEDTOKEN = AuthToken | 'admin'
+export type ENCRYPTEDTOKEN = AuthToken | 'admin';
 
 export interface GenerateTokenData {
-    type: AuthToken,
-    user: User,
+    type: AuthToken;
+    user: User;
 }
 export interface GenerateAdminTokenData {
-    type: AuthToken,
-    identifier: string,
+    type: AuthToken;
+    identifier: string;
 }
 
 export interface GenerateCodeData {
-    type: AuthToken,
-    identifier: string,
-    expiry: number,
+    type: AuthToken;
+    identifier: string;
+    expiry: number;
 }
 
 export interface CompareTokenData {
-    tokenType: AuthToken,
-    user: IUser & { id: string },
-    token: string
+    tokenType: AuthToken;
+    user: IUser & { id: string };
+    token: string;
 }
 export interface CompareAdminTokenData {
-    tokenType: AuthToken,
-    identifier: string,
-    token: string
+    tokenType: AuthToken;
+    identifier: string;
+    token: string;
 }
 
 export interface DeleteToken {
-    tokenType: AuthToken,
-    tokenClass: 'token' | 'code',
-    user: IUser & { id: string },
+    tokenType: AuthToken;
+    tokenClass: 'token' | 'code';
+    user: IUser & { id: string };
 }
 
 export type DecodedUser = { id: string };
 
 export interface DecodedTokenData {
-    user: DecodedUser,
-    token: string,
-    tokenType: AuthToken
-    authKey?: string
+    user: DecodedUser;
+    token: string;
+    tokenType: AuthToken;
+    authKey?: string;
 }
 
 export interface TenantQueries {
@@ -111,7 +118,7 @@ export enum NotificationTypes {
     // Chat Notifications
     CHAT_MESSAGE_RECEIVED = 'Chat Message Received',
     CHAT_ACTIVATED = 'Chat Activated',
-    USER_LEFT_CHAT = 'User Left Chat'
+    USER_LEFT_CHAT = 'User Left Chat',
 }
 
 export interface Notifications {

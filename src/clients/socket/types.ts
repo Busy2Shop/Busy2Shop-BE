@@ -38,7 +38,7 @@ export interface SocketData {
 export interface ClientToServerEvents {
     'join-order-chat': (orderId: string) => void;
     'send-message': (data: { orderId: string; message: string; imageUrl?: string }) => void;
-    'typing': (data: { orderId: string; isTyping: boolean }) => void;
+    typing: (data: { orderId: string; isTyping: boolean }) => void;
     'activate-chat': (orderId: string) => void;
     'mark-messages-read': (orderId: string) => void;
     'leave-order-chat': (orderId: string) => void;
@@ -51,14 +51,20 @@ export interface ServerToClientEvents {
     'user-joined': (user: SocketUser) => void;
     'user-left': (user: SocketUser) => void;
     'chat-activated': (data: ChatActivationType) => void;
-    'error': (error: { message: string }) => void;
+    error: (error: { message: string }) => void;
 }
 
 export interface InterServerEvents {
     ping: () => void;
 }
 
-export type CustomSocket = Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>; export interface ChatMessageType {
+export type CustomSocket = Socket<
+    ClientToServerEvents,
+    ServerToClientEvents,
+    InterServerEvents,
+    SocketData
+>;
+export interface ChatMessageType {
     id: string;
     orderId: string;
     senderId: string;
@@ -69,4 +75,3 @@ export type CustomSocket = Socket<ClientToServerEvents, ServerToClientEvents, In
     createdAt: Date | string;
     updatedAt: Date | string;
 }
-

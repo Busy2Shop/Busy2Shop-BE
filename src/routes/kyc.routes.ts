@@ -10,29 +10,19 @@ const router = Router();
 router.use(basicAuth('access'));
 
 // Upload NIN document
-router.post(
-    '/nin',
-    AuthenticatedController(KycController.uploadNIN)
-);
+router.post('/nin', AuthenticatedController(KycController.uploadNIN));
 
 // Upload verification images
 router.post(
     '/images',
     uploadMiddleware(UploadType.Array, 'images', 5), // Allow up to 5 images
-    AuthenticatedController(KycController.uploadVerificationImages)
+    AuthenticatedController(KycController.uploadVerificationImages),
 );
 
 // Get verification status
-router.get(
-    '/status',
-    AuthenticatedController(KycController.getVerificationStatus)
-);
+router.get('/status', AuthenticatedController(KycController.getVerificationStatus));
 
 //Todo: Make this an Admin route for approving KYC
-router.patch(
-    '/approve-kyc',
-    AuthenticatedController(KycController.approveKycVerification)
-);
-
+router.patch('/approve-kyc', AuthenticatedController(KycController.approveKycVerification));
 
 export default router;

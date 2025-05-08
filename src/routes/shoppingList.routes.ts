@@ -5,7 +5,7 @@ import { AuthenticatedController, basicAuth } from '../middlewares/authMiddlewar
 const router = Router();
 
 // All routes are protected
-router.use( basicAuth('access'));
+router.use(basicAuth('access'));
 
 router.post('/', AuthenticatedController(ShoppingListController.createShoppingList));
 router.get('/', AuthenticatedController(ShoppingListController.getUserShoppingLists));
@@ -16,12 +16,18 @@ router.delete('/:id', AuthenticatedController(ShoppingListController.deleteShopp
 
 // Item management
 router.post('/:listId/items', AuthenticatedController(ShoppingListController.addItemToList));
-router.put('/:listId/items/:itemId', AuthenticatedController(ShoppingListController.updateListItem));
-router.delete('/:listId/items/:itemId', AuthenticatedController(ShoppingListController.removeItemFromList));
+router.put(
+    '/:listId/items/:itemId',
+    AuthenticatedController(ShoppingListController.updateListItem),
+);
+router.delete(
+    '/:listId/items/:itemId',
+    AuthenticatedController(ShoppingListController.removeItemFromList),
+);
 
 // Status management
 router.post('/:id/submit', AuthenticatedController(ShoppingListController.submitShoppingList));
-router.patch('/:id/status',AuthenticatedController( ShoppingListController.updateListStatus));
+router.patch('/:id/status', AuthenticatedController(ShoppingListController.updateListStatus));
 router.post('/:id/accept', AuthenticatedController(ShoppingListController.acceptShoppingList));
 router.post('/:id/assign', AuthenticatedController(ShoppingListController.assignAgentToList));
 router.post('/:id/prices', AuthenticatedController(ShoppingListController.updateActualPrices));

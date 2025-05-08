@@ -1,5 +1,14 @@
-
-import { Table, Column, Model, DataType, IsUUID, PrimaryKey, Default, IsEmail, Unique } from 'sequelize-typescript';
+import {
+    Table,
+    Column,
+    Model,
+    DataType,
+    IsUUID,
+    PrimaryKey,
+    Default,
+    IsEmail,
+    Unique,
+} from 'sequelize-typescript';
 
 @Table
 export default class Admin extends Model<Admin | IAdmin> {
@@ -7,18 +16,18 @@ export default class Admin extends Model<Admin | IAdmin> {
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({ type: DataType.STRING, allowNull: false })
-        name: string;
+    name: string;
 
     @IsEmail
     @Unique
     @Column({ type: DataType.STRING, allowNull: false })
-        email: string;
+    email: string;
 
     @Column({ type: DataType.BOOLEAN, defaultValue: false })
-        isSuperAdmin: boolean;
+    isSuperAdmin: boolean;
 }
 
 export interface IAdmin {

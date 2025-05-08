@@ -35,10 +35,12 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Security middleware
-app.use(helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
-}));
+app.use(
+    helmet({
+        crossOriginResourcePolicy: { policy: 'cross-origin' },
+        crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+    }),
+);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -54,7 +56,7 @@ app.use(
         secure: NODE_ENV === 'production',
         sameSite: 'lax',
         httpOnly: true,
-    })
+    }),
 );
 
 // Passport middleware
@@ -66,7 +68,7 @@ app.use(
     expressWinston.logger({
         winstonInstance: logger,
         statusLevels: true,
-    })
+    }),
 );
 expressWinston.requestWhitelist.push('body');
 expressWinston.responseWhitelist.push('body');
@@ -80,7 +82,9 @@ app.use(express.static('src/public'));
 
 // Request logger middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
-    logger.warn(`Incoming request: ${req.method} ${req.path} ${req.originalUrl} from ${req.ip} at ${new Date().toISOString()}`);
+    logger.warn(
+        `Incoming request: ${req.method} ${req.path} ${req.originalUrl} from ${req.ip} at ${new Date().toISOString()}`,
+    );
     const fullUrl = req.protocol + '://' + req.get('host') + req.originalUrl;
     console.log('Full Requested URL:', fullUrl);
     next();

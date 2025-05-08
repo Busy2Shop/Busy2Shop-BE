@@ -13,8 +13,10 @@ export interface IViewReferralsQuery {
 }
 
 export default class ReferralService {
-
-    static async createReferral(referralData: IReferral, transaction?: Transaction): Promise<Referral> {
+    static async createReferral(
+        referralData: IReferral,
+        transaction?: Transaction,
+    ): Promise<Referral> {
         try {
             return await Referral.create({ ...referralData }, { transaction });
         } catch (error: unknown) {
@@ -29,7 +31,10 @@ export default class ReferralService {
         }
     }
 
-    static async updateReferral(referral: Referral, dataToUpdate: Partial<IReferral>): Promise<Referral> {
+    static async updateReferral(
+        referral: Referral,
+        dataToUpdate: Partial<IReferral>,
+    ): Promise<Referral> {
         await referral.update(dataToUpdate);
         return await this.viewReferral(referral.id);
     }
@@ -61,7 +66,9 @@ export default class ReferralService {
         return referral;
     }
 
-    static async viewReferrals(queryData?: IViewReferralsQuery): Promise<{ referrals: Referral[], count?: number, totalPages?: number }> {
+    static async viewReferrals(
+        queryData?: IViewReferralsQuery,
+    ): Promise<{ referrals: Referral[]; count?: number; totalPages?: number }> {
         let conditions: Record<string, unknown> = {};
         let paginate = false;
         const { page, size, refereeId, referredId, status } = queryData as IViewReferralsQuery;
@@ -86,23 +93,24 @@ export default class ReferralService {
             where.status = status;
         }
 
-        const { rows: referrals, count }: { rows: Referral[], count: number } = await Referral.findAndCountAll({
-            ...conditions,
-            where,
-            order: [['createdAt', 'DESC']],
-            include: [
-                {
-                    model: User,
-                    as: 'referee',
-                    attributes: ['id', 'firstName', 'lastName', 'email'],
-                },
-                {
-                    model: User,
-                    as: 'referred',
-                    attributes: ['id', 'firstName', 'lastName', 'email'],
-                },
-            ],
-        });
+        const { rows: referrals, count }: { rows: Referral[]; count: number } =
+            await Referral.findAndCountAll({
+                ...conditions,
+                where,
+                order: [['createdAt', 'DESC']],
+                include: [
+                    {
+                        model: User,
+                        as: 'referee',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    },
+                    {
+                        model: User,
+                        as: 'referred',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    },
+                ],
+            });
 
         if (paginate && referrals.length > 0) {
             const totalPages = Pagination.estimateTotalPage({ count, limit: size } as IPaging);

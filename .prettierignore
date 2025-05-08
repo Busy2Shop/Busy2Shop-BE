@@ -1,0 +1,23 @@
+# Build directories
+dist/
+build/
+coverage/
+
+# Node modules
+node_modules/
+
+# Generated files
+*.min.js
+*.min.css
+*.d.ts
+
+# Specific file types to ignore
+*.md
+*.svg
+*.json
+*.lock
+
+# Other special directories
+.git/
+.github/
+.vscode/

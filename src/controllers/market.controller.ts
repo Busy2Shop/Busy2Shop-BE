@@ -37,17 +37,20 @@ export default class MarketController {
         }
 
         // Create the market
-        const newMarket = await MarketService.addMarket({
-            name,
-            address,
-            location,
-            phoneNumber,
-            marketType,
-            description,
-            images: imageUrls,
-            operatingHours,
-            ownerId: req.user.id,
-        }, categoryIds);
+        const newMarket = await MarketService.addMarket(
+            {
+                name,
+                address,
+                location,
+                phoneNumber,
+                marketType,
+                description,
+                images: imageUrls,
+                operatingHours,
+                ownerId: req.user.id,
+            },
+            categoryIds,
+        );
 
         res.status(201).json({
             status: 'success',
@@ -57,17 +60,7 @@ export default class MarketController {
     }
 
     static async getAllMarkets(req: Request, res: Response) {
-        const {
-            page,
-            size,
-            q,
-            categoryId,
-            marketType,
-            isPinned,
-            lat,
-            lng,
-            distance,
-        } = req.query;
+        const { page, size, q, categoryId, marketType, isPinned, lat, lng, distance } = req.query;
 
         const queryParams: Record<string, unknown> = {};
 
@@ -116,14 +109,7 @@ export default class MarketController {
 
     static async updateMarket(req: AuthenticatedRequest, res: Response) {
         const { id } = req.params;
-        const {
-            name,
-            address,
-            location,
-            phoneNumber,
-            description,
-            operatingHours,
-        } = req.body;
+        const { name, address, location, phoneNumber, description, operatingHours } = req.body;
 
         // Check if the user is the owner of the market
         const market = await MarketService.viewSingleMarket(id);

@@ -17,10 +17,7 @@ const getApiPatterns = () => {
     }
 
     // Default patterns for development - TypeScript files
-    return [
-        path.join(__dirname, './docs/*.yaml'),
-        path.join(__dirname, './routes/*.ts'),
-    ];
+    return [path.join(__dirname, './docs/*.yaml'), path.join(__dirname, './routes/*.ts')];
 };
 
 // Initial swagger options
@@ -70,9 +67,9 @@ options.apis.forEach(pattern => {
         const filePattern = path.basename(pattern);
 
         if (fs.existsSync(dir)) {
-            const files = fs.readdirSync(dir).filter(file =>
-                new RegExp(filePattern.replace('*', '.*')).test(file)
-            );
+            const files = fs
+                .readdirSync(dir)
+                .filter(file => new RegExp(filePattern.replace('*', '.*')).test(file));
             console.log(`Files matching ${pattern}:`, files);
 
             // For each JavaScript file, check if it contains JSDoc comments
@@ -80,8 +77,12 @@ options.apis.forEach(pattern => {
                 const sampleFile = path.join(dir, files[0]);
                 if (fs.existsSync(sampleFile)) {
                     const content = fs.readFileSync(sampleFile, 'utf8');
-                    const hasJsDocComments = content.includes('/**') && content.includes('@swagger') || content.includes('@openapi');
-                    console.log(`Sample file ${files[0]} contains JSDoc swagger comments: ${hasJsDocComments}`);
+                    const hasJsDocComments =
+                        (content.includes('/**') && content.includes('@swagger')) ||
+                        content.includes('@openapi');
+                    console.log(
+                        `Sample file ${files[0]} contains JSDoc swagger comments: ${hasJsDocComments}`,
+                    );
                 }
             }
         } else {
@@ -118,7 +119,9 @@ export const updateSwaggerHost = (req: Request) => {
     console.log('Routes defined in spec:', Object.keys(updatedSpecs.paths || {}).length);
     if (Object.keys(updatedSpecs.paths || {}).length === 0) {
         console.warn('WARNING: No API routes found in the Swagger specification!');
-        console.warn('Check that your route files contain proper JSDoc annotations with @swagger or @openapi tags.');
+        console.warn(
+            'Check that your route files contain proper JSDoc annotations with @swagger or @openapi tags.',
+        );
     }
 
     return updatedSpecs;

@@ -7,7 +7,6 @@ import OrderService from '../services/order.service';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
 
 export default class ChatController {
-
     /**
      * Validates if a user has permission to access an order's chat
      *
@@ -22,10 +21,12 @@ export default class ChatController {
     private static verifyOrderAccess(
         order: { agentId?: string; customerId?: string },
         userId: string,
-        userType: string): void {
+        userType: string,
+    ): void {
         // Refactored to avoid duplicate BadRequestError
-        const hasAccess = (userType === 'agent' && order.agentId === userId) ||
-                        (userType === 'customer' && order.customerId === userId);
+        const hasAccess =
+            (userType === 'agent' && order.agentId === userId) ||
+            (userType === 'customer' && order.customerId === userId);
 
         if (!hasAccess) {
             throw new BadRequestError('You do not have access to this order chat');
@@ -46,7 +47,6 @@ export default class ChatController {
         // Check if the user is authorized to access this order's chat
         ChatController.verifyOrderAccess(order, userId, req.user.status.userType);
 
-
         // Check if the chat is active
         const isChatActive = await ChatService.isChatActive(orderId);
         if (!isChatActive) {
@@ -65,13 +65,11 @@ export default class ChatController {
                 messages,
             },
         });
-
     }
 
     static async getUnreadMessageCount(req: AuthenticatedRequest, res: Response) {
         const { id } = req.user;
         const { orderId } = req.query;
-
 
         let result;
 
@@ -157,7 +155,6 @@ export default class ChatController {
                 message: 'Failed to activate chat',
             });
         }
-
     }
 
     static async isChatActive(req: AuthenticatedRequest, res: Response) {
@@ -210,6 +207,5 @@ export default class ChatController {
                 imageUrl: result.url,
             },
         });
-
     }
 }
