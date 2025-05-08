@@ -41,6 +41,10 @@ export const paymentExpiryCheckQueue = new Queue<PaymentExpiryCheckJobData>(
 const webhookWorker = new Worker<PaymentWebhookJobData>(
     'payment-webhook',
     async job => {
+        if (job.name !== 'process-webhook') {
+            throw new Error(`Unknown job name: ${job.name}`);
+        }
+
         const { providerTransactionId, transactionId } = job.data;
         logger.info(`Processing payment webhook for transaction ${transactionId}`);
 

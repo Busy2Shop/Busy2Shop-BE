@@ -129,7 +129,7 @@ export default class AlatPayController {
             }
 
             // Process the webhook asynchronously using the queue system
-            await paymentWebhookQueue.add({
+            await paymentWebhookQueue.add('process-webhook', {
                 providerTransactionId: payload.Value.Data.Id,
                 transactionId: transaction.id,
                 userId: transaction.userId,
