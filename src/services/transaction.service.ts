@@ -1,8 +1,5 @@
-import {
-    Transaction,
+import Transaction, {
     TransactionStatus,
-    TransactionType,
-    PaymentMethod,
     ITransaction,
 } from '../models/transaction.model';
 import { logger } from '../utils/logger';
