@@ -5,7 +5,7 @@ import { redisClient, redisPubClient, redisSubClient } from './utils/redis';
 import http from 'http';
 import SocketConfig from './clients/socket/index.config';
 import { NODE_ENV, PORT } from './utils/constants';
-import queues from './queues';
+import queues, { gracefulShutdown as shutdownQueues } from './queues';
 
 // Create the HTTP server
 const server = http.createServer(app);
@@ -26,6 +26,7 @@ async function startServer(): Promise<void> {
         // Start the server and listen on the configured port
         const port = PORT || 8090;
         server.listen(port, () => {
+            // Initialize queue system and recurring jobs
             queues.initializeRecurringJobs(app);
 
             const address = server.address();
@@ -40,6 +41,9 @@ async function startServer(): Promise<void> {
             logger.info(
                 `Swagger documentation available at: ${protocol}://${hostname}:${port}/api-docs`,
             );
+            logger.info(
+                `BullMQ Dashboard available at: ${protocol}://${hostname}:${port}/admin/queues`,
+            );
         });
 
         // Handle server errors
@@ -52,12 +56,62 @@ async function startServer(): Promise<void> {
         });
 
         // Handle process termination
-        process.on('SIGTERM', () => {
+        process.on('SIGTERM', async () => {
             logger.info('SIGTERM received. Shutting down gracefully');
-            server.close(() => {
-                logger.info('Process terminated');
-                process.exit(0);
+
+            // First, close the HTTP server to stop accepting new connections
+            server.close(async () => {
+                try {
+                    // Then shut down queues gracefully
+                    await shutdownQueues();
+                    logger.info('Queue system shut down successfully');
+
+                    // Finally close Redis connections
+                    await Promise.all([
+                        redisClient.quit(),
+                        redisPubClient.quit(),
+                        redisSubClient.quit(),
+                    ]);
+                    logger.info('Redis connections closed successfully');
+
+                    logger.info('Process terminated gracefully');
+                    process.exit(0);
+                } catch (error) {
+                    logger.error('Error during graceful shutdown:', error);
+                    process.exit(1);
+                }
             });
+
+            // Safety timeout - force exit after 10 seconds if graceful shutdown fails
+            setTimeout(() => {
+                logger.error('Graceful shutdown timed out after 10s, forcing exit');
+                process.exit(1);
+            }, 10000);
+        });
+
+        // Also handle SIGINT (Ctrl+C)
+        process.on('SIGINT', async () => {
+            logger.info('SIGINT received. Shutting down gracefully');
+            server.close(async () => {
+                try {
+                    await shutdownQueues();
+                    await Promise.all([
+                        redisClient.quit(),
+                        redisPubClient.quit(),
+                        redisSubClient.quit(),
+                    ]);
+                    logger.info('Process terminated');
+                    process.exit(0);
+                } catch (error) {
+                    logger.error('Error during shutdown:', error);
+                    process.exit(1);
+                }
+            });
+
+            setTimeout(() => {
+                logger.error('Graceful shutdown timed out, forcing exit');
+                process.exit(1);
+            }, 10000);
         });
     } catch (err) {
         logger.error('Server startup error:', err);
@@ -77,6 +131,10 @@ async function startServer(): Promise<void> {
         };
 
         await closeRedis();
+        await shutdownQueues().catch(queueErr => {
+            logger.error('Error closing queue connections:', queueErr);
+        });
+
         process.exit(1);
     }
 }

@@ -1,10 +1,13 @@
+// src/controllers/payment/alatpay.controller.ts
 import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../../middlewares/authMiddleware';
 import AlatPayService from '../../services/payment/alatpay.service';
 import { BadRequestError, NotFoundError } from '../../utils/customErrors';
 import { logger } from '../../utils/logger';
 import OrderService from '../../services/order.service';
-import ShoppingListService from '../../services/shopping-list.service';
+import ShoppingListService from '../../services/shoppingList.service';
+import { paymentWebhookQueue } from '../../queues/payment.queue';
+import ShoppingListItem from '../../models/shoppingListItem.model';
 
 export default class AlatPayController {
     /**
@@ -66,7 +69,7 @@ export default class AlatPayController {
         const endAt = req.query.endAt ? new Date(req.query.endAt as string) : undefined;
 
         // Build filters object
-        const filters: any = {};
+        const filters: Record<string, any> = {};
         if (status) filters.Status = status;
         if (startAt) filters.StartAt = startAt.toISOString();
         if (endAt) filters.EndAt = endAt.toISOString();
@@ -105,19 +108,27 @@ export default class AlatPayController {
             logger.info('Received ALATPay webhook', {
                 payloadSummary: payload?.Value?.Data
                     ? {
-                          transactionId: payload.Value.Data.Id,
-                          status: payload.Value.Data.Status,
-                          amount: payload.Value.Data.Amount,
-                          orderId: payload.Value.Data.OrderId,
-                      }
+                        transactionId: payload.Value.Data.Id,
+                        status: payload.Value.Data.Status,
+                        amount: payload.Value.Data.Amount,
+                        orderId: payload.Value.Data.OrderId,
+                    }
                     : 'Invalid payload structure',
             });
 
-            // Process the webhook asynchronously
+            // Process the webhook asynchronously using the queue system
             // We don't want to keep ALATPay waiting for a response
-            AlatPayService.processWebhook({ payload }).catch(error => {
-                logger.error('Error processing webhook:', error);
-            });
+            await paymentWebhookQueue.add(
+                'process-webhook',
+                { payload },
+                {
+                    attempts: 3,
+                    backoff: {
+                        type: 'exponential',
+                        delay: 1000,
+                    },
+                }
+            );
 
             // Always respond with 200 to acknowledge receipt
             // This prevents ALATPay from retrying the webhook
@@ -160,12 +171,12 @@ export default class AlatPayController {
                 throw new BadRequestError('You do not have access to this shopping list');
             }
 
-            // Calculate total amount
+            // Calculate total amount with explicit typing to fix TypeScript error
             const totalAmount =
                 shoppingList.estimatedTotal ||
                 shoppingList.items.reduce(
-                    (acc, item) => acc + (item.estimatedPrice || 0) * item.quantity,
-                    0,
+                    (acc: number, item: ShoppingListItem) => acc + (item.estimatedPrice || 0) * item.quantity,
+                    0
                 );
 
             // Generate virtual account

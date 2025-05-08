@@ -11,7 +11,6 @@ import {
     Default,
     CreatedAt,
     UpdatedAt,
-    Index,
 } from 'sequelize-typescript';
 import User from '../user.model';
 import Order from '../order.model';
