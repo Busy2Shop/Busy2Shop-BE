@@ -35,15 +35,10 @@ async function startServer(): Promise<void> {
             const protocol = NODE_ENV === 'production' ? 'https' : 'http';
             const hostname = host === '::' ? 'localhost' : host;
 
-            logger.info(`Server is running in ${NODE_ENV} mode`);
-            logger.info(`Server is running on Port ${port}`);
-            logger.info(`Server URL: ${protocol}://${hostname}:${port}`);
             logger.info(
                 `Swagger documentation available at: ${protocol}://${hostname}:${port}/api-docs`,
             );
-            logger.info(
-                `BullMQ Dashboard available at: ${protocol}://${hostname}:${port}/admin/queues`,
-            );
+            logger.info(`Server is running on Port ${port} --${NODE_ENV} mode `);
         });
 
         // Handle server errors
