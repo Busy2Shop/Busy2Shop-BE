@@ -5,6 +5,8 @@ import { redisClient, redisPubClient, redisSubClient } from './utils/redis';
 import http from 'http';
 import SocketConfig from './clients/socket/index.config';
 import { NODE_ENV, PORT } from './utils/constants';
+import queues from './queues';
+
 
 // Create the HTTP server
 const server = http.createServer(app);
@@ -25,6 +27,8 @@ async function startServer(): Promise<void> {
         // Start the server and listen on the configured port
         const port = PORT || 8090;
         server.listen(port, () => {
+            queues.initializeRecurringJobs(app);
+
             const address = server.address();
             const host = typeof address === 'string' ? 'localhost' : address?.address ?? 'localhost';
             const protocol = NODE_ENV === 'production' ? 'https' : 'http';

@@ -41,6 +41,19 @@ router.post(
     AuthenticatedController(AlatPayController.generateOrderPaymentLink)
 );
 
+// Admin routes for transaction management
+router.get(
+    '/reconcile',
+    basicAuth('admin'),
+    AuthenticatedController(AlatPayController.reconcileTransactions)
+);
+
+router.get(
+    '/check-expired',
+    basicAuth('admin'),
+    AuthenticatedController(AlatPayController.checkExpiredTransactions)
+);
+
 // Webhook route - this doesn't require authentication as it's called by ALATPay
 router.post('/webhook', AlatPayController.handleWebhook);
 

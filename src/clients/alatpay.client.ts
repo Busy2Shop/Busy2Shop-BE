@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { logger } from '../utils/logger';
 import { ALATPAY_API_URL, ALATPAY_SUBSCRIPTION_KEY, ALATPAY_BUSINESS_ID, ALATPAY_MERCHANT_ID } from '../utils/constants';
 
@@ -176,6 +176,8 @@ export default class AlatPayClient {
     private subscriptionKey: string;
     private businessId: string;
     private merchantId: string;
+    private maxRetries: number = 3;
+    private retryDelay: number = 1000; // 1 second
 
     private constructor() {
         this.apiUrl = ALATPAY_API_URL || 'https://apibox.alatpay.ng';
@@ -202,67 +204,91 @@ export default class AlatPayClient {
         };
     }
 
-    public async generateVirtualAccount(request: Omit<AlatPayVirtualAccountRequest, 'businessId'>): Promise<AlatPayVirtualAccountResponse> {
+    private async makeRequest(method: 'get' | 'post', url: string, data?: any, params?: any, retryCount = 0): Promise<any> {
         try {
-            const finalRequest: AlatPayVirtualAccountRequest = {
-                ...request,
-                businessId: this.businessId,
-            };
-
-            const response = await axios.post(
-                `${this.apiUrl}/bank-transfer/api/v1/bankTransfer/virtualAccount`,
-                finalRequest,
-                { headers: this.getHeaders() }
-            );
-
+            const response = await axios({
+                method,
+                url,
+                data,
+                params,
+                headers: this.getHeaders(),
+            });
             return response.data;
         } catch (error) {
-            logger.error('Error generating virtual account:', error);
+            const axiosError = error as AxiosError;
+
+            // Log detailed error information
+            logger.error(`ALATPay API error: ${method.toUpperCase()} ${url}`, {
+                status: axiosError.response?.status,
+                data: axiosError.response?.data,
+                message: axiosError.message,
+                retryCount,
+            });
+
+            // Retry on network errors or 5xx server errors
+            if (retryCount < this.maxRetries &&
+                (axiosError.code === 'ECONNABORTED' ||
+                    axiosError.code === 'ETIMEDOUT' ||
+                    (axiosError.response && axiosError.response.status >= 500))) {
+
+                logger.info(`Retrying ALATPay request (${retryCount + 1}/${this.maxRetries}): ${method.toUpperCase()} ${url}`);
+
+                // Exponential backoff
+                const delay = this.retryDelay * Math.pow(2, retryCount);
+                await new Promise(resolve => setTimeout(resolve, delay));
+
+                return this.makeRequest(method, url, data, params, retryCount + 1);
+            }
+
             throw error;
         }
+    }
+
+    public async generateVirtualAccount(request: Omit<AlatPayVirtualAccountRequest, 'businessId'>): Promise<AlatPayVirtualAccountResponse> {
+        const finalRequest: AlatPayVirtualAccountRequest = {
+            ...request,
+            businessId: this.businessId,
+        };
+
+        return this.makeRequest(
+            'post',
+            `${this.apiUrl}/bank-transfer/api/v1/bankTransfer/virtualAccount`,
+            finalRequest
+        );
     }
 
     public async getTransactionStatus(transactionId: string): Promise<AlatPayTransactionStatusResponse> {
-        try {
-            const response = await axios.get(
-                `${this.apiUrl}/bank-transfer/api/v1/bankTransfer/transactions/${transactionId}`,
-                { headers: this.getHeaders() }
-            );
-
-            return response.data;
-        } catch (error) {
-            logger.error('Error checking transaction status:', error);
-            throw error;
-        }
+        return this.makeRequest(
+            'get',
+            `${this.apiUrl}/bank-transfer/api/v1/bankTransfer/transactions/${transactionId}`
+        );
     }
 
-    public async getAllTransactions(page: number = 1, limit: number = 10): Promise<any> {
-        try {
-            const response = await axios.get(
-                `${this.apiUrl}/alatpaytransaction/api/v1/transactions`,
-                {
-                    params: {
-                        Page: page,
-                        Limit: limit,
-                        BusinessId: this.businessId,
-                    },
-                    headers: this.getHeaders(),
-                }
-            );
+    public async getAllTransactions(page: number = 1, limit: number = 10, filters?: any): Promise<any> {
+        const params = {
+            Page: page,
+            Limit: limit,
+            BusinessId: this.businessId,
+            ...filters, // Allow additional filters like date range, status, etc.
+        };
 
-            return response.data;
-        } catch (error) {
-            logger.error('Error fetching transactions:', error);
-            throw error;
-        }
+        return this.makeRequest(
+            'get',
+            `${this.apiUrl}/alatpaytransaction/api/v1/transactions`,
+            undefined,
+            params
+        );
+    }
+
+    public async getSingleTransaction(id: string): Promise<any> {
+        return this.makeRequest(
+            'get',
+            `${this.apiUrl}/alatpaytransaction/api/v1/transactions/${id}`
+        );
     }
 
     public async validateWebhookPayload(payload: AlatPayWebhookPayload): Promise<boolean> {
-        // In a real implementation, you would verify the webhook signature
-        // ALATPay might include a signature in headers or have another
-        // mechanism to verify webhook authenticity
-
-        // For now, we'll do some basic validation
+        // Basic validation
         if (!payload.Value || !payload.Value.Data) {
             return false;
         }
@@ -271,5 +297,29 @@ export default class AlatPayClient {
 
         // Verify this webhook is for your business
         return (BusinessId === this.businessId && MerchantId === this.merchantId);
+    }
+
+    // Add support for filtering transactions by date range
+    public async getTransactionsByDateRange(
+        startDate: Date,
+        endDate: Date,
+        page: number = 1,
+        limit: number = 10
+    ): Promise<any> {
+        return this.getAllTransactions(page, limit, {
+            StartAt: startDate.toISOString(),
+            EndAt: endDate.toISOString(),
+        });
+    }
+
+    // Add support for filtering transactions by status
+    public async getTransactionsByStatus(
+        status: string,
+        page: number = 1,
+        limit: number = 10
+    ): Promise<any> {
+        return this.getAllTransactions(page, limit, {
+            Status: status,
+        });
     }
 }

@@ -1,6 +1,7 @@
 /* eslint-disable no-unused-vars */
 import {
     Table, Column, Model, DataType, ForeignKey, BelongsTo, IsUUID, PrimaryKey, Default,
+    CreatedAt, UpdatedAt, Index
 } from 'sequelize-typescript';
 import User from '../user.model';
 import Order from '../order.model';
@@ -13,107 +14,150 @@ export enum AlatPayStatus {
     EXPIRED = 'expired'
 }
 
-@Table
+@Table({
+    tableName: 'alat_payments',
+    indexes: [
+        { fields: ['transaction_id'], unique: true },
+        { fields: ['user_id'] },
+        { fields: ['order_id'] },
+        { fields: ['status'] },
+    ]
+})
 export default class AlatPayment extends Model<AlatPayment | IAlatPayment> {
     @IsUUID(4)
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column
-        id: string;
+    id: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: false,
+        unique: true,
+        field: 'transaction_id'
     })
-        transactionId: string;
+    transactionId: string;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: false,
     })
-        amount: number;
+    amount: number;
 
     @Column({
         type: DataType.STRING,
         allowNull: false,
         defaultValue: 'NGN',
     })
-        currency: string;
+    currency: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: false,
+        field: 'virtual_bank_account_number'
     })
-        virtualBankAccountNumber: string;
+    virtualBankAccountNumber: string;
 
     @Column({
         type: DataType.STRING,
         allowNull: false,
+        field: 'virtual_bank_code'
     })
-        virtualBankCode: string;
+    virtualBankCode: string;
 
     @Column({
         type: DataType.ENUM(...Object.values(AlatPayStatus)),
         allowNull: false,
         defaultValue: AlatPayStatus.PENDING,
     })
-        status: AlatPayStatus;
+    status: AlatPayStatus;
 
     @Column({
         type: DataType.DATE,
         allowNull: false,
+        field: 'expired_at'
     })
-        expiredAt: Date;
+    expiredAt: Date;
 
     @Column({
         type: DataType.DATE,
         allowNull: true,
+        field: 'paid_at'
     })
-        paidAt: Date;
+    paidAt: Date;
 
     @Column({
         type: DataType.JSONB,
         allowNull: true,
     })
-        metadata: object;
+    metadata: object;
 
     @Column({
         type: DataType.JSONB,
         allowNull: true,
     })
-        response: object;
+    response: object;
 
     // Foreign keys
     @IsUUID(4)
     @ForeignKey(() => User)
     @Column({
         allowNull: false,
+        field: 'user_id'
     })
-        userId: string;
+    userId: string;
 
     @IsUUID(4)
     @ForeignKey(() => Order)
     @Column({
         allowNull: true,
+        field: 'order_id'
     })
-        orderId: string;
+    orderId: string;
 
     @IsUUID(4)
     @ForeignKey(() => ShoppingList)
     @Column({
         allowNull: true,
+        field: 'shopping_list_id'
     })
-        shoppingListId: string;
+    shoppingListId: string;
+
+    // Timestamps
+    @CreatedAt
+    @Column({
+        field: 'created_at'
+    })
+    createdAt: Date;
+
+    @UpdatedAt
+    @Column({
+        field: 'updated_at'
+    })
+    updatedAt: Date;
 
     // Associations
     @BelongsTo(() => User)
-        user: User;
+    user: User;
 
     @BelongsTo(() => Order)
-        order: Order;
+    order: Order;
 
     @BelongsTo(() => ShoppingList)
-        shoppingList: ShoppingList;
+    shoppingList: ShoppingList;
+
+    // Calculated fields
+    get isExpired(): boolean {
+        return new Date() > new Date(this.expiredAt);
+    }
+
+    get isPaid(): boolean {
+        return this.status === AlatPayStatus.COMPLETED;
+    }
+
+    get hasFailed(): boolean {
+        return this.status === AlatPayStatus.FAILED;
+    }
 }
 
 export interface IAlatPayment {
@@ -131,4 +175,6 @@ export interface IAlatPayment {
     userId: string;
     orderId?: string;
     shoppingListId?: string;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
