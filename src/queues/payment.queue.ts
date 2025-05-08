@@ -1,181 +1,65 @@
 // src/queues/payment.queue.ts
-import { Queue, Worker } from 'bullmq';
-import { connection } from './connection';
+import Bull from 'bull';
 import { logger } from '../utils/logger';
 import AlatPayService from '../services/payment/alatpay.service';
+import { NotificationTypes } from '../models/notification.model';
 import NotificationService from '../services/notification.service';
-import { NotificationTypes } from '../utils/interface';
-import { emailService } from '../utils/Email';
+import { ITransaction } from '../models/transaction.model';
 
-// Queue names
-export const PAYMENT_PROCESSING_QUEUE = 'payment-processing';
-export const PAYMENT_WEBHOOK_QUEUE = 'payment-webhook';
-export const PAYMENT_EXPIRY_CHECK_QUEUE = 'payment-expiry-check';
-
-// Create queues
-export const paymentProcessingQueue = new Queue(PAYMENT_PROCESSING_QUEUE, { connection });
-export const paymentWebhookQueue = new Queue(PAYMENT_WEBHOOK_QUEUE, { connection });
-export const paymentExpiryCheckQueue = new Queue(PAYMENT_EXPIRY_CHECK_QUEUE, { connection });
-
-// Worker for processing payments
-const paymentProcessingWorker = new Worker(
-    PAYMENT_PROCESSING_QUEUE,
-    async (job) => {
-        const { paymentId, transactionId } = job.data;
-        logger.info(`Processing payment job for transaction ${transactionId}`);
-
-        try {
-            // Check the payment status from AlatPay
-            const result = await AlatPayService.checkTransactionStatus(transactionId);
-
-            // Update our payment record based on the AlatPay status
-            await AlatPayService.updatePaymentStatus({
-                transactionId,
-                status: result.data.status,
-                response: result.data,
-            });
-
-            // If payment is completed, process the order/shopping list
-            if (result.data.status === 'completed') {
-                await AlatPayService.processCompletedPayment(paymentId);
-
-                // Get the payment details to notify the customer
-                const payment = await AlatPayService.getPaymentById(paymentId);
-
-                if (payment) {
-                    // Send notification
-                    await NotificationService.addNotification({
-                        userId: payment.userId,
-                        title: NotificationTypes.PAYMENT_SUCCESSFUL,
-                        heading: 'Payment Successful',
-                        message: `Your payment of ${payment.currency} ${payment.amount} has been processed successfully.`,
-                        resource: payment.orderId || payment.shoppingListId,
-                        read: false,
-                        id: '', // Empty string as placeholder, will be set by the service
-                    });
-
-                    // Queue an email notification
-                    if (payment.userId) {
-                        const user = await AlatPayService.getUserById(payment.userId);
-                        if (user && user.email) {
-                            await emailService.send({
-                                email: user.email,
-                                subject: 'Payment Successful',
-                                from: 'support',
-                                message: `Your payment of ${payment.currency} ${payment.amount} has been processed successfully.`,
-                                postmarkInfo: [{
-                                    postMarkTemplateData: {
-                                        name: user.firstName || 'Valued Customer',
-                                        amount: payment.amount,
-                                        date: new Date().toLocaleDateString(),
-                                    },
-                                    recipientEmail: user.email,
-                                }],
-                            });
-                        }
-                    }
-                }
-            }
-
-            logger.info(`Payment processing completed for transaction ${transactionId}`);
-            return { success: true };
-        } catch (error) {
-            logger.error(`Error processing payment ${transactionId}:`, error);
-            throw error;
-        }
+// Create a Bull queue for payment processing
+export const paymentProcessingQueue = new Bull('payment-processing', {
+    redis: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
     },
-    {
-        connection,
-        limiter: {
-            max: 50,
-            duration: 1000 * 60, // 1 minute
-        },
-    }
-);
-
-// Worker for processing webhooks
-const paymentWebhookWorker = new Worker(
-    PAYMENT_WEBHOOK_QUEUE,
-    async (job) => {
-        const { payload } = job.data;
-        logger.info('Processing AlatPay webhook');
-
-        try {
-            // Process the webhook asynchronously
-            await AlatPayService.processWebhook({ payload });
-            logger.info('Webhook processed successfully');
-            return { success: true };
-        } catch (error) {
-            logger.error('Error processing webhook:', error);
-            throw error;
-        }
-    },
-    { connection }
-);
-
-// Worker for checking expired payments
-const paymentExpiryCheckWorker = new Worker(
-    PAYMENT_EXPIRY_CHECK_QUEUE,
-    async (_job) => {
-        logger.info('Checking for expired payments');
-
-        try {
-            const results = await AlatPayService.checkExpiredTransactions();
-            logger.info(`Processed ${results.processed} expired payments`);
-            return results;
-        } catch (error) {
-            logger.error('Error checking expired payments:', error);
-            throw error;
-        }
-    },
-    { connection }
-);
-
-// Error handling for all workers
-[paymentProcessingWorker, paymentWebhookWorker, paymentExpiryCheckWorker].forEach(worker => {
-    worker.on('failed', (job, error) => {
-        if (job) {
-            logger.error(`${job.queueName} job ${job.id} failed:`, error);
-        }
-    });
-
-    worker.on('error', (error) => {
-        logger.error('Worker error:', error);
-    });
 });
 
-// Initialize recurring jobs
-export const initializePaymentJobs = async () => {
+// Process completed payments
+paymentProcessingQueue.process('process-completed-payment', async (job) => {
     try {
-        // Schedule a job to check for expired payments every hour
-        await paymentExpiryCheckQueue.add(
-            'check-expired-payments',
-            {},
-            {
-                repeat: {
-                    pattern: '0 * * * *', // Every hour
-                },
-                jobId: 'scheduled-expiry-check',
-            }
-        );
+        const { transactionId, providerTransactionId } = job.data;
 
-        logger.info('Payment recurring jobs initialized successfully');
+        // Process the payment
+        await AlatPayService.processCompletedPayment(transactionId);
+
+        // Get transaction details for notification
+        const transaction = await AlatPayService.getTransactionById(transactionId);
+        if (!transaction) {
+            throw new Error(`Transaction not found: ${transactionId}`);
+        }
+
+        // Create notification for successful payment
+        await NotificationService.addNotification({
+            userId: transaction.userId,
+            title: NotificationTypes.PAYMENT_SUCCESSFUL,
+            message: `Your payment of ${transaction.currency} ${transaction.amount} has been processed successfully.`,
+            type: NotificationTypes.PAYMENT_SUCCESSFUL,
+            read: false,
+            id: '',
+            metadata: {
+                transactionId: transaction.id,
+                amount: transaction.amount,
+                currency: transaction.currency,
+                orderId: transaction.orderId,
+                shoppingListId: transaction.shoppingListId,
+            },
+        });
+
+        logger.info(`Payment processing completed for transaction ${transactionId}`);
     } catch (error) {
-        logger.error('Failed to initialize payment recurring jobs:', error);
+        logger.error('Error processing payment:', error);
         throw error;
     }
-};
+});
 
-export default {
-    queues: {
-        paymentProcessingQueue,
-        paymentWebhookQueue,
-        paymentExpiryCheckQueue,
-    },
-    workers: {
-        paymentProcessingWorker,
-        paymentWebhookWorker,
-        paymentExpiryCheckWorker,
-    },
-    initializePaymentJobs,
-};
+// Handle failed jobs
+paymentProcessingQueue.on('failed', (job, error) => {
+    logger.error(`Job ${job.id} failed:`, error);
+});
+
+// Handle completed jobs
+paymentProcessingQueue.on('completed', (job) => {
+    logger.info(`Job ${job.id} completed successfully`);
+});
+
+export default paymentProcessingQueue;
