@@ -121,7 +121,7 @@ export default class AlatPayService {
 
                 if (transaction.status !== alatPayStatus) {
                     // Queue webhook processing if status changed
-                    await paymentWebhookQueue.add({
+                    await paymentWebhookQueue.add('process-webhook', {
                         providerTransactionId: transactionId,
                         transactionId: transaction.id,
                         userId: transaction.userId,
@@ -172,7 +172,7 @@ export default class AlatPayService {
             }
 
             // Queue the webhook processing
-            await paymentWebhookQueue.add({
+            await paymentWebhookQueue.add('process-webhook', {
                 providerTransactionId: Data.Id,
                 transactionId: transaction.id,
                 userId: transaction.userId,
@@ -224,7 +224,7 @@ export default class AlatPayService {
                         );
 
                         // Queue webhook processing
-                        await paymentWebhookQueue.add({
+                        await paymentWebhookQueue.add('process-webhook', {
                             providerTransactionId: transaction.metadata.providerTransactionId,
                             transactionId: transaction.id,
                             userId: transaction.userId,
@@ -246,7 +246,7 @@ export default class AlatPayService {
                         );
 
                         // Queue expiry check
-                        await paymentExpiryCheckQueue.add({
+                        await paymentExpiryCheckQueue.add('check-expiry', {
                             transactionId: transaction.id,
                             userId: transaction.userId,
                         });
@@ -374,7 +374,7 @@ export default class AlatPayService {
                         );
 
                         // Queue webhook processing
-                        await paymentWebhookQueue.add({
+                        await paymentWebhookQueue.add('process-webhook', {
                             providerTransactionId: transaction.metadata.providerTransactionId,
                             transactionId: transaction.id,
                             userId: transaction.userId,

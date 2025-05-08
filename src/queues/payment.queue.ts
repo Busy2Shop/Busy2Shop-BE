@@ -89,6 +89,10 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
 const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
     'payment-expiry-check',
     async job => {
+        if (job.name !== 'check-expiry') {
+            throw new Error(`Unknown job name: ${job.name}`);
+        }
+
         const { transactionId } = job.data;
         logger.info(`Checking payment expiry for transaction ${transactionId}`);
 
