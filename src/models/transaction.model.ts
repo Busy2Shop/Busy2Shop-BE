@@ -182,4 +182,4 @@ export interface ITransaction {
     refundedAt?: Date;
     refundAmount?: number;
     refundReason?: string;
-} 
+}

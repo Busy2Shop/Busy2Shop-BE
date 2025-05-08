@@ -108,11 +108,11 @@ export default class AlatPayController {
             logger.info('Received ALATPay webhook', {
                 payloadSummary: payload?.Value?.Data
                     ? {
-                        transactionId: payload.Value.Data.Id,
-                        status: payload.Value.Data.Status,
-                        amount: payload.Value.Data.Amount,
-                        orderId: payload.Value.Data.OrderId,
-                    }
+                          transactionId: payload.Value.Data.Id,
+                          status: payload.Value.Data.Status,
+                          amount: payload.Value.Data.Amount,
+                          orderId: payload.Value.Data.OrderId,
+                      }
                     : 'Invalid payload structure',
             });
 
@@ -127,7 +127,7 @@ export default class AlatPayController {
                         type: 'exponential',
                         delay: 1000,
                     },
-                }
+                },
             );
 
             // Always respond with 200 to acknowledge receipt
@@ -175,8 +175,9 @@ export default class AlatPayController {
             const totalAmount =
                 shoppingList.estimatedTotal ||
                 shoppingList.items.reduce(
-                    (acc: number, item: ShoppingListItem) => acc + (item.estimatedPrice || 0) * item.quantity,
-                    0
+                    (acc: number, item: ShoppingListItem) =>
+                        acc + (item.estimatedPrice || 0) * item.quantity,
+                    0,
                 );
 
             // Generate virtual account

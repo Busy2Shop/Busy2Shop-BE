@@ -1,4 +1,10 @@
-import { Transaction, TransactionStatus, TransactionType, PaymentMethod, ITransaction } from '../models/transaction.model';
+import {
+    Transaction,
+    TransactionStatus,
+    TransactionType,
+    PaymentMethod,
+    ITransaction,
+} from '../models/transaction.model';
 import { logger } from '../utils/logger';
 import { BadRequestError, NotFoundError } from '../utils/customErrors';
 import { Op } from 'sequelize';
@@ -39,7 +45,7 @@ export default class TransactionService {
         userId: string,
         page: number = 1,
         limit: number = 10,
-        filters: any = {}
+        filters: any = {},
     ): Promise<{ transactions: Transaction[]; count: number; totalPages: number }> {
         const where: any = { userId };
 
@@ -80,9 +86,9 @@ export default class TransactionService {
     static async updateTransactionStatus(
         id: string,
         status: TransactionStatus,
-        metadata: any = {}
+        metadata: any = {},
     ): Promise<Transaction> {
-        return await Database.transaction(async (transaction) => {
+        return await Database.transaction(async transaction => {
             const existingTransaction = await Transaction.findByPk(id, { transaction });
 
             if (!existingTransaction) {
@@ -103,7 +109,10 @@ export default class TransactionService {
             }
 
             // Set refundedAt if status is refunded or partially_refunded
-            if (status === TransactionStatus.REFUNDED || status === TransactionStatus.PARTIALLY_REFUNDED) {
+            if (
+                status === TransactionStatus.REFUNDED ||
+                status === TransactionStatus.PARTIALLY_REFUNDED
+            ) {
                 updateData.refundedAt = new Date();
             }
 
@@ -116,12 +125,8 @@ export default class TransactionService {
     /**
      * Process a refund
      */
-    static async processRefund(
-        id: string,
-        amount: number,
-        reason: string
-    ): Promise<Transaction> {
-        return await Database.transaction(async (transaction) => {
+    static async processRefund(id: string, amount: number, reason: string): Promise<Transaction> {
+        return await Database.transaction(async transaction => {
             const existingTransaction = await Transaction.findByPk(id, { transaction });
 
             if (!existingTransaction) {
@@ -154,7 +159,7 @@ export default class TransactionService {
                         refundedAt: new Date(),
                     },
                 },
-                { transaction }
+                { transaction },
             );
 
             return await this.getTransaction(id);
@@ -166,7 +171,7 @@ export default class TransactionService {
      */
     static async getTransactionByReference(
         referenceId: string,
-        referenceType: 'order' | 'shopping_list'
+        referenceType: 'order' | 'shopping_list',
     ): Promise<Transaction | null> {
         return await Transaction.findOne({
             where: {
@@ -180,7 +185,9 @@ export default class TransactionService {
     /**
      * Get transaction by provider transaction ID
      */
-    static async getTransactionByProviderId(providerTransactionId: string): Promise<Transaction | null> {
+    static async getTransactionByProviderId(
+        providerTransactionId: string,
+    ): Promise<Transaction | null> {
         return await Transaction.findOne({
             where: {
                 'metadata.providerTransactionId': providerTransactionId,
@@ -188,4 +195,4 @@ export default class TransactionService {
             include: ['user', 'order', 'shoppingList'],
         });
     }
-} 
+}

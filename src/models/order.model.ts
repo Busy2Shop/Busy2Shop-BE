@@ -188,14 +188,14 @@ export default class Order extends Model<Order | IOrder> {
 export interface IOrder {
     id?: string;
     status?:
-    | 'pending'
-    | 'accepted'
-    | 'in_progress'
-    | 'shopping'
-    | 'shopping_completed'
-    | 'delivery'
-    | 'completed'
-    | 'cancelled';
+        | 'pending'
+        | 'accepted'
+        | 'in_progress'
+        | 'shopping'
+        | 'shopping_completed'
+        | 'delivery'
+        | 'completed'
+        | 'cancelled';
     totalAmount: number;
     serviceFee: number;
     deliveryFee: number;

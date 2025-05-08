@@ -66,6 +66,8 @@ export const gracefulShutdown = async () => {
     }
 };
 
+export { paymentWebhookQueue, paymentExpiryCheckQueue };
+
 export default {
     queues,
     initializeRecurringJobs,

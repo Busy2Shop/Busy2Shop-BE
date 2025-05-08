@@ -353,7 +353,7 @@ export default class NotificationService {
         await Notification.destroy({
             where: {
                 createdAt: {
-                    [Op.lt]: Sequelize.literal('CURRENT_TIMESTAMP - INTERVAL \'30 days\''),
+                    [Op.lt]: Sequelize.literal("CURRENT_TIMESTAMP - INTERVAL '30 days'"),
                 },
             },
         });

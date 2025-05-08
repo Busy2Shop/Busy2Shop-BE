@@ -6,9 +6,8 @@ import AlatPayClient, {
 import User from '../../models/user.model';
 import { logger } from '../../utils/logger';
 import { BadRequestError } from '../../utils/customErrors';
-import ShoppingListService from '../../services/shoppingList.service';
 import OrderService from '../../services/order.service';
-import { paymentProcessingQueue } from '../../queues/payment.queue';
+import { paymentWebhookQueue, paymentExpiryCheckQueue } from '../../queues/payment.queue';
 import HelperUtils from '../../utils/helpers';
 import TransactionService from '../transaction.service';
 import { TransactionStatus, TransactionType, PaymentMethod } from '../../models/transaction.model';
@@ -33,7 +32,7 @@ export default class AlatPayService {
      * Generate a virtual account for payment
      */
     static async generateVirtualAccount(
-        params: GenerateVirtualAccountParams
+        params: GenerateVirtualAccountParams,
     ): Promise<{ data: AlatPayVirtualAccountResponse }> {
         try {
             const { amount, orderId, description, user, currency, idempotencyKey } = params;
@@ -46,7 +45,7 @@ export default class AlatPayService {
             // Check if there's already a pending transaction for this order
             const existingTransaction = await TransactionService.getTransactionByReference(
                 orderId,
-                'order'
+                'order',
             );
 
             if (existingTransaction && !idempotencyKey) {
@@ -54,7 +53,8 @@ export default class AlatPayService {
             }
 
             // Generate a client reference to avoid duplicates (if idempotencyKey was provided)
-            const clientReference = idempotencyKey || `${orderId}-${HelperUtils.generateRandomString(8)}`;
+            const clientReference =
+                idempotencyKey || `${orderId}-${HelperUtils.generateRandomString(8)}`;
 
             // Call AlatPay API to generate a virtual account
             const client = AlatPayClient.getInstance();
@@ -107,7 +107,7 @@ export default class AlatPayService {
      * Check the status of a transaction
      */
     static async checkTransactionStatus(
-        transactionId: string
+        transactionId: string,
     ): Promise<{ data: AlatPayTransactionStatusResponse['data'] }> {
         try {
             const client = AlatPayClient.getInstance();
@@ -120,23 +120,12 @@ export default class AlatPayService {
                 const alatPayStatus = this.mapAlatPayStatusToLocal(response.data.status);
 
                 if (transaction.status !== alatPayStatus) {
-                    // Queue transaction processing if status changed to completed
-                    if (alatPayStatus === TransactionStatus.COMPLETED) {
-                        await paymentProcessingQueue.add(
-                            'process-completed-payment',
-                            {
-                                transactionId: transaction.id,
-                                providerTransactionId: transactionId,
-                            },
-                            {
-                                attempts: 3,
-                                backoff: {
-                                    type: 'exponential',
-                                    delay: 1000,
-                                },
-                            }
-                        );
-                    }
+                    // Queue webhook processing if status changed
+                    await paymentWebhookQueue.add({
+                        providerTransactionId: transactionId,
+                        transactionId: transaction.id,
+                        userId: transaction.userId,
+                    });
 
                     // Update transaction status
                     await TransactionService.updateTransactionStatus(
@@ -146,7 +135,7 @@ export default class AlatPayService {
                             providerResponse: response.data,
                             attempts: (transaction.metadata.attempts || 0) + 1,
                             lastAttemptAt: new Date(),
-                        }
+                        },
                     );
                 }
             }
@@ -161,9 +150,7 @@ export default class AlatPayService {
     /**
      * Process webhook notification from AlatPay
      */
-    static async processWebhook(
-        { payload }: { payload: AlatPayWebhookPayload }
-    ): Promise<void> {
+    static async processWebhook({ payload }: { payload: AlatPayWebhookPayload }): Promise<void> {
         try {
             // Validate webhook payload
             const client = AlatPayClient.getInstance();
@@ -184,79 +171,16 @@ export default class AlatPayService {
                 return;
             }
 
-            // Update transaction status
-            const alatPayStatus = this.mapAlatPayStatusToLocal(Data.Status);
+            // Queue the webhook processing
+            await paymentWebhookQueue.add({
+                providerTransactionId: Data.Id,
+                transactionId: transaction.id,
+                userId: transaction.userId,
+            });
 
-            // Only process if the status has changed
-            if (transaction.status !== alatPayStatus) {
-                if (alatPayStatus === TransactionStatus.COMPLETED) {
-                    // Queue the transaction processing task
-                    await paymentProcessingQueue.add(
-                        'process-completed-payment',
-                        {
-                            transactionId: transaction.id,
-                            providerTransactionId: Data.Id,
-                        },
-                        {
-                            attempts: 3,
-                            backoff: {
-                                type: 'exponential',
-                                delay: 1000,
-                            },
-                        }
-                    );
-                }
-
-                // Update transaction record
-                await TransactionService.updateTransactionStatus(
-                    transaction.id,
-                    alatPayStatus,
-                    {
-                        providerResponse: Data,
-                        attempts: (transaction.metadata.attempts || 0) + 1,
-                        lastAttemptAt: new Date(),
-                    }
-                );
-
-                logger.info(`Transaction ${Data.Id} status updated to ${alatPayStatus}`);
-            }
+            logger.info(`Webhook queued for processing: ${Data.Id}`);
         } catch (error) {
             logger.error('Error processing webhook:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Process completed payment
-     */
-    static async processCompletedPayment(transactionId: string): Promise<void> {
-        try {
-            const transaction = await TransactionService.getTransaction(transactionId);
-
-            // Skip if transaction is not completed
-            if (transaction.status !== TransactionStatus.COMPLETED) {
-                logger.warn(`Transaction ${transactionId} status is ${transaction.status}, not processing`);
-                return;
-            }
-
-            // Skip if already processed
-            if (transaction.processedAt) {
-                logger.info(`Transaction ${transactionId} already processed`);
-                return;
-            }
-
-            // Process order payment
-            if (transaction.orderId) {
-                await OrderService.processOrderPayment(transaction.orderId, transaction.id);
-            }
-            // Process shopping list payment
-            else if (transaction.shoppingListId) {
-                await ShoppingListService.processShoppingListPayment(transaction.shoppingListId, transaction.id);
-            }
-
-            logger.info(`Transaction ${transactionId} processed successfully`);
-        } catch (error) {
-            logger.error(`Error processing transaction ${transactionId}:`, error);
             throw error;
         }
     }
@@ -282,7 +206,7 @@ export default class AlatPayService {
                     // Double-check with AlatPay
                     const client = AlatPayClient.getInstance();
                     const response = await client.getTransactionStatus(
-                        transaction.metadata.providerTransactionId
+                        transaction.metadata.providerTransactionId,
                     );
 
                     const alatPayStatus = this.mapAlatPayStatusToLocal(response.data.status);
@@ -296,27 +220,21 @@ export default class AlatPayService {
                                 providerResponse: response.data,
                                 attempts: (transaction.metadata.attempts || 0) + 1,
                                 lastAttemptAt: new Date(),
-                            }
+                            },
                         );
 
-                        // Queue transaction processing
-                        await paymentProcessingQueue.add(
-                            'process-completed-payment',
-                            {
-                                transactionId: transaction.id,
-                                providerTransactionId: transaction.metadata.providerTransactionId,
-                            },
-                            {
-                                attempts: 3,
-                                backoff: {
-                                    type: 'exponential',
-                                    delay: 1000,
-                                },
-                            }
-                        );
+                        // Queue webhook processing
+                        await paymentWebhookQueue.add({
+                            providerTransactionId: transaction.metadata.providerTransactionId,
+                            transactionId: transaction.id,
+                            userId: transaction.userId,
+                        });
                     }
                     // If truly expired, update status
-                    else if (alatPayStatus === TransactionStatus.PENDING || alatPayStatus === TransactionStatus.FAILED) {
+                    else if (
+                        alatPayStatus === TransactionStatus.PENDING ||
+                        alatPayStatus === TransactionStatus.FAILED
+                    ) {
                         await TransactionService.updateTransactionStatus(
                             transaction.id,
                             TransactionStatus.FAILED,
@@ -324,8 +242,15 @@ export default class AlatPayService {
                                 providerResponse: response.data,
                                 attempts: (transaction.metadata.attempts || 0) + 1,
                                 lastAttemptAt: new Date(),
-                            }
+                            },
                         );
+
+                        // Queue expiry check
+                        await paymentExpiryCheckQueue.add({
+                            transactionId: transaction.id,
+                            userId: transaction.userId,
+                        });
+
                         result.expired.push(transaction.metadata.providerTransactionId);
                     }
 
@@ -346,7 +271,7 @@ export default class AlatPayService {
     /**
      * Map AlatPay status to our local status
      */
-    private static mapAlatPayStatusToLocal(alatPayStatus: string): TransactionStatus {
+    public static mapAlatPayStatusToLocal(alatPayStatus: string): TransactionStatus {
         switch (alatPayStatus.toLowerCase()) {
             case 'completed':
             case 'successful':

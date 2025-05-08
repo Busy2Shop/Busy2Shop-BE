@@ -553,7 +553,10 @@ export default class ShoppingListService {
      * @param shoppingListId The ID of the shopping list to process payment for
      * @param paymentId The ID of the payment record
      */
-    static async processShoppingListPayment(shoppingListId: string, paymentId: string): Promise<void> {
+    static async processShoppingListPayment(
+        shoppingListId: string,
+        paymentId: string,
+    ): Promise<void> {
         const list = await this.getShoppingList(shoppingListId);
 
         if (!list) {

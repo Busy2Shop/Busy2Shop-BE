@@ -692,8 +692,8 @@ export default class OrderService {
                 // Log details about the rejection
                 console.warn(
                     `No agents available for order ${orderId} after rejection. ` +
-                    `Previous agent: ${agentId}, Market: ${shoppingList.marketId}, ` +
-                    `${rejectedAgentIds.length} total rejections`,
+                        `Previous agent: ${agentId}, Market: ${shoppingList.marketId}, ` +
+                        `${rejectedAgentIds.length} total rejections`,
                 );
 
                 // Then throw the error
