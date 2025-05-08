@@ -1,0 +1,628 @@
+ALATPay Documentation
+ALATPay provides a comprehensive suite of easy-to-integrate API services, enabling you to offer your customers seamless, instant payment options. Enjoy transparent pricing with no hidden charges and benefit from our ongoing, dedicated developer support. Elevate your payment solutions with ALATPay and deliver an exceptional experience to your customers.
+
+Learn how to integrate our API services into your products so you can start accepting and processing unlimited transactions.
+
+Getting Started With ALATPay
+Start accepting payments online with ALATPay today! Here are some quick steps:
+
+https://alatpay.ng
+
+Endpoint Base Url for all requests
+https://apibox.alatpay.ng
+
+Ensure you own a bank account for your business from any Nigerian Financial Institution or, you can Create a WEMA account for your business. Click here to create one.
+
+Step 1: Visit the ALATPay merchant onboarding portal and click "Get Started" to set up your business profile on the ALATPay platform.
+
+Step 2: Sign up by creating a profile.
+
+Step 3: Follow through the onboarding process and create a business using your account number from any Financial Institution in Nigeria.
+
+Step 4: Click the "Submit" button to complete the profile setup. You will be redirected to the dashboard where you can manage your merchant profile.
+
+Step 5: Once your business has been reviewed and approved, you can Start receiving payments instantly!
+
+Step 6: Retrieve Your Business ID:
+Log in to your account.
+Navigate to Settings.
+Click on Business to find your Business ID.
+
+Step 8: Obtain Your API Key:
+Log in to your account.
+Navigate to Settings.
+Select Business
+Click on View to see your API keys.
+Copy either the Primary Key or the Secondary Key as needed.
+
+
+Onboarding
+API Integration for Registered Businesses
+Overview
+This section provides a comprehensive guide on how merchants can use the ALATPay API to register new businesses. The onboarding process involves creating a business profile through the ALATPay platform, which is crucial for integrating payment solutions for your customers.
+
+Get Merchant ID
+
+Login using the login endpoint below to obtain merchant ID:
+
+Endpoint - POST
+/merchant-onboarding/api/v1/auth/login
+
+Request
+{
+    email: "myemail@email.com",
+    password: "SecurePassword##1"
+  }
+
+Response
+
+The merchant Id can be retrieved from the login response; highlighted line 5.
+
+On subsequent calls, the subscription key would be required in the headers:
+
+{
+  "Content-Type": "application/json",
+  "Ocp-Apim-Subscription-Key": "YOUR_SUBSCRIPTION_KEY" // Replace with your actual subscription key
+}
+
+Endpoint - POST
+/merchant-onboarding/api/v1/merchants/{merchantId}/business-onboarding
+
+Request Payload
+{
+  "name": "JohnJoe Store",
+  "businessAddress": {
+    "houseNumber": 15,
+    "streetName": "Victoria Avenue",
+    "country": "Nigeria",
+    "houseAddress": {
+      "houseNumber": 22,
+      "streetName": "Broad Street",
+      "country": "Nigeria",
+      "nearestLandMark": "City Hall",
+      "state": "Lagos",
+      "lga": "Lagos Island",
+      "city": "Lagos"
+    },
+    "nearestLandMark": "National Museum",
+    "state": "Lagos",
+    "lga": "Lagos Island",
+    "city": "Lagos",
+    "lcda": "Ikoyi"
+  },
+  "businessShareholders": [
+    {
+      "name": "John Doe",
+      "phoneNumber": "+2348012345678",
+      "email": "johndoe@example.com",
+      "bvn": "12345678901",
+      "sharesOwned": 40,
+      "idType": 1,
+      "fileUrlString": "https://example.com/shareholder-id.pdf"
+    }
+  ],
+  "businessLicenseFileUrl": "https://example.com/business-license.pdf",
+  "cacFileUrl": "https://example.com/cac-document.pdf",
+  "mermartFileUrl": "https://example.com/mermart-document.pdf",
+  "paymentMethodIds": "*",
+  "businessProjectionCurrency": "USD",
+  "businessProjectionValue": 100000,
+  "category": "Ecommerce",
+  "bankAccountNumber": "2010001234",
+  "bankName": "Wema Bank",
+  "usdBankAccountNumber": "2010005678", //optional
+  "usdBankName": "Chase Bank", //optional
+  "usdBankAccountName": "JohnJoe Store", //optional
+  "bankCode": "058", //optional
+  "usdBankCode": "033", //optional
+  "correspondentBank": "Wells Fargo", //optional
+  "beneficiaryBankAddress": "123 Bank Street, New York, USA", //optional
+  "bankSWIFTOrBICCode": "CHASUS33XXX", //optional
+  "bankBranch": "Victoria Island Branch", //optional
+  "logo": "https://example.com/logo.png",
+  "callbackUrl": "https://example.com/callback",
+  "businessWebsiteUrl": "https://johnjoestore.com",
+  "businessDescription": "JohnJoe Store specializes in providing high-quality electronics and fashion items."
+}
+
+Response Payload
+Success Response
+{
+  "status": true,
+  "message": "Success",
+  "data": {
+    "merchantId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "businessName": "Test Stores",
+    "onboardingRequestReference": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "status": "Active",
+    "onboardingComments": ["Business verified and approved."],
+    "businessVerificationStatus": 1
+  }
+}
+
+Error Response
+{
+    "data": null,
+    "status": false,
+    "message": "Couldn't fetch Merchant details"
+  }
+
+Check Onboarding Status
+Endpoint - GET
+/merchant-onboarding/api/v1/merchants/{merchantId}/business-onboarding?reference={onboardingRequestReference}
+
+Response
+{
+  "status": true,
+  "message": "Success",
+  "data": {
+    "merchantId": "123e4567-e89b-12d3-a456-426614174000",
+    "businessName": "Test Tech",
+    "onboardingRequestReference": "123e4567-e89b-12d3-a456-426614174000",
+    "status": "Pending",
+    "onboardingComments": [
+      "Awaiting document verification."
+    ],
+    "businessVerificationStatus": 0
+  }
+}
+
+API Integration for Unregistered Businesses
+Overview
+This section details how to use the ALATPay API to register unregistered businesses. The process involves creating a business profile through the API, which is essential for managing payments and other related services.
+
+Endpoint - POST
+/merchant-onboarding/api/v1/merchants/{merchantId}/addUnregistredBusiness
+
+Request Payload
+{
+  "name": "Test Enterprises",
+  "businessAddress": {
+    "houseNumber": 12,
+    "streetName": "Palm Street",
+    "country": "Nigeria",
+    "houseAddress": {
+      "houseNumber": 22,
+      "streetName": "Cedar Road",
+      "country": "Nigeria",
+      "nearestLandMark": "Community Center",
+      "state": "Abuja",
+      "lga": "Gwagwalada",
+      "city": "Abuja"
+    },
+    "nearestLandMark": "Shopping Plaza",
+    "state": "Abuja",
+    "lga": "Gwagwalada",
+    "city": "Abuja",
+    "lcda": "Garki"
+  },
+  "paymentMethodIds": "1,2",
+  "businessProjectionCurrency": "NGN",
+  "businessProjectionValue": 100000,
+  "category": "Wholesale",
+  "callbackUrl": "https://example.com/callback",
+  "setUpUrl": "https://example.com/setup",
+  "businessWebsiteUrl": "https://ejikeme-enterprises.com",
+  "businessDescription": "We specialize in wholesale distribution of agricultural products.",
+  "phoneNumber": "+2347012345678",
+  "nin": "98765432109"
+}
+
+Response Payload
+Success Response
+{
+  "status": true,
+  "message": "Success",
+  "data": {
+    "merchantId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "businessName": "Test Stores",
+    "onboardingRequestReference": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "status": "Active",
+    "onboardingComments": ["Business verified and approved."],
+    "businessVerificationStatus": 1
+  }
+}
+
+Error Response
+{
+    "data": null,
+    "status": false,
+    "message": "Couldn't fetch Merchant details"
+  }
+
+Things to Look Out For
+Here is the reference for Channel requested in the body
+
+Below is a reference table for each ID:
+
+1 - Card
+2 - Bank transfer
+3 - Bank details
+4 - QR code
+5 - Phone number
+* - All methods
+Below is a list of the acceptable categories:
+
+Ecommerce
+Restaurant
+Consultant
+Education
+Automotive
+Real Estate
+Entertainment
+Not for Profit
+Government Agency
+Legal & Financial
+Food & Dining
+Hotel & Resort
+Health & Medicine
+Travel & Transportation
+Construction & Contractors
+Others
+When filling out onboarding properties, ensure that you pass the appropriate enum types.
+
+Accept Payments with Bank Transfer
+Overview
+This API allows merchants to receive payments via a virtual account. Customers can thus make payments using either an intra-bank or interbank transfers.
+
+Step 1: Generate Virtual Account
+POST: /bank-transfer/api/v1/bankTransfer/virtualAccount
+
+{
+  "businessId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "amount": 0,
+  "currency": "string",
+  "orderId": "string",
+  "description": "string",
+  "customer": {
+    "email": "string",
+    "phone": "string",
+    "firstName": "string",
+    "lastName": "string",
+    "metadata": "string"
+  }
+}
+Upon checkout/customer payout, merchant is to call this endpoint to generate the virtual account number for payment.
+
+Each virtual account would be active for 30 minutes, within which the customer is expected to have made payments.
+
+Note:
+A transactionId would be returned in the response object. This would be used in the call to validate the transaction.
+Response
+{
+  "status": true,
+  "message": "string",
+  "data": {
+    "businessId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "amount": 0,
+    "currency": "string",
+    "orderId": "string",
+    "description": "string",
+    "customer": {
+      "email": "string",
+      "phone": "string",
+      "firstName": "string",
+      "lastName": "string",
+      "metadata": "string"
+    },
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "merchantId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "virtualBankCode": "string",
+    "virtualBankAccountNumber": "string",
+    "businessBankAccountNumber": "string",
+    "businessBankCode": "string",
+    "transactionId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "status": "string",
+    "expiredAt": "2024-09-24T13:30:25.542Z",
+    "settlementType": "string",
+    "createdAt": "2024-09-24T13:30:25.542Z"
+  }
+}
+
+Step 2: Confirm Transaction Status
+GET: /bank-transfer/api/v1/bankTransfer/transactions/{transactionId}
+Using this endpoint above, customers can be allowed to check the status of the bank transfer performed.
+
+This is a GET request that checks the status of the transfer
+
+Request
+{
+                  "accountNumber": "1234567890"
+  }
+
+Response
+{
+  "status": true,
+  "message": "string",
+  "data": {
+    "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "merchantId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "businessId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "channel": "string",
+    "callbackUrl": "string",
+    "feeAmount": 0,
+    "businessName": "string",
+    "currency": "string",
+    "status": "string",
+    "statusReason": "string",
+    "settlementType": "string",
+    "createdAt": "2024-10-15T03:48:07.248Z",
+    "updatedAt": "2024-10-15T03:48:07.248Z",
+    "ngnVirtualBankAccountNumber": "string",
+    "ngnVirtualBankCode": "string",
+    "usdVirtualAccountNumber": "string",
+    "usdVirtualBankCode": "string",
+    "amount": 0,
+    "orderId": "string",
+    "description": "string",
+    "paymentMethodId": 0,
+    "sessionId": "string",
+    "isAmountDiscrepant": true,
+    "amountSent": 0,
+    "nipTransaction": {
+      "originatoraccountnumber": "string",
+      "originatorname": "string",
+      "bankname": "string",
+      "bankcode": "string",
+      "amount": 0,
+      "narration": "string",
+      "craccountname": "string",
+      "craccount": "string",
+      "paymentreference": "string",
+      "sessionid": "string",
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "requestdate": "string",
+      "nibssresponse": "string",
+      "sendstatus": "string",
+      "sendresponse": "string",
+      "transactionId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "transactionStatus": "string",
+      "log": "string",
+      "createdAt": "2024-10-15T03:48:07.248Z"
+    },
+    "virtualAccount": {
+      "businessId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "amount": 0,
+      "currency": "string",
+      "orderId": "string",
+      "description": "string",
+      "customer": {
+        "email": "string",
+        "phone": "string",
+        "firstName": "string",
+        "lastName": "string",
+        "metadata": "string"
+      },
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "merchantId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "virtualBankCode": "string",
+      "virtualBankAccountNumber": "string",
+      "businessBankAccountNumber": "string",
+      "businessBankCode": "string",
+      "transactionId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "status": "string",
+      "expiredAt": "2024-10-15T03:48:07.248Z",
+      "settlementType": "string",
+      "createdAt": "2024-10-15T03:48:07.248Z"
+    },
+    "customer": {
+      "email": "string",
+      "phone": "string",
+      "firstName": "string",
+      "lastName": "string",
+      "metadata": "string",
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "transactionId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "createdAt": "2024-10-15T03:48:07.249Z"
+    }
+  }
+}
+
+
+Transaction Monitoring
+Overview
+The Transaction Monitoring API helps you retrieve details of every transaction performed on behalf the merchant across all payment options.
+
+Get All/Filter Transactions
+/alatpaytransaction/api/v1/transactions
+
+This GET endpoint allows the retrieval of a list of all transaction records performed on behalf of the merchant.
+
+However, optional parameters can be provided to filter the output based on the requirement(s) at the time of query.
+
+Query parameters
+Page	Required
+Limit	Optional
+MerchantId	Optional
+BusinessId	Required
+PaymentMethod	Optional
+Status	Optional
+Amount	Optional
+StartAt	Optional
+EndAt	Optional
+Response
+{
+  "data": {
+      "amount": 5000,
+      "orderId": "dummyOrder12345678",
+      "description": "Sample Transaction",
+      "paymentMethodId": 1,
+      "sessionId": "dummySessionId1234567890",
+      "merchantName": "Test Merchant",
+      "settlementId": "dummy-settlement-id-0000000",
+      "customer": {
+          "id": "dummy-customer-id-000001",
+          "transactionId": "dummy-transaction-id-000001",
+          "createdAt": "2024-01-01T12:00:00.000Z",
+          "email": "sample.customer@example.com",
+          "phone": "08012345678",
+          "firstName": "John",
+          "lastName": "Doe",
+          "metadata": "Dummy Metadata"
+      },
+      "id": "dummy-transaction-id-000002",
+      "merchantId": "dummy-merchant-id-000003",
+      "businessId": "dummy-business-id-000004",
+      "channel": "Dummy Payment Channel",
+      "callbackUrl": "https://dummy.callback.url",
+      "feeAmount": 25.00,
+      "businessName": "Sample Business Name",
+      "businessBankAccountNumber": "0000000000",
+      "businessBankCode": "000",
+      "currency": "USD",
+      "status": "pending",
+      "statusReason": "Waiting for confirmation",
+      "settlementType": "Automated",
+      "createdAt": "2024-01-01T12:00:00.000Z",
+      "updatedAt": "2024-01-01T12:30:00.000Z",
+      "settledAt": "0001-01-01T00:00:00"
+  },
+  "status": true,
+  "message": "Success",
+  "pagination": {
+      "currentPage": 1,
+      "totalItems": 10,
+      "totalPages": 1,
+      "pathUrl": "https://dummy.api/transactions",
+      "previousPageUrl": "https://dummy.api/transactions?page=0",
+      "nextPageUrl": "https://dummy.api/transactions?page=2"
+  }
+}
+
+Get Single Transaction
+/alatpaytransaction/api/v1/transactions/{transactionId}
+
+This GET endpoint allows the retrieval of the details of a given transaction. This endpoint accepts a single required path parameter, transactionId.
+
+This GET endpoint allows the retrieval of a list of all transaction records performed on behalf of the merchant.
+
+However, optional parameters can be provided to filter the output based on the requirement(s) at the time of query.
+
+Note:
+This GET endpoint allows the retrieval of the details of a given transaction. This endpoint accepts a single required path parameter, transactionId.
+Response
+{
+  "data": {
+      "amount": 200.00,
+      "description": "Sample Checkout Payment",
+      "paymentMethodId": 1,
+      "sessionId": "DUMMY_SESSION",
+      "merchantName": "Test Merchant",
+      "settlementId": "00000000-0000-0000-0000-000000000000",
+      "customer": {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "transactionId": "00000000-0000-0000-0000-000000000002",
+          "createdAt": "2024-01-01T00:00:00.000Z",
+          "email": "dummy@example.com",
+          "phone": "08000000000",
+          "firstName": "John",
+          "lastName": "Doe",
+          "metadata": "Sample Metadata"
+      },
+      "isEPosTransaction": false,
+      "userId": null,
+      "ePosTransactionReference": null,
+      "cardScheme": null,
+      "ePosTransactionStan": null,
+      "eposTransactionRrn": null,
+      "terminalId": null,
+      "cardPan": null,
+      "cardExpiryDate": null,
+      "cardHolderName": null,
+      "applicationPanSequenceNumber": null,
+      "id": "00000000-0000-0000-0000-000000000003",
+      "merchantId": "00000000-0000-0000-0000-000000000004",
+      "businessId": "00000000-0000-0000-0000-000000000005",
+      "channel": "Test Channel",
+      "callbackUrl": "https://example.com/callback",
+      "feeAmount": 0.00,
+      "businessName": "Sample Business",
+      "currency": "NGN",
+      "status": "pending",
+      "statusReason": null,
+      "settlementType": "Automatic",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z",
+      "settledAt": null,
+      "orderId": "123456",
+      "ngnVirtualBankAccountNumber": "000NGN000000000",
+      "ngnVirtualBankCode": "000",
+      "usdVirtualAccountNumber": "000USD000000000",
+      "usdVirtualBankCode": "000"
+  },
+  "status": true,
+  "message": "Success"
+}
+
+Setup Callback URL
+Overview
+A callback URL is a designated webpage that users are redirected to after completing a transaction. For example, on an e-commerce site selling phone accessories and jewelry, when a customer makes a purchase, they go through the checkout process. Once payment is processed, the system automatically takes them back to a confirmation page on the website, which serves as the callback URL.
+
+For customers, having a callback URL that leads to a confirmation page reassures them that their transaction was successful, offering clarity and confidence in their purchase.
+
+Upon the completion and fulfillment of payment request performed using the ALATPay payment engine, a callback is made to notify the merchant of the transaction status and the user, redirected to the callback url(if available).
+
+Merchants are required to provide a callback URL on the merchant portal for each business they setup.
+
+This callback url can be passed in the add business endpoint.
+
+Steps to Add a Callback URL
+Log in to your account.
+Go to Settings.
+Select Business.
+Click Edit next to the business you wish to update.
+Add the desired callback URL.
+Click Update Details to save your changes.
+Callback URL Response Payload
+The callback URL response payload provides the data sent to your server when a transaction is completed. It contains essential information like transaction status, amount, and other relevant details that you can use to update your system or notify your users.
+{ 
+  "Value": { 
+    "Data": { 
+      "Amount": 100.00, 
+      "OrderId": "", 
+      "Description": null, 
+      "PaymentMethodId": 3, 
+      "SessionId": "M245679862", 
+      "Customer": { 
+        "Id": "e423456d-ce62-4c3a-fb93-08dce9ab4259", 
+        "TransactionId": "aeee1f3456789", 
+        "CreatedAt": "2024-11-01T15:47:09.1193923", 
+        "Email": "johndoe@gmail.com", 
+        "Phone": "081****01", 
+        "FirstName": "john", 
+        "LastName": "doe", 
+        "Metadata": "your metadata" 
+      }, 
+      "Otp": null, 
+      "Id": "a5768e1f0d-2ef5-4f99-96b4-8b60bc538d4f", 
+      "MerchantId": "4aa46573-66c2-4ed2-2fdc-08dc53a699fb", 
+      "BusinessId": "123456f70-d966-4c79-0823-08dc57d6698e", 
+      "Channel": null, 
+      "CallbackUrl": "https://webhook.site/afc97e4a-3400-4fb0-a424-209c00dcca9e", 
+      "FeeAmount": 0, 
+      "BusinessName": "your-business-name", 
+      "Currency": "NGN", 
+      "Status": "completed", 
+      "StatusReason": null, 
+      "SettlementType": "Manual", 
+      "CreatedAt": "2024-11-01T15:47:09.1193392", 
+      "UpdatedAt": "2024-11-01T16:47:31.070972Z", 
+      "NgnVirtualBankAccountNumber": "999NGNxxxxx", 
+      "NgnVirtualBankCode": null, 
+      "UsdVirtualAccountNumber": "999USDx", 
+      "UsdVirtualBankCode": null 
+    }, 
+    "Status": true, 
+    "Message": "Success" 
+  }, 
+  "Formatters": [], 
+  "ContentTypes": [], 
+  "DeclaredType": null, 
+  "StatusCode": 200 
+} 
+
+
+
+
+
+

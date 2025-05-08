@@ -12,6 +12,7 @@ import kycRoute from './kyc.routes';
 import AdminRoutes from './admin.routes';
 import chatRoute from './chat.routes';
 import notificationRoutes from './notification.routes';
+import alatPayRoute from './payment/alatpay.routes';
 
 const router = Router();
 
@@ -28,5 +29,6 @@ router.use('/referral', referralRoute);
 router.use('/admin', AdminRoutes);
 router.use('/chat', chatRoute);
 router.use('/notifications', notificationRoutes);
+router.use('/payment/alatpay', alatPayRoute);
 
 export default router;

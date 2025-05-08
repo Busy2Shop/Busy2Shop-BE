@@ -96,3 +96,11 @@ export const TYM_BUSINESS_ID = process.env.TYM_BUSINESS_ID as string;
 export const BULL_BOARD_USER = process.env.BULL_BOARD_USER as string;
 
 export const BULL_BOARD_PASS = process.env.BULL_BOARD_PASS as string;
+
+export const ALATPAY_API_URL = process.env.ALATPAY_API_URL || 'https://apibox.alatpay.ng';
+
+export const ALATPAY_SUBSCRIPTION_KEY = process.env.ALATPAY_SUBSCRIPTION_KEY;
+
+export const ALATPAY_BUSINESS_ID = process.env.ALATPAY_BUSINESS_ID;
+
+export const ALATPAY_MERCHANT_ID = process.env.ALATPAY_MERCHANT_ID;
