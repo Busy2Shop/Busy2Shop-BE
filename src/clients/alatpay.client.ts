@@ -344,4 +344,32 @@ export default class AlatPayClient {
             Status: status,
         });
     }
+
+    /**
+     * Get transaction history
+     */
+    async getTransactionHistory(
+        page: number = 1,
+        limit: number = 10,
+        filters: Record<string, any> = {}
+    ): Promise<{ data: { transactions: any[]; total: number } }> {
+        try {
+            const response = await this.makeRequest(
+                'get',
+                `${this.apiUrl}/alatpaytransaction/api/v1/transactions`,
+                undefined,
+                {
+                    Page: page,
+                    Limit: limit,
+                    BusinessId: this.businessId,
+                    ...filters,
+                },
+            );
+
+            return response.data;
+        } catch (error) {
+            logger.error('Error getting transaction history:', error);
+            throw error;
+        }
+    }
 }

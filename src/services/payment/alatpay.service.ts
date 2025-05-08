@@ -287,4 +287,112 @@ export default class AlatPayService {
                 return TransactionStatus.PENDING;
         }
     }
+
+    /**
+     * Get transaction history
+     */
+    static async getTransactionHistory(
+        page: number = 1,
+        limit: number = 10,
+        filters: Record<string, any> = {}
+    ): Promise<{ data: any[]; pagination: { total: number; page: number; limit: number } }> {
+        try {
+            const client = AlatPayClient.getInstance();
+            const response = await client.getTransactionHistory(page, limit, filters);
+
+            return {
+                data: response.data.transactions,
+                pagination: {
+                    total: response.data.total,
+                    page,
+                    limit,
+                },
+            };
+        } catch (error) {
+            logger.error('Error getting transaction history:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get user payments
+     */
+    static async getUserPayments(userId: string): Promise<any[]> {
+        try {
+            const transactions = await TransactionService.getUserTransactions(userId, 1, 1000, {
+                paymentMethod: PaymentMethod.ALATPAY,
+            });
+
+            return transactions.transactions;
+        } catch (error) {
+            logger.error('Error getting user payments:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Reconcile transactions with AlatPay
+     */
+    static async reconcileTransactions(): Promise<{
+        reconciled: number;
+        failed: number;
+        errors: string[];
+    }> {
+        try {
+            const result = {
+                reconciled: 0,
+                failed: 0,
+                errors: [] as string[],
+            };
+
+            // Get all pending transactions
+            const pendingTransactions = await TransactionService.getUserTransactions('', 1, 1000, {
+                status: TransactionStatus.PENDING,
+                paymentMethod: PaymentMethod.ALATPAY,
+            });
+
+            // Process each transaction
+            for (const transaction of pendingTransactions.transactions) {
+                try {
+                    // Get status from AlatPay
+                    const { data: statusResponse } = await this.checkTransactionStatus(
+                        transaction.metadata.providerTransactionId
+                    );
+
+                    const alatPayStatus = this.mapAlatPayStatusToLocal(statusResponse.status);
+
+                    // Update transaction status if different
+                    if (transaction.status !== alatPayStatus) {
+                        await TransactionService.updateTransactionStatus(
+                            transaction.id,
+                            alatPayStatus,
+                            {
+                                providerResponse: statusResponse,
+                                attempts: (transaction.metadata.attempts || 0) + 1,
+                                lastAttemptAt: new Date(),
+                            }
+                        );
+
+                        // Queue webhook processing
+                        await paymentWebhookQueue.add({
+                            providerTransactionId: transaction.metadata.providerTransactionId,
+                            transactionId: transaction.id,
+                            userId: transaction.userId,
+                        });
+
+                        result.reconciled++;
+                    }
+                } catch (error) {
+                    logger.error(`Error reconciling transaction ${transaction.id}:`, error);
+                    result.failed++;
+                    result.errors.push(transaction.id);
+                }
+            }
+
+            return result;
+        } catch (error) {
+            logger.error('Error reconciling transactions:', error);
+            throw error;
+        }
+    }
 }

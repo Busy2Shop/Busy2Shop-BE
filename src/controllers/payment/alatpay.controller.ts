@@ -8,6 +8,7 @@ import OrderService from '../../services/order.service';
 import ShoppingListService from '../../services/shoppingList.service';
 import { paymentWebhookQueue } from '../../queues/payment.queue';
 import ShoppingListItem from '../../models/shoppingListItem.model';
+import TransactionService from '../../services/transaction.service';
 
 export default class AlatPayController {
     /**
@@ -108,30 +109,33 @@ export default class AlatPayController {
             logger.info('Received ALATPay webhook', {
                 payloadSummary: payload?.Value?.Data
                     ? {
-                          transactionId: payload.Value.Data.Id,
-                          status: payload.Value.Data.Status,
-                          amount: payload.Value.Data.Amount,
-                          orderId: payload.Value.Data.OrderId,
-                      }
+                        transactionId: payload.Value.Data.Id,
+                        status: payload.Value.Data.Status,
+                        amount: payload.Value.Data.Amount,
+                        orderId: payload.Value.Data.OrderId,
+                    }
                     : 'Invalid payload structure',
             });
 
+            // Find the transaction by provider transaction ID
+            const transaction = await TransactionService.getTransactionByProviderId(payload.Value.Data.Id);
+
+            if (!transaction) {
+                logger.warn(`Transaction not found for provider transaction ID: ${payload.Value.Data.Id}`);
+                return res.status(200).json({
+                    status: 'success',
+                    message: 'Webhook received but transaction not found',
+                });
+            }
+
             // Process the webhook asynchronously using the queue system
-            // We don't want to keep ALATPay waiting for a response
-            await paymentWebhookQueue.add(
-                'process-webhook',
-                { payload },
-                {
-                    attempts: 3,
-                    backoff: {
-                        type: 'exponential',
-                        delay: 1000,
-                    },
-                },
-            );
+            await paymentWebhookQueue.add({
+                providerTransactionId: payload.Value.Data.Id,
+                transactionId: transaction.id,
+                userId: transaction.userId,
+            });
 
             // Always respond with 200 to acknowledge receipt
-            // This prevents ALATPay from retrying the webhook
             res.status(200).json({
                 status: 'success',
                 message: 'Webhook received',
@@ -248,24 +252,15 @@ export default class AlatPayController {
 
     /**
      * Reconcile local transactions with ALATPay
-     * This is an admin-only endpoint
      */
     static async reconcileTransactions(req: AuthenticatedRequest, res: Response) {
         try {
-            const startDate = req.query.startDate
-                ? new Date(req.query.startDate as string)
-                : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Default to 7 days ago
-            const endDate = req.query.endDate ? new Date(req.query.endDate as string) : new Date(); // Default to now
-
-            const results = await AlatPayService.reconcileTransactions({
-                startDate,
-                endDate,
-            });
+            const result = await AlatPayService.reconcileTransactions();
 
             res.status(200).json({
                 status: 'success',
-                message: 'Transaction reconciliation completed',
-                data: results,
+                message: 'Transactions reconciled successfully',
+                data: result,
             });
         } catch (error) {
             logger.error('Error reconciling transactions:', error);
@@ -274,17 +269,16 @@ export default class AlatPayController {
     }
 
     /**
-     * Check and update expired transactions
-     * This is typically called by a scheduled job
+     * Check for expired transactions
      */
     static async checkExpiredTransactions(req: AuthenticatedRequest, res: Response) {
         try {
-            const results = await AlatPayService.checkExpiredTransactions();
+            const result = await AlatPayService.checkExpiredTransactions();
 
             res.status(200).json({
                 status: 'success',
-                message: 'Expired transactions check completed',
-                data: results,
+                message: 'Expired transactions checked successfully',
+                data: result,
             });
         } catch (error) {
             logger.error('Error checking expired transactions:', error);
