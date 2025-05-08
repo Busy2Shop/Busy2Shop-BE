@@ -165,19 +165,37 @@ export default class Order extends Model<Order | IOrder> {
 
     @BelongsTo(() => ShoppingList)
     shoppingList: ShoppingList;
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    paymentId: string;
+
+    @Column({
+        type: DataType.ENUM('pending', 'completed', 'failed', 'expired'),
+        allowNull: true,
+    })
+    paymentStatus: 'pending' | 'completed' | 'failed' | 'expired';
+
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
+    paymentProcessedAt: Date;
 }
 
 export interface IOrder {
     id?: string;
     status?:
-        | 'pending'
-        | 'accepted'
-        | 'in_progress'
-        | 'shopping'
-        | 'shopping_completed'
-        | 'delivery'
-        | 'completed'
-        | 'cancelled';
+    | 'pending'
+    | 'accepted'
+    | 'in_progress'
+    | 'shopping'
+    | 'shopping_completed'
+    | 'delivery'
+    | 'completed'
+    | 'cancelled';
     totalAmount: number;
     serviceFee: number;
     deliveryFee: number;
@@ -206,4 +224,7 @@ export interface IOrder {
     customerId: string;
     agentId?: string;
     shoppingListId: string;
+    paymentId?: string;
+    paymentStatus?: 'pending' | 'completed' | 'failed' | 'expired';
+    paymentProcessedAt?: Date;
 }

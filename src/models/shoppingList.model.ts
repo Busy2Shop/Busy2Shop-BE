@@ -74,6 +74,24 @@ export default class ShoppingList extends Model<ShoppingList | IShoppingList> {
     @BelongsTo(() => User, 'agentId')
     agent: User;
 
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    paymentId: string;
+
+    @Column({
+        type: DataType.ENUM('pending', 'completed', 'failed', 'expired'),
+        allowNull: true,
+    })
+    paymentStatus: 'pending' | 'completed' | 'failed' | 'expired';
+
+    @Column({
+        type: DataType.DATE,
+        allowNull: true,
+    })
+    paymentProcessedAt: Date;
+
     // Relationships
     @HasMany(() => ShoppingListItem)
     items: ShoppingListItem[];
@@ -88,4 +106,7 @@ export interface IShoppingList {
     customerId: string;
     marketId?: string;
     agentId?: string;
+    paymentId?: string;
+    paymentStatus?: 'pending' | 'completed' | 'failed' | 'expired';
+    paymentProcessedAt?: Date;
 }

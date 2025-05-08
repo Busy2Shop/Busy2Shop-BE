@@ -692,8 +692,8 @@ export default class OrderService {
                 // Log details about the rejection
                 console.warn(
                     `No agents available for order ${orderId} after rejection. ` +
-                        `Previous agent: ${agentId}, Market: ${shoppingList.marketId}, ` +
-                        `${rejectedAgentIds.length} total rejections`,
+                    `Previous agent: ${agentId}, Market: ${shoppingList.marketId}, ` +
+                    `${rejectedAgentIds.length} total rejections`,
                 );
 
                 // Then throw the error
@@ -753,5 +753,26 @@ export default class OrderService {
         }
 
         return freshOrder;
+    }
+
+    /**
+     * Process payment for an order
+     * @param orderId The ID of the order to process payment for
+     * @param paymentId The ID of the payment record
+     */
+    static async processOrderPayment(orderId: string, paymentId: string): Promise<void> {
+        const order = await this.getOrder(orderId);
+
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
+
+        // Update order status to indicate payment is processed
+        await order.update({
+            status: 'accepted',
+            paymentId,
+            paymentStatus: 'completed',
+            paymentProcessedAt: new Date(),
+        });
     }
 }

@@ -548,6 +548,27 @@ export default class ShoppingListService {
         return await this.getShoppingList(listId);
     }
 
+    /**
+     * Process payment for a shopping list
+     * @param shoppingListId The ID of the shopping list to process payment for
+     * @param paymentId The ID of the payment record
+     */
+    static async processShoppingListPayment(shoppingListId: string, paymentId: string): Promise<void> {
+        const list = await this.getShoppingList(shoppingListId);
+
+        if (!list) {
+            throw new NotFoundError('Shopping list not found');
+        }
+
+        // Update shopping list status to indicate payment is processed
+        await list.update({
+            status: 'accepted',
+            paymentId,
+            paymentStatus: 'completed',
+            paymentProcessedAt: new Date(),
+        });
+    }
+
     private static isValidStatusTransition(currentStatus: string, newStatus: string): boolean {
         const validTransitions: Record<string, string[]> = {
             draft: ['pending', 'cancelled'],

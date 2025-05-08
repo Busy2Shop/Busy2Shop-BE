@@ -45,7 +45,7 @@ export default class AlatPayService {
             }
 
             // Check if there's already a pending payment for this order
-            const existingPayment = await AlatPayPayment.findOne({
+            const existingPayment = await AlatPayment.findOne({
                 where: {
                     [Op.or]: [
                         { orderId, status: AlatPayStatus.PENDING },
@@ -108,9 +108,9 @@ export default class AlatPayService {
             }
 
             // Create the payment record
-            await AlatPayPayment.create(paymentData);
+            await AlatPayment.create(paymentData);
 
-            return { data: response.data };
+            return { data: response };
         } catch (error) {
             logger.error('Error generating virtual account:', error);
             throw error;
@@ -128,7 +128,7 @@ export default class AlatPayService {
             const response = await client.getTransactionStatus(transactionId);
 
             // Update our payment record if the status has changed
-            const payment = await AlatPayPayment.findOne({
+            const payment = await AlatPayment.findOne({
                 where: { transactionId },
             });
 
@@ -200,9 +200,9 @@ export default class AlatPayService {
     /**
      * Get user payments
      */
-    static async getUserPayments(userId: string): Promise<AlatPayPayment[]> {
+    static async getUserPayments(userId: string): Promise<AlatPayment[]> {
         try {
-            const payments = await AlatPayPayment.findAll({
+            const payments = await AlatPayment.findAll({
                 where: { userId },
                 order: [['createdAt', 'DESC']],
             });
@@ -233,7 +233,7 @@ export default class AlatPayService {
             const { Data } = payload.Value;
 
             // Find the corresponding payment in our database
-            const payment = await AlatPayPayment.findOne({
+            const payment = await AlatPayment.findOne({
                 where: { transactionId: Data.Id },
             });
 
@@ -286,7 +286,7 @@ export default class AlatPayService {
      */
     static async processCompletedPayment(paymentId: string): Promise<void> {
         try {
-            const payment = await AlatPayPayment.findByPk(paymentId);
+            const payment = await AlatPayment.findByPk(paymentId);
 
             if (!payment) {
                 throw new Error(`Payment not found: ${paymentId}`);
@@ -299,25 +299,25 @@ export default class AlatPayService {
             }
 
             // Skip if already processed
-            if (payment.metadata?.processed) {
+            if ((payment.metadata as any)?.processed) {
                 logger.info(`Payment ${paymentId} already processed`);
                 return;
             }
 
             // Process order payment
             if (payment.orderId) {
-                await OrderService.processPayment(payment.orderId, payment.id);
+                await OrderService.processOrderPayment(payment.orderId, payment.id);
             }
 
             // Process shopping list payment
             else if (payment.shoppingListId) {
-                await ShoppingListService.processPayment(payment.shoppingListId, payment.id);
+                await ShoppingListService.processShoppingListPayment(payment.shoppingListId, payment.id);
             }
 
             // Mark payment as processed
             await payment.update({
                 metadata: {
-                    ...payment.metadata as object,
+                    ...(payment.metadata as object),
                     processed: true,
                     processedAt: new Date().toISOString(),
                 },
@@ -343,7 +343,7 @@ export default class AlatPayService {
         response: any;
     }): Promise<void> {
         try {
-            const payment = await AlatPayPayment.findOne({
+            const payment = await AlatPayment.findOne({
                 where: { transactionId },
             });
 
@@ -374,7 +374,7 @@ export default class AlatPayService {
     static async checkExpiredTransactions(): Promise<CheckExpiredTransactionsResult> {
         try {
             const now = new Date();
-            const pendingExpiredPayments = await AlatPayPayment.findAll({
+            const pendingExpiredPayments = await AlatPayment.findAll({
                 where: {
                     status: AlatPayStatus.PENDING,
                     expiredAt: { [Op.lt]: now },
@@ -465,7 +465,7 @@ export default class AlatPayService {
             );
 
             // Get our local transactions for the same period
-            const localTransactions = await AlatPayPayment.findAll({
+            const localTransactions = await AlatPayment.findAll({
                 where: {
                     createdAt: {
                         [Op.between]: [startDate, endDate],
@@ -507,7 +507,7 @@ export default class AlatPayService {
                             // If now completed and not processed, queue it
                             if (
                                 alatPayStatus === AlatPayStatus.COMPLETED &&
-                                (!localTransaction.metadata?.processed)
+                                (!(localTransaction.metadata as any)?.processed)
                             ) {
                                 await paymentProcessingQueue.add(
                                     'process-completed-payment',
@@ -552,8 +552,8 @@ export default class AlatPayService {
     /**
      * Get payment by ID
      */
-    static async getPaymentById(paymentId: string): Promise<AlatPayPayment | null> {
-        return AlatPayPayment.findByPk(paymentId);
+    static async getPaymentById(paymentId: string): Promise<AlatPayment | null> {
+        return AlatPayment.findByPk(paymentId);
     }
 
     /**
@@ -583,6 +583,3 @@ export default class AlatPayService {
         }
     }
 }
-
-// For TypeScript support (import alias)
-const AlatPayPayment = AlatPayment;

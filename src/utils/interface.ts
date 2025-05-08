@@ -74,6 +74,12 @@ export enum NotificationTypes {
     ORDER_REJECTED = 'Order Rejected',
     ORDER_COMPLETED = 'Order Completed',
 
+    // Payment Notifications
+    PAYMENT_SUCCESSFUL = 'Payment Successful',
+    PAYMENT_FAILED = 'Payment Failed',
+    PAYMENT_EXPIRED = 'Payment Expired',
+    PAYMENT_PENDING = 'Payment Pending',
+
     // User Notifications
     USER_CREATED = 'User Created',
     USER_UPDATED = 'User Updated',

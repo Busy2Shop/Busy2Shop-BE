@@ -3,7 +3,6 @@ import { Queue, Worker } from 'bullmq';
 import { connection } from './connection';
 import { logger } from '../utils/logger';
 import AlatPayService from '../services/payment/alatpay.service';
-import { AlatPayStatus } from '../models/payment/alatPayment.model';
 import NotificationService from '../services/notification.service';
 import { NotificationTypes } from '../utils/interface';
 import { emailService } from '../utils/Email';
@@ -45,17 +44,17 @@ const paymentProcessingWorker = new Worker(
 
                 if (payment) {
                     // Send notification
-                    await NotificationService.createNotification({
+                    await NotificationService.addNotification({
                         userId: payment.userId,
-                        title: NotificationTypes.PAYMENT_SUCCESS,
+                        title: NotificationTypes.PAYMENT_SUCCESSFUL,
                         heading: 'Payment Successful',
                         message: `Your payment of ${payment.currency} ${payment.amount} has been processed successfully.`,
                         resource: payment.orderId || payment.shoppingListId,
+                        read: false,
+                        id: '', // Empty string as placeholder, will be set by the service
                     });
 
                     // Queue an email notification
-                    // This would need the actual email template and user data
-                    // Simplified here for demonstration
                     if (payment.userId) {
                         const user = await AlatPayService.getUserById(payment.userId);
                         if (user && user.email) {
@@ -117,7 +116,7 @@ const paymentWebhookWorker = new Worker(
 // Worker for checking expired payments
 const paymentExpiryCheckWorker = new Worker(
     PAYMENT_EXPIRY_CHECK_QUEUE,
-    async (job) => {
+    async (_job) => {
         logger.info('Checking for expired payments');
 
         try {
