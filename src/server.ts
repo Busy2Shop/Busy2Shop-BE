@@ -38,7 +38,7 @@ async function startServer(): Promise<void> {
             logger.info(
                 `Swagger documentation available at: ${protocol}://${hostname}:${port}/api-docs`,
             );
-            logger.info(`Server is running on Port ${port} --${NODE_ENV} mode `);
+            logger.info(`Server is running on Port ${port} -- ${NODE_ENV} mode `);
         });
 
         // Handle server errors
