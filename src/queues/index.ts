@@ -2,8 +2,7 @@
 import { Express } from 'express';
 import { bullBoard } from './bullboard';
 import { logger } from '../utils/logger';
-import paymentQueueSystem, {
-    paymentProcessingQueue,
+import {
     paymentWebhookQueue,
     paymentExpiryCheckQueue,
 } from './payment.queue';
@@ -11,7 +10,6 @@ import paymentQueueSystem, {
 // Export all queues for use throughout the application
 export const queues = {
     payment: {
-        paymentProcessingQueue,
         paymentWebhookQueue,
         paymentExpiryCheckQueue,
     },
@@ -20,13 +18,9 @@ export const queues = {
 // Initialize all recurring jobs
 export const initializeRecurringJobs = async (app: Express) => {
     try {
-        // Initialize payment system recurring jobs
-        await paymentQueueSystem.initializePaymentJobs();
-
         // Initialize Bull Board with all queues
         bullBoard.initialize({
             // Payment queues
-            paymentProcessingQueue,
             paymentWebhookQueue,
             paymentExpiryCheckQueue,
 
@@ -51,7 +45,6 @@ export const gracefulShutdown = async () => {
         // Close all queue connections
         const closePromises = [
             // Payment queues
-            paymentProcessingQueue.close(),
             paymentWebhookQueue.close(),
             paymentExpiryCheckQueue.close(),
 
