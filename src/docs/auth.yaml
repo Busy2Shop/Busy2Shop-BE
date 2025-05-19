@@ -273,342 +273,432 @@ components:
 
 
 paths:
-  /auth/customer/signup:
+  /auth/validate-auth:
     post:
       tags:
         - Authentication
-      summary: Create a new customer account
-      description: Register a new customer in the system
+      summary: Validate initial signup data
+      description: Validates email/phone and password for initial signup
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CustomerSignup'
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                password:
+                  type: string
+                  format: password
+                  description: User's password
+                phone:
+                  type: object
+                  properties:
+                    countryCode:
+                      type: string
+                      description: Country code (e.g., +234)
+                    number:
+                      type: string
+                      description: Phone number
+      responses:
+        '200':
+          description: Validation successful
+        '400':
+          description: Invalid input data
+        '409':
+          description: Email/phone already exists
+
+  /auth/customer/signup:
+    post:
+      tags:
+        - Authentication
+      summary: Customer signup
+      description: Register a new customer account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                phone:
+                  type: object
+                  properties:
+                    countryCode:
+                      type: string
+                    number:
+                      type: string
       responses:
         '201':
-          description: Successfully created customer account
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "Email verification code sent successfully"
-                  data:
-                    type: object
-                    properties:
-                      user:
-                        $ref: '#/components/schemas/User'
+          description: Customer account created successfully
         '400':
-          description: Bad request, validation failed
+          description: Invalid input data
         '409':
-          description: Email already in use
-        '500':
-          description: Internal server error
+          description: Email/phone already exists
 
   /auth/agent/signup:
     post:
       tags:
         - Authentication
-      summary: Create a new agent account
-      description: Register a new agent in the system
+      summary: Agent signup
+      description: Register a new agent account
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AgentSignup'
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                phone:
+                  type: object
+                  properties:
+                    countryCode:
+                      type: string
+                    number:
+                      type: string
       responses:
         '201':
-          description: Successfully created agent account
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "Email verification code sent successfully"
-                  data:
-                    type: object
-                    properties:
-                      user:
-                        $ref: '#/components/schemas/User'
+          description: Agent account created successfully
         '400':
-          description: Bad request, validation failed
+          description: Invalid input data
         '409':
-          description: Email already in use
-        '500':
-          description: Internal server error
+          description: Email/phone already exists
 
-  /auth/verifyemail:
+  /auth/verify-email:
     post:
       tags:
         - Authentication
-      summary: Verify email with OTP
+      summary: Verify email address
+      description: Verify user's email address with verification code
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VerifyEmail'
+              type: object
+              required:
+                - email
+                - code
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: string
       responses:
-        200:
+        '200':
           description: Email verified successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "Email verified successfully"
-                  data:
-                    type: object
-                    properties:
-                      user:
-                        $ref: '#/components/schemas/User'
-                      accessToken:
-                        type: string
-                      refreshToken:
-                        type: string
-        400:
-          description: Invalid OTP code or email already verified
+        '400':
+          description: Invalid verification code
+        '404':
+          description: User not found
 
-  /auth/resendverifyemail:
-    get:
+  /auth/resend-verification:
+    post:
       tags:
         - Authentication
       summary: Resend verification email
-      parameters:
-        - in: query
-          name: email
-          schema:
-            type: string
-            format: email
-          required: true
-          description: User email address
-      responses:
-        200:
-          description: Verification email resent
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "Email verification code resent successfully"
-                  data:
-                    type: object
-        400:
-          description: Email already verified
-
-  /auth/forgotpassword:
-    post:
-      tags:
-        - Authentication
-      summary: Send password reset instructions
+      description: Resend email verification code
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ForgotPassword'
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
       responses:
-        200:
-          description: Reset instructions sent
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "Reset password instructions sent successfully"
-                  data:
-                    type: string
-        400:
+        '200':
+          description: Verification email sent successfully
+        '404':
           description: User not found
 
-  /auth/login:
+  /auth/complete-account:
     post:
       tags:
         - Authentication
-      summary: User login
+      summary: Complete account setup
+      description: Complete user account setup with additional information
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserLogin'
+              type: object
+              required:
+                - firstName
+                - lastName
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+                address:
+                  type: string
       responses:
-        200:
+        '200':
+          description: Account completed successfully
+        '400':
+          description: Invalid input data
+        '401':
+          description: Unauthorized
+
+  /auth/customer/login:
+    post:
+      tags:
+        - Authentication
+      summary: Customer login
+      description: Login as a customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                phone:
+                  type: object
+                  properties:
+                    countryCode:
+                      type: string
+                    number:
+                      type: string
+      responses:
+        '200':
           description: Login successful
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status:
+                  accessToken:
                     type: string
-                    example: "success"
-                  message:
+                  refreshToken:
                     type: string
-                    example: "Login successful"
-                  data:
+                  user:
                     type: object
-                    properties:
-                      user:
-                        $ref: '#/components/schemas/User'
-                      accessToken:
-                        type: string
-                      refreshToken:
-                        type: string
-        400:
-          description: Invalid credentials or email not verified
+        '400':
+          description: Invalid credentials
+        '401':
+          description: Unauthorized
 
-  /auth/resetpassword:
+  /auth/agent/login:
     post:
       tags:
         - Authentication
-      summary: Reset user password
+      summary: Agent login
+      description: Login as an agent
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ResetPassword'
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                phone:
+                  type: object
+                  properties:
+                    countryCode:
+                      type: string
+                    number:
+                      type: string
       responses:
-        200:
-          description: Password reset successful
+        '200':
+          description: Login successful
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status:
+                  accessToken:
                     type: string
-                    example: "success"
-                  message:
+                  refreshToken:
                     type: string
-                    example: "Password reset successfully. Please login with your new password"
-                  data:
-                    type: string
-        400:
-          description: Invalid reset token or password format
-
-  /auth/changepassword:
-    post:
-      tags:
-        - Authentication
-      security:
-        - BearerAuth: [ ]
-      summary: Change user password
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ChangePassword'
-      responses:
-        200:
-          description: Password changed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "Password changed successfully"
-                  data:
-                    type: string
-        400:
-          description: Invalid old password or new password format
+                  user:
+                    type: object
+        '400':
+          description: Invalid credentials
+        '401':
+          description: Unauthorized
 
   /auth/logout:
-    get:
+    post:
       tags:
         - Authentication
+      summary: Logout
+      description: Logout user and invalidate tokens
       security:
-        - BearerAuth: [ ]
-      summary: Logout user
+        - BearerAuth: []
       responses:
-        200:
+        '200':
           description: Logout successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "Logout successful"
-                  data:
-                    type: string
+        '401':
+          description: Unauthorized
 
-  /auth/loggeduser:
+  /auth/forgot-password:
+    post:
+      tags:
+        - Authentication
+      summary: Forgot password
+      description: Request password reset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '200':
+          description: Password reset email sent
+        '404':
+          description: User not found
+
+  /auth/reset-password:
+    post:
+      tags:
+        - Authentication
+      summary: Reset password
+      description: Reset password with token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - password
+              properties:
+                token:
+                  type: string
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Password reset successful
+        '400':
+          description: Invalid token
+        '404':
+          description: User not found
+
+  /auth/change-password:
+    post:
+      tags:
+        - Authentication
+      summary: Change password
+      description: Change user password
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                  format: password
+                newPassword:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Password changed successfully
+        '400':
+          description: Invalid current password
+        '401':
+          description: Unauthorized
+
+  /auth/me:
     get:
       tags:
         - Authentication
+      summary: Get user data
+      description: Get logged in user's data
       security:
-        - BearerAuth: [ ]
-      summary: Get logged in user data
+        - BearerAuth: []
       responses:
-        200:
+        '200':
           description: User data retrieved successfully
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "user data retrieved successfully"
-                  data:
+                  user:
                     type: object
-                    properties:
-                      user:
-                        $ref: '#/components/schemas/User'
-
-  /auth/update-profile:
-    patch:
+        '401':
+          description: Unauthorized
+    put:
       tags:
         - Authentication
+      summary: Update user data
+      description: Update logged in user's data
       security:
-        - BearerAuth: [ ]
-      summary: Update user profile
+        - BearerAuth: []
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
               type: object
               properties:
@@ -616,87 +706,44 @@ paths:
                   type: string
                 lastName:
                   type: string
-                otherName:
+                address:
                   type: string
-                displayImage:
-                  type: string
-                file:
-                  type: string
-                  format: binary
-                gender:
-                  type: string
-                location:
-                  type: object
-                  properties:
-                    country:
-                      type: string
-                    city:
-                      type: string
-                    address:
-                      type: string
-                isDeactivated:
-                  type: string
-                  enum: [ "true", "false" ]
       responses:
-        200:
-          description: Profile updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "User updated successfully"
-                  data:
-                    $ref: '#/components/schemas/User'
-        400:
-          description: No new data to update
-
-  /auth/authtoken:
-    get:
-      tags:
-        - Authentication
-      security:
-        - BearerAuth: [ ]
-      summary: Refresh access token using refresh token
-      responses:
-        200:
-          description: Token refreshed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: "success"
-                  message:
-                    type: string
-                    example: "Refresh successful"
-                  data:
-                    type: object
-                    properties:
-                      accessToken:
-                        type: string
-
-  /auth/google:
-    get:
-      tags:
-        - Authentication
-      summary: Initiate Google OAuth authentication
-      responses:
-        302:
-          description: Redirect to Google OAuth consent screen
+        '200':
+          description: User data updated successfully
+        '400':
+          description: Invalid input data
+        '401':
+          description: Unauthorized
 
   /auth/google/callback:
     get:
       tags:
         - Authentication
-      summary: Google OAuth callback endpoint
+      summary: Google OAuth callback
+      description: Handle Google OAuth callback
+      parameters:
+        - in: query
+          name: code
+          schema:
+            type: string
+          required: true
+          description: Authorization code from Google
       responses:
-        302:
-          description: Redirect to frontend with authentication tokens on success
+        '200':
+          description: Google authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken:
+                    type: string
+                  refreshToken:
+                    type: string
+                  user:
+                    type: object
+        '400':
+          description: Invalid authorization code
+        '401':
+          description: Authentication failed

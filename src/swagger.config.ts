@@ -29,7 +29,7 @@ const options = {
             version: '1.0.0',
             description: 'API documentation for Busy2Shop e-commerce platform',
             contact: {
-                name: 'API Support',
+                name: 'Busy2Shop Support',
                 email: 'support@busy2shop.com',
             },
         },
@@ -56,6 +56,11 @@ const options = {
                 },
             },
         },
+        security: [
+            {
+                BearerAuth: [],
+            },
+        ],
     },
     apis: getApiPatterns(),
 };
