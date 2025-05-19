@@ -23,8 +23,9 @@ export default class AuthController {
         lastName?: string;
         email?: string;
         password?: string;
+        userType?: string;
     }) {
-        const { firstName, lastName, email, password } = signupData;
+        const { firstName, lastName, email, password, userType } = signupData;
 
         // Validate required fields
         if (!firstName || !lastName || !email || !password) {
@@ -41,192 +42,115 @@ export default class AuthController {
         if (!Validator.isValidPassword(password)) {
             throw new BadRequestError('Invalid password format');
         }
+
+        // Validate user type
+        const validUserTypes = ['customer', 'agent'];
+        if (!userType || !validUserTypes.includes(userType)) {
+            throw new BadRequestError('Invalid user type');
+        }
     }
 
-    static async customerSignup(req: Request, res: Response) {
-        req.body.userType = 'customer';
+    static async validateAuth(req: Request, res: Response) {
+        const { email, userType } = req.body;
 
-        const {
-            firstName,
-            lastName,
-            dob,
-            email,
-            location: { country, city, address } = {},
-            password,
-            otherName,
-            displayImage,
-            gender,
-            phone: { countryCode, number } = {},
-        } = req.body;
+        // Validate required fields
+        if (!email || !userType) {
+            throw new BadRequestError('Email, password, and user type are required');
+        }
 
-        AuthController.validateSignupData({ firstName, lastName, email, password });
+        // Check if email is available for the specified user type
+        const { isAvailable, isActivated } = await UserService.isEmailAvailable(email, userType);
 
-        await UserService.isEmailAvailable(email, 'customer');
-
-        const newUser = await UserService.addUser({
-            firstName,
-            lastName,
-            email,
-            otherName,
-            displayImage,
-            dob,
-            gender,
-            // Agent metadata is now handled separately
-            // agentMeta: userType === 'agent' ? {
-            //     nin,
-            //     images,
-            // } : undefined,
-            // Properly construct the location object
-            location: country
-                ? {
-                    country,
-                    city,
-                    address,
-                }
-                : undefined,
-            phone: countryCode
-                ? {
-                    countryCode,
-                    number,
-                }
-                : undefined,
-            status: {
-                activated: false,
-                emailVerified: false,
-                userType: 'customer',
-            },
-        });
-
-        const otpCode = await AuthUtil.generateCode({
-            type: 'emailverification',
-            identifier: newUser.id,
-            expiry: 60 * 10,
-        });
-
-        const templateData = {
-            otpCode,
-            name: firstName ?? 'User',
-        };
-
-        console.log('sending email');
-        await emailService.send({
-            email: 'batch',
-            subject: 'Account Activation',
-            from: 'auth',
-            isPostmarkTemplate: true,
-            postMarkTemplateAlias: 'verify-email',
-            postmarkInfo: [
-                {
-                    postMarkTemplateData: templateData,
-                    recipientEmail: email,
+        // Case 1: Email doesn't exist for this user type - Create new user
+        if (isAvailable) {
+            const newUser = await UserService.addUser({
+                email,
+                status: {
+                    activated: false,
+                    emailVerified: false,
+                    userType,
                 },
-            ],
-            html: await new EmailTemplate().accountActivation({
-                otpCode,
-                name: firstName || 'User',
-            }),
-        });
+            });
 
-        // Create a new password for the user
-        await Password.create({ userId: newUser.id, password: password });
+            // Generate and send OTP
+            const otpCode = await AuthUtil.generateCode({
+                type: 'emailverification',
+                identifier: newUser.id,
+                expiry: 60 * 10,
+            });
 
-        res.status(201).json({
-            status: 'success',
-            message: 'Email verification code sent successfully',
-            data: {
-                user: newUser,
-            },
-        });
-    }
+            await emailService.send({
+                email: 'batch',
+                subject: 'Email Verification',
+                from: 'auth',
+                isPostmarkTemplate: true,
+                postMarkTemplateAlias: 'verify-email',
+                postmarkInfo: [
+                    {
+                        postMarkTemplateData: { otpCode },
+                        recipientEmail: email,
+                    },
+                ],
+                html: await new EmailTemplate().accountActivation({ otpCode }),
+            });
 
-    static async agentSignup(req: Request, res: Response) {
-        req.body.userType = 'agent';
-
-        const {
-            firstName,
-            lastName,
-            email,
-            password,
-            dob,
-            otherName,
-            displayImage,
-            gender,
-            location: { country, city, address } = {},
-            phone: { countryCode, number } = {},
-        } = req.body;
-
-        AuthController.validateSignupData({ firstName, lastName, email, password });
-
-        await UserService.isEmailAvailable(email, 'agent');
-
-        const newUser = await UserService.addUser({
-            firstName,
-            lastName,
-            email,
-            otherName,
-            displayImage,
-            dob,
-            gender,
-            // Location data
-            location: country
-                ? {
-                    country,
-                    city,
-                    address,
-                }
-                : undefined,
-            // Phone data
-            phone: countryCode
-                ? {
-                    countryCode,
-                    number,
-                }
-                : undefined,
-            status: {
-                activated: false,
-                emailVerified: false,
-                userType: 'agent',
-            },
-        });
-
-        const otpCode = await AuthUtil.generateCode({
-            type: 'emailverification',
-            identifier: newUser.id,
-            expiry: 60 * 10,
-        });
-
-        const templateData = {
-            otpCode,
-            name: firstName ?? 'Agent',
-        };
-
-        // Send verification email
-        await emailService.send({
-            email: 'batch',
-            subject: 'Agent Account Activation',
-            from: 'auth',
-            isPostmarkTemplate: true,
-            postMarkTemplateAlias: 'verify-email',
-            postmarkInfo: [
-                {
-                    postMarkTemplateData: templateData,
-                    recipientEmail: email,
+            return res.status(201).json({
+                status: 'success',
+                message: 'Email verification code sent successfully',
+                data: {
+                    email: newUser.email,
+                    userExists: false,
+                    isActivated: false,
+                    action: 'verify_email',
                 },
-            ],
-            html: await new EmailTemplate().accountActivation({
-                otpCode,
-                name: firstName ?? 'Agent',
-            }),
-        });
+            });
+        }
 
-        // Create a new password for the user
-        await Password.create({ userId: newUser.id, password: password });
+        // Case 2: Email exists but not activated - Resend verification
+        if (!isActivated) {
+            const user = await UserService.viewSingleUserByEmail(email);
 
-        res.status(201).json({
+            const otpCode = await AuthUtil.generateCode({
+                type: 'emailverification',
+                identifier: user.id,
+                expiry: 60 * 10,
+            });
+
+            await emailService.send({
+                email: 'batch',
+                subject: 'Email Verification',
+                from: 'auth',
+                isPostmarkTemplate: true,
+                postMarkTemplateAlias: 'verify-email',
+                postmarkInfo: [
+                    {
+                        postMarkTemplateData: { otpCode },
+                        recipientEmail: email,
+                    },
+                ],
+                html: await new EmailTemplate().accountActivation({ otpCode }),
+            });
+
+            return res.status(200).json({
+                status: 'success',
+                message: 'Verification code resent successfully',
+                data: {
+                    email: user.email,
+                    userExists: true,
+                    isActivated: false,
+                    action: 'verify_email',
+                },
+            });
+        }
+
+        // Case 3: Email exists and is activated - Prompt to login
+        return res.status(200).json({
             status: 'success',
-            message: 'Email verification code sent successfully',
+            message: `Email already registered as ${userType}. Please login to continue.`,
             data: {
-                user: newUser,
+                userExists: true,
+                isActivated: true,
+                action: 'login',
             },
         });
     }
@@ -237,7 +161,7 @@ export default class AuthController {
         await Database.transaction(async (transaction: Transaction) => {
             const user = await UserService.viewSingleUserByEmail(email, transaction);
 
-            if (user.status.emailVerified) throw new BadRequestError('Email already verified');
+            if (user.status.emailVerified && user.status.activated) throw new BadRequestError('Email already verified');
 
             const validCode = await AuthUtil.compareCode({
                 user,
@@ -246,7 +170,12 @@ export default class AuthController {
             });
             if (!validCode) throw new BadRequestError('Invalid otp code');
 
-            await user.update({ status: { ...user.status, emailVerified: true } }, { transaction });
+            await user.update({
+                status: {
+                    ...user.status,
+                    emailVerified: true,
+                },
+            }, { transaction });
 
             await AuthUtil.deleteToken({
                 user,
@@ -254,18 +183,90 @@ export default class AuthController {
                 tokenClass: 'code',
             });
 
-            const accessToken = await AuthUtil.generateToken({ type: 'access', user });
-            const refreshToken = await AuthUtil.generateToken({ type: 'refresh', user });
+            const accessToken = await AuthUtil.generateToken({ type: 'setup', user });
 
             res.status(200).json({
                 status: 'success',
                 message: 'Email verified successfully',
                 data: {
-                    user: user.dataValues,
+                    email: user.email,
                     accessToken,
-                    refreshToken,
                 },
             });
+        });
+    }
+
+    static async completeAccount(req: AuthenticatedRequest, res: Response) {
+        const {
+            firstName,
+            lastName,
+            dob,
+            location: { country, city, address } = {},
+            otherName,
+            displayImage,
+            gender,
+            phone: { countryCode, number } = {},
+            password,
+        } = req.body;
+
+        const userId = req.user.id;
+        // Validate required fields
+        await this.validateSignupData({
+            firstName,
+            lastName,
+            password,
+        });
+
+        // Get user and verify email is verified
+        const user = await UserService.viewSingleUser(userId);
+        if (!user.status.emailVerified) {
+            throw new BadRequestError('Please verify your email first');
+        }
+
+        // Update user with complete information
+        const updatedUser = await UserService.updateUser(user, {
+            firstName,
+            lastName,
+            otherName,
+            displayImage,
+            dob,
+            gender,
+            location: country
+                ? {
+                    country,
+                    city,
+                    address,
+                }
+                : undefined,
+            phone: countryCode
+                ? {
+                    countryCode,
+                    number,
+                }
+                : undefined,
+            status: {
+                ...user.status,
+                activated: true,
+            },
+        });
+
+        // Create password for the user
+        await Password.create({
+            userId: updatedUser.id,
+            password,
+        });
+
+        const accessToken = await AuthUtil.generateToken({ type: 'access', user });
+        const refreshToken = await AuthUtil.generateToken({ type: 'refresh', user });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Account completed successfully',
+            data: {
+                user: updatedUser,
+                accessToken,
+                refreshToken,
+            },
         });
     }
 
@@ -302,7 +303,7 @@ export default class AuthController {
                     recipientEmail: email,
                 },
             ],
-            html: await new EmailTemplate().accountActivation({ otpCode, name: user.firstName }),
+            html: await new EmailTemplate().accountActivation({ otpCode }),
         });
         res.status(200).json({
             status: 'success',
@@ -442,81 +443,124 @@ export default class AuthController {
     }
 
     static async login(req: Request, res: Response) {
-        const { password } = req.body;
-        let data;
+        const { password, userType } = req.body;
+        let data: IDynamicQueryOptions;
 
-        if (req.body.email) {
-            data = { email: req.body.email };
-        } else {
-            throw new BadRequestError('Please provide email');
+        // Validate required fields
+        if (!password || !userType) {
+            throw new BadRequestError('Password and user type are required');
         }
-        logger.info('signing in with: ', data);
 
-        const queryOptions: IDynamicQueryOptions = {
-            query: data,
-        };
-        const user = await UserService.viewSingleUserDynamic(queryOptions);
+        // Check if login is with email or phone
+        if (req.body.email) {
+            // Validate email format
+            const validEmail = Validator.isValidEmail(req.body.email);
+            if (!validEmail) {
+                throw new BadRequestError('Invalid email format');
+            }
+            data = { query: { email: req.body.email } };
+        } else if (req.body.phone) {
+            const { countryCode, number } = req.body.phone;
 
+            // Validate phone components
+            if (!countryCode || !number) {
+                throw new BadRequestError('Country code and phone number are required');
+            }
+
+            // Validate phone format
+            const validPhone = Validator.isValidPhone(number);
+            if (!validPhone) {
+                throw new BadRequestError('Invalid phone number format');
+            }
+
+            // Validate country code format
+            const validCountryCode = Validator.isValidCountryCode(countryCode);
+            if (!validCountryCode) {
+                throw new BadRequestError('Invalid country code format');
+            }
+
+            data = {
+                query: {
+                    'phone.countryCode': countryCode,
+                    'phone.number': number,
+                },
+            };
+        } else {
+            throw new BadRequestError('Please provide either email or phone number');
+        }
+
+        // Find user with email/phone and user type
+        const user = await UserService.viewSingleUserDynamic(data);
+
+        // Check if user exists and matches the requested user type
+        if (!user || user.status.userType !== userType) {
+            throw new BadRequestError(`No ${userType} account found with the provided credentials`);
+        }
+
+        // Check if email is verified
         if (!user.status.emailVerified) {
             const otpCode = await AuthUtil.generateCode({
                 type: 'emailverification',
                 identifier: user.id,
                 expiry: 60 * 10,
             });
-            // send email to user to verify email
-            const templateData = {
-                otpCode,
-                name: user.firstName,
-            };
 
-            console.log('sending email');
             await emailService.send({
                 email: 'batch',
-                subject: 'Account Activation',
+                subject: 'Email Verification',
                 from: 'auth',
                 isPostmarkTemplate: true,
                 postMarkTemplateAlias: 'verify-email',
                 postmarkInfo: [
                     {
-                        postMarkTemplateData: templateData,
+                        postMarkTemplateData: { otpCode },
                         recipientEmail: user.email,
                     },
                 ],
-                html: await new EmailTemplate().accountActivation({
-                    otpCode,
-                    name: user.firstName,
-                }),
+                html: await new EmailTemplate().accountActivation({ otpCode }),
             });
+
             throw new BadRequestError(
-                'An Email verification code has been sent to your email. Please verify your email',
+                'Please verify your email first. A new verification code has been sent.',
             );
         }
 
+        // Check if account is completed
+        if (!user.status.activated) {
+            throw new BadRequestError(
+                'Please complete your account setup before logging in',
+            );
+        }
+
+        // Get and validate password
         const userPassword = await user.$get('password');
         if (!userPassword) {
             throw new BadRequestError(
-                'Oops Please set a password, you can do that by clicking on the forgot password link',
+                'Please set a password using the forgot password link',
             );
         }
 
         const validPassword = userPassword.isValidPassword(password);
         if (!validPassword) {
-            throw new BadRequestError('Invalid credential combination');
+            throw new BadRequestError('Invalid password');
         }
 
+        // Check if account is blocked
         if (user.settings.isBlocked) {
-            throw new ForbiddenError('Oops! Your account has been blocked. Please contact support');
+            throw new ForbiddenError('Account has been blocked. Please contact support');
         }
 
-        if (!user.status.activated) {
-            await user.update({ status: { ...user.status, activated: true } });
+        // Check if account is deactivated
+        if (user.settings.isDeactivated) {
+            throw new ForbiddenError('Account has been deactivated. Please contact support');
         }
 
+        // Generate tokens
         const accessToken = await AuthUtil.generateToken({ type: 'access', user });
         const refreshToken = await AuthUtil.generateToken({ type: 'refresh', user });
 
-        // // update the last Login for the user
-        // await UserService.updateUserSettings(user.id, { lastLogin: new Date() });
+        // Update last login
+        await UserService.updateUserSettings(user.id, { lastLogin: new Date() });
 
         res.status(200).json({
             status: 'success',

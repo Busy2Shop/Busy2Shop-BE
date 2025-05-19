@@ -8,6 +8,7 @@ export interface SaveTokenToCache {
 }
 
 export type AuthToken =
+    | 'setup'
     | 'access'
     | 'refresh'
     | 'passwordreset'

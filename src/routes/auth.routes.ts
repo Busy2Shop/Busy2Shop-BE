@@ -1,53 +1,54 @@
-import express, { Router } from 'express';
+import { Router } from 'express';
 import AuthController from '../controllers/auth.controller';
 import { basicAuth, AuthenticatedController } from '../middlewares/authMiddleware';
-import { uploadMiddleware, UploadType } from '../middlewares/uploadMiddleware';
-// import { rateLimiter } from '../middlewares/rateLimiter';
-import passport from 'passport';
 
-const router: Router = express.Router();
+const router = Router();
 
-//Configure the upload middleware for single file upload
-const upload = uploadMiddleware(UploadType.Single, 'file');
+// Initial signup validation
+router.post('/validate-auth', AuthController.validateAuth);
 
-router
-    .post('/customer/signup', AuthController.customerSignup)
-    .post('/agent/signup', AuthController.agentSignup)
-    .post('/verifyemail', AuthController.verifyEmail)
-    .get('/resendverifyemail', AuthController.resendVerificationEmail)
-    .post('/forgotpassword', AuthController.forgotPassword)
-    .post('/login', AuthController.login)
-    .post('/resetpassword', AuthController.resetPassword)
+// Customer signup flow
+router.post('/customer/signup', (req, res) => {
+    req.body.userType = 'customer';
+    return AuthController.validateAuth(req, res);
+});
 
-    //.post('/setpassword', basicAuth('setpassword'), AuthenticatedController(AuthController.setPassword))
-    .post(
-        '/changepassword',
-        basicAuth('access'),
-        AuthenticatedController(AuthController.changePassword),
-    )
-    .get('/logout', basicAuth('access'), AuthenticatedController(AuthController.logout))
-    .get(
-        '/loggeduser',
-        basicAuth('access'),
-        AuthenticatedController(AuthController.getLoggedUserData),
-    )
-    .patch(
-        '/update-profile',
-        basicAuth('access'),
-        upload,
-        AuthenticatedController(AuthController.updateUser),
-    )
-    .get('/authtoken', basicAuth('refresh'));
+// Agent signup flow
+router.post('/agent/signup', (req, res) => {
+    req.body.userType = 'agent';
+    return AuthController.validateAuth(req, res);
+});
 
-// Google authentication route
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-router.get(
-    '/google/callback',
-    passport.authenticate('google', {
-        failureRedirect: '/register',
-        session: false,
-    }),
-    AuthenticatedController(AuthController.googleSignIn),
-);
+// Email verification
+router.post('/verify-email', AuthController.verifyEmail);
+router.post('/resend-verification', AuthController.resendVerificationEmail);
+
+// Account completion
+router.post('/complete-account', basicAuth('access'), AuthenticatedController(AuthController.completeAccount));
+
+// Authentication
+router.post('/customer/login', (req, res) => {
+    req.body.userType = 'customer';
+    return AuthController.login(req, res);
+});
+
+router.post('/agent/login', (req, res) => {
+    req.body.userType = 'agent';
+    return AuthController.login(req, res);
+});
+
+router.post('/logout', basicAuth('access'), AuthenticatedController(AuthController.logout));
+
+// Password management
+router.post('/forgot-password', AuthController.forgotPassword);
+router.post('/reset-password', AuthController.resetPassword);
+router.post('/change-password', basicAuth('access'), AuthenticatedController(AuthController.changePassword));
+
+// User data
+router.get('/me', basicAuth('access'), AuthenticatedController(AuthController.getLoggedUserData));
+router.put('/me', basicAuth('access'), AuthenticatedController(AuthController.updateUser));
+
+// Social auth
+router.get('/google/callback', AuthenticatedController(AuthController.googleSignIn));
 
 export default router;

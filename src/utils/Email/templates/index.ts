@@ -9,8 +9,8 @@ class EmailTemplate {
     forgotPassword = async ({ link, name }: { link: string; name: string }) => {
         return container(forgotPassword({ link, name }));
     };
-    accountActivation = async ({ otpCode, name }: { otpCode: string; name: string }) => {
-        return container(accountActivation(otpCode, name));
+    accountActivation = async ({ otpCode }: { otpCode: string; }) => {
+        return container(accountActivation(otpCode));
     };
     adminLogin = async ({ otpCode, name }: { otpCode: string; name: string }) => {
         return container(adminLogin(otpCode, name));

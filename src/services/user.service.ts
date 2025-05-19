@@ -22,7 +22,7 @@ export interface IDynamicQueryOptions {
 }
 
 export default class UserService {
-    static async isEmailAvailable(email: string, userType?: string): Promise<boolean> {
+    static async isEmailAvailable(email: string, userType?: string): Promise<{ isAvailable: boolean, isActivated: boolean }> {
         const validEmail = Validator.isValidEmail(email);
         if (!validEmail) throw new BadRequestError('Invalid email');
 
@@ -37,10 +37,11 @@ export default class UserService {
 
         // If user exists with same email and user type, email is not available
         if (existingUser) {
-            throw new BadRequestError(`Email already in use by a ${userType}`);
+            const isActivated = existingUser.status.activated;
+            return { isAvailable: false, isActivated };
         }
 
-        return true;
+        return { isAvailable: true, isActivated: false };
     }
 
     static async isEmailExisting(email: string): Promise<User | null> {

@@ -1,4 +1,4 @@
-export const accountActivation = (otpCode: string, name: string) => {
+export const accountActivation = (otpCode: string) => {
     return `
 <table style="width: 95%; max-width: 670px; margin: 0 auto; background: #fff; border-radius: 3px; text-align: center; box-shadow: 0 6px 18px 0 rgba(0,0,0,.06);" >
     <tr>
@@ -8,7 +8,7 @@ export const accountActivation = (otpCode: string, name: string) => {
         <td style="padding: 35px;">
             <div style="width: 100%;">
                 <h1 style="color: #1e1e2d; margin: 10px 0; font-size: 35px; font-weight: 300; font-family: 'Rubik', sans-serif; text-transform: capitalize;">
-                    Hi ${name}, <span style="text-transform: capitalize;"></span>
+                    Email Otp Verification
                 </h1>
                 <p style="color: #1e1e2d; font-size: 18px; margin: 10px 0;">Welcome to Busy2Shop, we are excited to have you on board!</p>
                 <p style="color: #1e1e2d; font-size: 16px; margin: 10px 0;">To complete your account activation, please use the following one-time passcode (OTP):</p>

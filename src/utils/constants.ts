@@ -104,3 +104,39 @@ export const ALATPAY_SUBSCRIPTION_KEY = process.env.ALATPAY_SUBSCRIPTION_KEY;
 export const ALATPAY_BUSINESS_ID = process.env.ALATPAY_BUSINESS_ID;
 
 export const ALATPAY_MERCHANT_ID = process.env.ALATPAY_MERCHANT_ID;
+
+
+// SMPP (SMS)
+// export const SMPP_HOST = process.env.SMPP_HOST || 'localhost',
+//     SMPP_PORT = parseInt(process.env.SMPP_PORT || '2775'),
+//     SMPP_SYSTEM_ID = process.env.SMPP_SYSTEM_ID || '',
+//     SMPP_PASSWORD = process.env.SMPP_PASSWORD || '',
+//     SMPP_SYSTEM_TYPE = process.env.SMPP_SYSTEM_TYPE || '',
+//     SMPP_SOURCE_ADDR = process.env.SMPP_SOURCE_ADDR || '',
+//     SMPP_SOURCE_ADDR_TON = parseInt(process.env.SMPP_SOURCE_ADDR_TON || '0'),
+//     SMPP_SOURCE_ADDR_NPI = parseInt(process.env.SMPP_SOURCE_ADDR_NPI || '0'),
+//     SMPP_DEST_ADDR_TON = parseInt(process.env.SMPP_DEST_ADDR_TON || '0'),
+//     SMPP_DEST_ADDR_NPI = parseInt(process.env.SMPP_DEST_ADDR_NPI || '0');
+
+
+// export const QUEUE = {
+//     NAMES: {
+//         EMAIL: 'email',
+//         SMS: 'sms',
+//         PAYMENT: 'payment',
+//         NOTIFICATION: 'notification',
+//     },
+//     PRIORITY: {
+//         HIGH: 1,
+//         NORMAL: 2,
+//         LOW: 3,
+//     },
+//     ATTEMPTS: {
+//         DEFAULT: 3,
+//         MAX: 5,
+//     },
+//     BACKOFF: {
+//         TYPE: 'exponential',
+//         DELAY: 1000,
+//     },
+// } as const;
