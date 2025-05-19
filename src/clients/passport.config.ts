@@ -30,7 +30,7 @@ export default class FederationLoginConfig {
                 {
                     clientID: GOOGLE_CLIENT_ID,
                     clientSecret: GOOGLE_CLIENT_SECRET,
-                    callbackURL: '/auth/google/callback',
+                    callbackURL: '/api/v0/auth/google/callback',
                 },
                 async (accessToken, refreshToken, profile, done) => {
                     try {

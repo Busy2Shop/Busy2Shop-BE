@@ -22,32 +22,22 @@ export interface IDynamicQueryOptions {
 }
 
 export default class UserService {
-    static async isEmailAndUsernameAvailable(email: string, username?: string): Promise<boolean> {
+    static async isEmailAvailable(email: string, userType?: string): Promise<boolean> {
         const validEmail = Validator.isValidEmail(email);
         if (!validEmail) throw new BadRequestError('Invalid email');
 
-        let whereCondition;
-
-        // Construct where condition based on the presence of username
-        if (username) {
-            whereCondition = {
-                [Op.or]: [{ email: email }],
-            };
-        } else {
-            whereCondition = { email: email };
-        }
-
-        // Find a user with the constructed where condition
-        const existingUser: User | null = await User.findOne({
-            where: whereCondition,
-            attributes: ['email'],
+        // Find user with the same email and user type
+        const existingUser = await User.findOne({
+            where: {
+                email,
+                'status.userType': userType,
+            },
+            attributes: ['email', 'status'],
         });
 
-        // Check if any user was found
+        // If user exists with same email and user type, email is not available
         if (existingUser) {
-            if (existingUser.email === email) {
-                throw new BadRequestError('Email already in use');
-            }
+            throw new BadRequestError(`Email already in use by a ${userType}`);
         }
 
         return true;

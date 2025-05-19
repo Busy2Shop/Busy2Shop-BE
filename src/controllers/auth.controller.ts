@@ -61,7 +61,7 @@ export default class AuthController {
 
         AuthController.validateSignupData({ firstName, lastName, email, password });
 
-        await UserService.isEmailAndUsernameAvailable(email);
+        await UserService.isEmailAvailable(email, 'customer');
 
         const newUser = await UserService.addUser({
             firstName,
@@ -79,16 +79,16 @@ export default class AuthController {
             // Properly construct the location object
             location: country
                 ? {
-                      country,
-                      city,
-                      address,
-                  }
+                    country,
+                    city,
+                    address,
+                }
                 : undefined,
             phone: countryCode
                 ? {
-                      countryCode,
-                      number,
-                  }
+                    countryCode,
+                    number,
+                }
                 : undefined,
             status: {
                 activated: false,
@@ -157,7 +157,7 @@ export default class AuthController {
 
         AuthController.validateSignupData({ firstName, lastName, email, password });
 
-        await UserService.isEmailAndUsernameAvailable(email);
+        await UserService.isEmailAvailable(email, 'agent');
 
         const newUser = await UserService.addUser({
             firstName,
@@ -170,17 +170,17 @@ export default class AuthController {
             // Location data
             location: country
                 ? {
-                      country,
-                      city,
-                      address,
-                  }
+                    country,
+                    city,
+                    address,
+                }
                 : undefined,
             // Phone data
             phone: countryCode
                 ? {
-                      countryCode,
-                      number,
-                  }
+                    countryCode,
+                    number,
+                }
                 : undefined,
             status: {
                 activated: false,
