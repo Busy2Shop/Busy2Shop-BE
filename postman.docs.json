@@ -1,0 +1,1216 @@
+{
+    "info": {
+      "name": "Busy2Shop API",
+      "description": "API collection for Busy2Shop e-commerce platform",
+      "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+      {
+        "name": "Authentication",
+        "item": [
+          {
+            "name": "Validate Auth",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"user@example.com\",\n    \"userType\": \"customer\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/validate-auth",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "validate-auth"]
+              },
+              "description": "Validates user email to check if they need to register or login"
+            }
+          },
+          {
+            "name": "Customer Signup",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"customer@example.com\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/customer/signup",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "customer", "signup"]
+              },
+              "description": "Register a new customer account"
+            }
+          },
+          {
+            "name": "Agent Signup",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"agent@example.com\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/agent/signup",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "agent", "signup"]
+              },
+              "description": "Register a new agent account"
+            }
+          },
+          {
+            "name": "Verify Email",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"user@example.com\",\n    \"otpCode\": \"123456\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/verify-email",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "verify-email"]
+              },
+              "description": "Verify email with OTP code sent during registration"
+            }
+          },
+          {
+            "name": "Complete Account",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{setupToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"firstName\": \"John\",\n    \"lastName\": \"Doe\",\n    \"otherName\": \"\",\n    \"dob\": \"1990-01-01\",\n    \"gender\": \"male\",\n    \"location\": {\n        \"country\": \"Nigeria\",\n        \"city\": \"Lagos\",\n        \"address\": \"123 Main St\"\n    },\n    \"phone\": {\n        \"countryCode\": \"+234\",\n        \"number\": \"8012345678\"\n    },\n    \"password\": \"Password123!\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/complete-account",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "complete-account"]
+              },
+              "description": "Complete user profile after email verification"
+            }
+          },
+          {
+            "name": "Customer Login",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"customer@example.com\",\n    \"password\": \"Password123!\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/customer/login",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "customer", "login"]
+              },
+              "description": "Customer login"
+            }
+          },
+          {
+            "name": "Agent Login",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"agent@example.com\",\n    \"password\": \"Password123!\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/agent/login",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "agent", "login"]
+              },
+              "description": "Agent login"
+            }
+          },
+          {
+            "name": "Forgot Password",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"user@example.com\",\n    \"redirectUrl\": \"http://localhost:5173/reset-password\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/forgot-password",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "forgot-password"]
+              },
+              "description": "Request password reset link"
+            }
+          },
+          {
+            "name": "Reset Password",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"user@example.com\",\n    \"resetToken\": \"reset-token-here\",\n    \"newPassword\": \"NewPassword123!\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/auth/reset-password",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "reset-password"]
+              },
+              "description": "Reset password with token"
+            }
+          },
+          {
+            "name": "Get User Profile",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/auth/me",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "me"]
+              },
+              "description": "Get current user profile"
+            }
+          },
+          {
+            "name": "Logout",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/auth/logout",
+                "host": ["{{baseUrl}}"],
+                "path": ["auth", "logout"]
+              },
+              "description": "Logout current user"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Markets",
+        "item": [
+          {
+            "name": "Get All Markets",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/market",
+                "host": ["{{baseUrl}}"],
+                "path": ["market"]
+              },
+              "description": "Get all markets"
+            }
+          },
+          {
+            "name": "Get Market Details",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/market/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["market", ":id"],
+                "variable": [
+                  {
+                    "key": "id",
+                    "value": "market-id-here"
+                  }
+                ]
+              },
+              "description": "Get details of a specific market"
+            }
+          },
+          {
+            "name": "Create Market",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "formdata",
+                "formdata": [
+                  {
+                    "key": "name",
+                    "value": "Sample Market",
+                    "type": "text"
+                  },
+                  {
+                    "key": "address",
+                    "value": "123 Market Street",
+                    "type": "text"
+                  },
+                  {
+                    "key": "location",
+                    "value": "{\"latitude\": 6.5244, \"longitude\": 3.3792, \"city\": \"Lagos\", \"state\": \"Lagos\", \"country\": \"Nigeria\"}",
+                    "type": "text"
+                  },
+                  {
+                    "key": "phoneNumber",
+                    "value": "+2348012345678",
+                    "type": "text"
+                  },
+                  {
+                    "key": "marketType",
+                    "value": "supermarket",
+                    "type": "text"
+                  },
+                  {
+                    "key": "description",
+                    "value": "A great supermarket with fresh produce",
+                    "type": "text"
+                  },
+                  {
+                    "key": "files",
+                    "type": "file"
+                  }
+                ]
+              },
+              "url": {
+                "raw": "{{baseUrl}}/market",
+                "host": ["{{baseUrl}}"],
+                "path": ["market"]
+              },
+              "description": "Create a new market"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Categories",
+        "item": [
+          {
+            "name": "Get All Categories",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/category",
+                "host": ["{{baseUrl}}"],
+                "path": ["category"]
+              },
+              "description": "Get all product categories"
+            }
+          },
+          {
+            "name": "Get Category Details",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/category/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["category", ":id"],
+                "variable": [
+                  {
+                    "key": "id",
+                    "value": "category-id-here"
+                  }
+                ]
+              },
+              "description": "Get details of a specific category"
+            }
+          },
+          {
+            "name": "Get Markets By Category",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/category/:id/markets",
+                "host": ["{{baseUrl}}"],
+                "path": ["category", ":id", "markets"],
+                "variable": [
+                  {
+                    "key": "id",
+                    "value": "category-id-here"
+                  }
+                ]
+              },
+              "description": "Get all markets in a specific category"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Products",
+        "item": [
+          {
+            "name": "Get All Products",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/product",
+                "host": ["{{baseUrl}}"],
+                "path": ["product"]
+              },
+              "description": "Get all products"
+            }
+          },
+          {
+            "name": "Get Product Details",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/product/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["product", ":id"],
+                "variable": [
+                  {
+                    "key": "id",
+                    "value": "product-id-here"
+                  }
+                ]
+              },
+              "description": "Get details of a specific product"
+            }
+          },
+          {
+            "name": "Get Market Products",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/product/market/:marketId",
+                "host": ["{{baseUrl}}"],
+                "path": ["product", "market", ":marketId"],
+                "variable": [
+                  {
+                    "key": "marketId",
+                    "value": "market-id-here"
+                  }
+                ]
+              },
+              "description": "Get all products in a specific market"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Shopping Lists",
+        "item": [
+          {
+            "name": "Get User Shopping Lists",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/shopping-list",
+                "host": ["{{baseUrl}}"],
+                "path": ["shopping-list"]
+              },
+              "description": "Get all shopping lists for the current user"
+            }
+          },
+          {
+            "name": "Create Shopping List",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"name\": \"Weekly Groceries\",\n    \"notes\": \"For family dinner\",\n    \"marketId\": \"market-id-here\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/shopping-list",
+                "host": ["{{baseUrl}}"],
+                "path": ["shopping-list"]
+              },
+              "description": "Create a new shopping list"
+            }
+          },
+          {
+            "name": "Get Shopping List Details",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/shopping-list/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["shopping-list", ":id"],
+                "variable": [
+                  {
+                    "key": "id",
+                    "value": "shopping-list-id-here"
+                  }
+                ]
+              },
+              "description": "Get details of a specific shopping list"
+            }
+          },
+          {
+            "name": "Add Item to Shopping List",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"name\": \"Apples\",\n    \"quantity\": 5,\n    \"unit\": \"pcs\",\n    \"notes\": \"Green apples preferred\",\n    \"estimatedPrice\": 1000,\n    \"productId\": \"product-id-optional\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/shopping-list/:listId/items",
+                "host": ["{{baseUrl}}"],
+                "path": ["shopping-list", ":listId", "items"],
+                "variable": [
+                  {
+                    "key": "listId",
+                    "value": "shopping-list-id-here"
+                  }
+                ]
+              },
+              "description": "Add an item to a shopping list"
+            }
+          },
+          {
+            "name": "Submit Shopping List",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/shopping-list/:id/submit",
+                "host": ["{{baseUrl}}"],
+                "path": ["shopping-list", ":id", "submit"],
+                "variable": [
+                  {
+                    "key": "id",
+                    "value": "shopping-list-id-here"
+                  }
+                ]
+              },
+              "description": "Submit shopping list to make it available for agents"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Orders",
+        "item": [
+          {
+            "name": "Get User Orders",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/order",
+                "host": ["{{baseUrl}}"],
+                "path": ["order"]
+              },
+              "description": "Get all orders for the current user"
+            }
+          },
+          {
+            "name": "Create Order",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"shoppingListId\": \"shopping-list-id-here\",\n    \"deliveryAddress\": {\n        \"latitude\": 6.5244,\n        \"longitude\": 3.3792,\n        \"address\": \"123 Delivery St\",\n        \"city\": \"Lagos\",\n        \"state\": \"Lagos\",\n        \"country\": \"Nigeria\",\n        \"additionalDirections\": \"Gate on the left\"\n    },\n    \"customerNotes\": \"Please call before delivery\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/order",
+                "host": ["{{baseUrl}}"],
+                "path": ["order"]
+              },
+              "description": "Create a new order from a shopping list"
+            }
+          },
+          {
+            "name": "Get Order Details",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/order/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["order", ":id"],
+                "variable": [
+                  {
+                    "key": "id",
+                    "value": "order-id-here"
+                  }
+                ]
+              },
+              "description": "Get details of a specific order"
+            }
+          },
+          {
+            "name": "Update Order Status",
+            "request": {
+              "method": "PATCH",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"status\": \"in_progress\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/order/:id/status",
+                "host": ["{{baseUrl}}"],
+                "path": ["order", ":id", "status"],
+                "variable": [
+                  {
+                    "key": "id",
+                    "value": "order-id-here"
+                  }
+                ]
+              },
+              "description": "Update order status (agents only)"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Agents",
+        "item": [
+          {
+            "name": "Get All Agents",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/agent",
+                "host": ["{{baseUrl}}"],
+                "path": ["agent"]
+              },
+              "description": "Get all agents"
+            }
+          },
+          {
+            "name": "Find Nearby Agents",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/agent/nearby?latitude=6.5244&longitude=3.3792&radius=5",
+                "host": ["{{baseUrl}}"],
+                "path": ["agent", "nearby"],
+                "query": [
+                  {
+                    "key": "latitude",
+                    "value": "6.5244"
+                  },
+                  {
+                    "key": "longitude",
+                    "value": "3.3792"
+                  },
+                  {
+                    "key": "radius",
+                    "value": "5"
+                  }
+                ]
+              },
+              "description": "Find agents near a location"
+            }
+          },
+          {
+            "name": "Get Agent Profile",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/agent/:id",
+                "host": ["{{baseUrl}}"],
+                "path": ["agent", ":id"],
+                "variable": [
+                  {
+                    "key": "id",
+                    "value": "agent-id-here"
+                  }
+                ]
+              },
+              "description": "Get details of a specific agent"
+            }
+          },
+          {
+            "name": "Update Agent Status",
+            "request": {
+              "method": "PUT",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"status\": \"available\",\n    \"isAcceptingOrders\": true\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/agent/status",
+                "host": ["{{baseUrl}}"],
+                "path": ["agent", "status"]
+              },
+              "description": "Update agent status (agents only)"
+            }
+          },
+          {
+            "name": "Add Agent Location",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"latitude\": 6.5244,\n    \"longitude\": 3.3792,\n    \"radius\": 5,\n    \"name\": \"My Service Area\",\n    \"address\": \"Lagos Island\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/agent/locations",
+                "host": ["{{baseUrl}}"],
+                "path": ["agent", "locations"]
+              },
+              "description": "Add a location service area for agent (agents only)"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Reviews",
+        "item": [
+          {
+            "name": "Get All Reviews",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/review",
+                "host": ["{{baseUrl}}"],
+                "path": ["review"]
+              },
+              "description": "Get all reviews"
+            }
+          },
+          {
+            "name": "Get Market Reviews",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{baseUrl}}/review/market/:marketId",
+                "host": ["{{baseUrl}}"],
+                "path": ["review", "market", ":marketId"],
+                "variable": [
+                  {
+                    "key": "marketId",
+                    "value": "market-id-here"
+                  }
+                ]
+              },
+              "description": "Get reviews for a specific market"
+            }
+          },
+          {
+            "name": "Create Review",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "formdata",
+                "formdata": [
+                  {
+                    "key": "comment",
+                    "value": "Great products and service!",
+                    "type": "text"
+                  },
+                  {
+                    "key": "rating",
+                    "value": "5",
+                    "type": "text"
+                  },
+                  {
+                    "key": "marketId",
+                    "value": "market-id-here",
+                    "type": "text"
+                  },
+                  {
+                    "key": "files",
+                    "type": "file"
+                  }
+                ]
+              },
+              "url": {
+                "raw": "{{baseUrl}}/review",
+                "host": ["{{baseUrl}}"],
+                "path": ["review"]
+              },
+              "description": "Create a new review for a market or product"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Notifications",
+        "item": [
+          {
+            "name": "List Notifications",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/notifications",
+                "host": ["{{baseUrl}}"],
+                "path": ["notifications"]
+              },
+              "description": "Get all notifications for the current user"
+            }
+          },
+          {
+            "name": "Mark Notification as Read",
+            "request": {
+              "method": "PATCH",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"notificationId\": \"notification-id-here\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/notifications/read",
+                "host": ["{{baseUrl}}"],
+                "path": ["notifications", "read"]
+              },
+              "description": "Mark a notification as read"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Payments",
+        "item": [
+          {
+            "name": "Generate Virtual Account",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"amount\": 25000,\n    \"orderId\": \"order-id-here\",\n    \"description\": \"Payment for order\",\n    \"currency\": \"NGN\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/payment/alatpay/virtual-account",
+                "host": ["{{baseUrl}}"],
+                "path": ["payment", "alatpay", "virtual-account"]
+              },
+              "description": "Generate a virtual account for order payment"
+            }
+          },
+          {
+            "name": "Generate Shopping List Payment Link",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"currency\": \"NGN\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/payment/alatpay/shopping-list/:shoppingListId/payment",
+                "host": ["{{baseUrl}}"],
+                "path": ["payment", "alatpay", "shopping-list", ":shoppingListId", "payment"],
+                "variable": [
+                  {
+                    "key": "shoppingListId",
+                    "value": "shopping-list-id-here"
+                  }
+                ]
+              },
+              "description": "Generate a payment link for a shopping list"
+            }
+          },
+          {
+            "name": "Check Payment Status",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/payment/alatpay/transaction/:transactionId",
+                "host": ["{{baseUrl}}"],
+                "path": ["payment", "alatpay", "transaction", ":transactionId"],
+                "variable": [
+                  {
+                    "key": "transactionId",
+                    "value": "transaction-id-here"
+                  }
+                ]
+              },
+              "description": "Check the status of a payment transaction"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Chat",
+        "item": [
+          {
+            "name": "Get Order Messages",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/chat/orders/:orderId/messages",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "orders", ":orderId", "messages"],
+                "variable": [
+                  {
+                    "key": "orderId",
+                    "value": "order-id-here"
+                  }
+                ]
+              },
+              "description": "Get chat messages for an order"
+            }
+          },
+          {
+            "name": "Activate Chat",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/chat/orders/:orderId/activate",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "orders", ":orderId", "activate"],
+                "variable": [
+                  {
+                    "key": "orderId",
+                    "value": "order-id-here"
+                  }
+                ]
+              },
+              "description": "Activate chat for an order"
+            }
+          },
+          {
+            "name": "Upload Chat Image",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{accessToken}}"
+                }
+              ],
+              "body": {
+                "mode": "formdata",
+                "formdata": [
+                  {
+                    "key": "file",
+                    "type": "file"
+                  }
+                ]
+              },
+              "url": {
+                "raw": "{{baseUrl}}/chat/upload-image",
+                "host": ["{{baseUrl}}"],
+                "path": ["chat", "upload-image"]
+              },
+              "description": "Upload an image for chat"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Admin",
+        "item": [
+          {
+            "name": "Admin Login",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"admin@example.com\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/admin/login",
+                "host": ["{{baseUrl}}"],
+                "path": ["admin", "login"]
+              },
+              "description": "Login as an admin (sends OTP)"
+            }
+          },
+          {
+            "name": "Verify Admin Login",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"email\": \"admin@example.com\",\n    \"otpCode\": \"123456\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/admin/verify",
+                "host": ["{{baseUrl}}"],
+                "path": ["admin", "verify"]
+              },
+              "description": "Verify admin login with OTP"
+            }
+          },
+          {
+            "name": "Get All Users",
+            "request": {
+              "method": "GET",
+              "header": [
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{adminToken}}"
+                }
+              ],
+              "url": {
+                "raw": "{{baseUrl}}/admin/users?page=1&size=10&isBlocked=false&isDeactivated=false&userType=customer",
+                "host": ["{{baseUrl}}"],
+                "path": ["admin", "users"],
+                "query": [
+                  {
+                    "key": "page",
+                    "value": "1"
+                  },
+                  {
+                    "key": "size",
+                    "value": "10"
+                  },
+                  {
+                    "key": "isBlocked",
+                    "value": "false"
+                  },
+                  {
+                    "key": "isDeactivated",
+                    "value": "false"
+                  },
+                  {
+                    "key": "userType",
+                    "value": "customer"
+                  }
+                ]
+              },
+              "description": "Get all users (admin only)"
+            }
+          },
+          {
+            "name": "Block User",
+            "request": {
+              "method": "POST",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Authorization",
+                  "value": "Bearer {{adminToken}}"
+                }
+              ],
+              "body": {
+                "mode": "raw",
+                "raw": "{\n    \"userId\": \"user-id-here\",\n    \"reason\": \"Violation of terms of service\"\n}"
+              },
+              "url": {
+                "raw": "{{baseUrl}}/admin/block-user",
+                "host": ["{{baseUrl}}"],
+                "path": ["admin", "block-user"]
+              },
+              "description": "Block a user (admin only)"
+            }
+          }
+        ]
+      }
+    ],
+    "variable": [
+      {
+        "key": "baseUrl",
+        "value": "http://localhost:8090/api/v0",
+        "description": "Base URL for the API"
+      }
+    ]
+  }
