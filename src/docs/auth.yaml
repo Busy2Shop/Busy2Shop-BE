@@ -1,284 +1,20 @@
 openapi: 3.0.0
 info:
-  title: Authentication API
-  description: Authentication endpoints for Busy2Shop e-commerce platform
-  version: 1.0.0
-  contact:
-    name: API Support
-    email: support@busy2shop.com
-  license:
-    name: proprietary
-servers:
-  - url: ${protocol}://${host}/api/v0
-    description: Development server
-components:
-  schemas:
-    UserLogin:
-      type: object
-      required:
-        - email
-        - password
-      properties:
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-        password:
-          type: string
-          format: password
-          example: "Password123!"
+  title: 'Busy2Shop Authentication API'
+  version: '1.0.0'
+  description: 'API documentation for Busy2Shop authentication endpoints'
 
-    CustomerSignup:
-      type: object
-      required:
-        - email
-        - firstName
-        - lastName
-        - password
-        - dob
-        - gender
-      properties:
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-        password:
-          type: string
-          format: password
-          example: "Password123!"
-        firstName:
-          type: string
-          example: "John"
-        lastName:
-          type: string
-          example: "Doe"
-        otherName:
-          type: string
-          example: "Smith"
-        gender:
-          type: string
-          example: "male"
-        displayImage:
-          type: string
-          format: uri
-          example: "https://example.com/image.jpg"
-        location:
-          type: object
-          properties:
-            country:
-              type: string
-              example: "United States"
-            city:
-              type: string
-              example: "New York"
-            address:
-              type: string
-              example: "123 Main St"
-        phone:
-          type: object
-          properties:
-            countryCode:
-              type: string
-              example: "+1"
-            number:
-              type: string
-              example: "2345678900"
-        dob:
-          type: string
-          format: date
-          example: "1990-01-01"
-
-    AgentSignup:
-      type: object
-      required:
-        - email
-        - firstName
-        - lastName
-        - password
-        - dob
-        - gender
-      properties:
-        email:
-          type: string
-          format: email
-          example: "agent@example.com"
-        password:
-          type: string
-          format: password
-          example: "Password123!"
-        firstName:
-          type: string
-          example: "John"
-        lastName:
-          type: string
-          example: "Doe"
-        otherName:
-          type: string
-          example: "Smith"
-        gender:
-          type: string
-          example: "male"
-        displayImage:
-          type: string
-          format: uri
-          example: "https://example.com/image.jpg"
-        location:
-          type: object
-          properties:
-            country:
-              type: string
-              example: "United States"
-            city:
-              type: string
-              example: "New York"
-            address:
-              type: string
-              example: "123 Main St"
-        phone:
-          type: object
-          properties:
-            countryCode:
-              type: string
-              example: "+1"
-            number:
-              type: string
-              example: "2345678900"
-        dob:
-          type: string
-          format: date
-          example: "1990-01-01"
-
-    VerifyEmail:
-      type: object
-      required:
-        - otpCode
-        - email
-      properties:
-        otpCode:
-          type: string
-          example: "123456"
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-
-    ForgotPassword:
-      type: object
-      required:
-        - email
-      properties:
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-        redirectUrl:
-          type: string
-          format: uri
-          example: "https://example.com/reset-password"
-
-    ResetPassword:
-      type: object
-      required:
-        - resetToken
-        - email
-        - newPassword
-      properties:
-        resetToken:
-          type: string
-          example: "abc123def456"
-        email:
-          type: string
-          format: email
-          example: "user@example.com"
-        newPassword:
-          type: string
-          format: password
-          example: "NewPassword123!"
-
-    ChangePassword:
-      type: object
-      required:
-        - oldPassword
-        - newPassword
-      properties:
-        oldPassword:
-          type: string
-          format: password
-          example: "OldPassword123!"
-        newPassword:
-          type: string
-          format: password
-          example: "NewPassword123!"
-
-    User:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        email:
-          type: string
-          format: email
-        firstName:
-          type: string
-        lastName:
-          type: string
-        otherName:
-          type: string
-        fullName:
-          type: string
-        gender:
-          type: string
-        displayImage:
-          type: string
-        location:
-          $ref: '#/components/schemas/Location'
-        phone:
-          $ref: '#/components/schemas/Phone'
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-        status:
-          type: object
-          properties:
-            activated:
-              type: boolean
-            emailVerified:
-              type: boolean
-            userType:
-              type: string
-              enum: [customer, agent]
-
-    Phone:
-      type: object
-      properties:
-        countryCode:
-          type: string
-        number:
-          type: string
-
-    Location:
-      type: object
-      properties:
-        country:
-          type: string
-        city:
-          type: string
-        address:
-          type: string
-
-
+tags:
+  - name: Authentication
+    description: Authentication endpoints for user registration, login, and account management
 
 paths:
-  /auth/validate-auth:
+  /auth/customer/signup:
     post:
       tags:
         - Authentication
-      summary: Validate initial signup data
-      description: Validates email/phone and password for initial signup
+      summary: Register a new customer account
+      description: Creates a new customer account and sends verification email
       requestBody:
         required: true
         content:
@@ -287,76 +23,47 @@ paths:
               type: object
               required:
                 - email
-                - password
               properties:
                 email:
                   type: string
                   format: email
                   description: User's email address
-                password:
-                  type: string
-                  format: password
-                  description: User's password
-                phone:
-                  type: object
-                  properties:
-                    countryCode:
-                      type: string
-                      description: Country code (e.g., +234)
-                    number:
-                      type: string
-                      description: Phone number
-      responses:
-        '200':
-          description: Validation successful
-        '400':
-          description: Invalid input data
-        '409':
-          description: Email/phone already exists
-
-  /auth/customer/signup:
-    post:
-      tags:
-        - Authentication
-      summary: Customer signup
-      description: Register a new customer account
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-                - password
-              properties:
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-                  format: password
-                phone:
-                  type: object
-                  properties:
-                    countryCode:
-                      type: string
-                    number:
-                      type: string
       responses:
         '201':
-          description: Customer account created successfully
-        '400':
-          description: Invalid input data
-        '409':
-          description: Email/phone already exists
+          description: Customer registration initiated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Email verification code sent successfully
+                  data:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                        format: email
+                      userExists:
+                        type: boolean
+                        example: false
+                      isActivated:
+                        type: boolean
+                        example: false
+                      action:
+                        type: string
+                        example: verify_email
 
   /auth/agent/signup:
     post:
       tags:
         - Authentication
-      summary: Agent signup
-      description: Register a new agent account
+      summary: Register a new agent account
+      description: Creates a new agent account and sends verification email
       requestBody:
         required: true
         content:
@@ -365,35 +72,47 @@ paths:
               type: object
               required:
                 - email
-                - password
               properties:
                 email:
                   type: string
                   format: email
-                password:
-                  type: string
-                  format: password
-                phone:
-                  type: object
-                  properties:
-                    countryCode:
-                      type: string
-                    number:
-                      type: string
+                  description: User's email address
       responses:
         '201':
-          description: Agent account created successfully
-        '400':
-          description: Invalid input data
-        '409':
-          description: Email/phone already exists
+          description: Agent registration initiated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Email verification code sent successfully
+                  data:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                        format: email
+                      userExists:
+                        type: boolean
+                        example: false
+                      isActivated:
+                        type: boolean
+                        example: false
+                      action:
+                        type: string
+                        example: verify_email
 
   /auth/verify-email:
     post:
       tags:
         - Authentication
-      summary: Verify email address
-      description: Verify user's email address with verification code
+      summary: Verify email with OTP code
+      description: Verifies user's email address using the OTP code sent to their email
       requestBody:
         required: true
         content:
@@ -402,51 +121,76 @@ paths:
               type: object
               required:
                 - email
-                - code
+                - otpCode
               properties:
                 email:
                   type: string
                   format: email
-                code:
+                  description: User's email address
+                otpCode:
                   type: string
+                  description: One-time passcode sent to the user's email
       responses:
         '200':
           description: Email verified successfully
-        '400':
-          description: Invalid verification code
-        '404':
-          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Email verified successfully
+                  data:
+                    type: object
+                    properties:
+                      email:
+                        type: string
+                        format: email
+                      accessToken:
+                        type: string
+                        description: Setup token for completing account
 
   /auth/resend-verification:
     post:
       tags:
         - Authentication
       summary: Resend verification email
-      description: Resend email verification code
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-              properties:
-                email:
-                  type: string
-                  format: email
+      description: Resends the verification code to the user's email
+      parameters:
+        - in: query
+          name: email
+          schema:
+            type: string
+            format: email
+          required: true
+          description: User's email address
       responses:
         '200':
-          description: Verification email sent successfully
-        '404':
-          description: User not found
+          description: Verification email resent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Email verification code resent successfully
+                  data:
+                    type: null
 
   /auth/complete-account:
     post:
       tags:
         - Authentication
       summary: Complete account setup
-      description: Complete user account setup with additional information
+      description: Completes the user registration with personal information and creates password
       security:
         - BearerAuth: []
       requestBody:
@@ -458,27 +202,86 @@ paths:
               required:
                 - firstName
                 - lastName
+                - password
               properties:
                 firstName:
                   type: string
+                  description: User's first name
                 lastName:
                   type: string
-                address:
+                  description: User's last name
+                otherName:
                   type: string
+                  description: User's middle or other names (optional)
+                displayImage:
+                  type: string
+                  description: URL to user's profile picture (optional)
+                dob:
+                  type: string
+                  format: date
+                  description: User's date of birth (YYYY-MM-DD)
+                gender:
+                  type: string
+                  enum: [male, female, other, prefer_not_to_say]
+                  description: User's gender
+                location:
+                  type: object
+                  properties:
+                    country:
+                      type: string
+                      description: User's country
+                    city:
+                      type: string
+                      description: User's city
+                    address:
+                      type: string
+                      description: User's address
+                phone:
+                  type: object
+                  properties:
+                    countryCode:
+                      type: string
+                      description: Phone country code (e.g., +234)
+                    number:
+                      type: string
+                      description: Phone number without country code
+                password:
+                  type: string
+                  format: password
+                  description: User's password (must meet complexity requirements)
       responses:
         '200':
           description: Account completed successfully
-        '400':
-          description: Invalid input data
-        '401':
-          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Account completed successfully
+                  data:
+                    type: object
+                    properties:
+                      user:
+                        type: object
+                        description: User profile information
+                      accessToken:
+                        type: string
+                        description: JWT access token for authenticated requests
+                      refreshToken:
+                        type: string
+                        description: JWT refresh token for obtaining new access tokens
 
   /auth/customer/login:
     post:
       tags:
         - Authentication
       summary: Customer login
-      description: Login as a customer
+      description: Authenticates a customer user with email/phone and password
       requestBody:
         required: true
         content:
@@ -486,22 +289,25 @@ paths:
             schema:
               type: object
               required:
-                - email
                 - password
               properties:
                 email:
                   type: string
                   format: email
-                password:
-                  type: string
-                  format: password
+                  description: User's email address (either email or phone required)
                 phone:
                   type: object
                   properties:
                     countryCode:
                       type: string
+                      description: Phone country code (e.g., +234)
                     number:
                       type: string
+                      description: Phone number without country code
+                password:
+                  type: string
+                  format: password
+                  description: User's password
       responses:
         '200':
           description: Login successful
@@ -510,23 +316,31 @@ paths:
               schema:
                 type: object
                 properties:
-                  accessToken:
+                  status:
                     type: string
-                  refreshToken:
+                    example: success
+                  message:
                     type: string
-                  user:
+                    example: Login successful
+                  data:
                     type: object
-        '400':
-          description: Invalid credentials
-        '401':
-          description: Unauthorized
+                    properties:
+                      user:
+                        type: object
+                        description: User profile information
+                      accessToken:
+                        type: string
+                        description: JWT access token for authenticated requests
+                      refreshToken:
+                        type: string
+                        description: JWT refresh token for obtaining new access tokens
 
   /auth/agent/login:
     post:
       tags:
         - Authentication
       summary: Agent login
-      description: Login as an agent
+      description: Authenticates an agent user with email/phone and password
       requestBody:
         required: true
         content:
@@ -534,22 +348,25 @@ paths:
             schema:
               type: object
               required:
-                - email
                 - password
               properties:
                 email:
                   type: string
                   format: email
-                password:
-                  type: string
-                  format: password
+                  description: User's email address (either email or phone required)
                 phone:
                   type: object
                   properties:
                     countryCode:
                       type: string
+                      description: Phone country code (e.g., +234)
                     number:
                       type: string
+                      description: Phone number without country code
+                password:
+                  type: string
+                  format: password
+                  description: User's password
       responses:
         '200':
           description: Login successful
@@ -558,37 +375,56 @@ paths:
               schema:
                 type: object
                 properties:
-                  accessToken:
+                  status:
                     type: string
-                  refreshToken:
+                    example: success
+                  message:
                     type: string
-                  user:
+                    example: Login successful
+                  data:
                     type: object
-        '400':
-          description: Invalid credentials
-        '401':
-          description: Unauthorized
+                    properties:
+                      user:
+                        type: object
+                        description: User profile information
+                      accessToken:
+                        type: string
+                        description: JWT access token for authenticated requests
+                      refreshToken:
+                        type: string
+                        description: JWT refresh token for obtaining new access tokens
 
   /auth/logout:
     post:
       tags:
         - Authentication
-      summary: Logout
-      description: Logout user and invalidate tokens
+      summary: User logout
+      description: Invalidates the user's access and refresh tokens
       security:
         - BearerAuth: []
       responses:
         '200':
           description: Logout successful
-        '401':
-          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Logout successful
+                  data:
+                    type: null
 
   /auth/forgot-password:
     post:
       tags:
         - Authentication
-      summary: Forgot password
-      description: Request password reset
+      summary: Request password reset
+      description: Sends a password reset link to the user's email
       requestBody:
         required: true
         content:
@@ -601,18 +437,34 @@ paths:
                 email:
                   type: string
                   format: email
+                  description: User's email address
+                redirectUrl:
+                  type: string
+                  format: uri
+                  description: URL to redirect after password reset (optional)
       responses:
         '200':
-          description: Password reset email sent
-        '404':
-          description: User not found
+          description: Password reset instructions sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Reset password instructions sent successfully
+                  data:
+                    type: null
 
   /auth/reset-password:
     post:
       tags:
         - Authentication
       summary: Reset password
-      description: Reset password with token
+      description: Resets the user's password using the reset token
       requestBody:
         required: true
         content:
@@ -620,28 +472,44 @@ paths:
             schema:
               type: object
               required:
-                - token
-                - password
+                - resetToken
+                - email
+                - newPassword
               properties:
-                token:
+                resetToken:
                   type: string
-                password:
+                  description: Password reset token from email
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                newPassword:
                   type: string
                   format: password
+                  description: New password (must meet complexity requirements)
       responses:
         '200':
           description: Password reset successful
-        '400':
-          description: Invalid token
-        '404':
-          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Password reset successfully. Please login with your new password
+                  data:
+                    type: null
 
   /auth/change-password:
     post:
       tags:
         - Authentication
       summary: Change password
-      description: Change user password
+      description: Changes the user's password (requires authentication)
       security:
         - BearerAuth: []
       requestBody:
@@ -651,29 +519,40 @@ paths:
             schema:
               type: object
               required:
-                - currentPassword
+                - oldPassword
                 - newPassword
               properties:
-                currentPassword:
+                oldPassword:
                   type: string
                   format: password
+                  description: Current password
                 newPassword:
                   type: string
                   format: password
+                  description: New password (must meet complexity requirements)
       responses:
         '200':
           description: Password changed successfully
-        '400':
-          description: Invalid current password
-        '401':
-          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: Password changed successfully
+                  data:
+                    type: null
 
   /auth/me:
     get:
       tags:
         - Authentication
-      summary: Get user data
-      description: Get logged in user's data
+      summary: Get current user data
+      description: Returns the authenticated user's profile information
       security:
         - BearerAuth: []
       responses:
@@ -684,15 +563,23 @@ paths:
               schema:
                 type: object
                 properties:
-                  user:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: User data retrieved successfully
+                  data:
                     type: object
-        '401':
-          description: Unauthorized
+                    properties:
+                      user:
+                        type: object
+                        description: User profile information
     put:
       tags:
         - Authentication
-      summary: Update user data
-      description: Update logged in user's data
+      summary: Update user profile
+      description: Updates the authenticated user's profile information
       security:
         - BearerAuth: []
       requestBody:
@@ -704,46 +591,74 @@ paths:
               properties:
                 firstName:
                   type: string
+                  description: User's first name
                 lastName:
                   type: string
-                address:
+                  description: User's last name
+                otherName:
                   type: string
+                  description: User's middle or other names
+                displayImage:
+                  type: string
+                  description: URL to user's profile picture
+                gender:
+                  type: string
+                  enum: [male, female, other, prefer_not_to_say]
+                  description: User's gender
+                location:
+                  type: object
+                  properties:
+                    country:
+                      type: string
+                      description: User's country
+                    city:
+                      type: string
+                      description: User's city
+                    address:
+                      type: string
+                      description: User's address
+                isDeactivated:
+                  type: string
+                  enum: ['true', 'false']
+                  description: Account deactivation status
       responses:
         '200':
-          description: User data updated successfully
-        '400':
-          description: Invalid input data
-        '401':
-          description: Unauthorized
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: User updated successfully
+                  data:
+                    type: object
+                    description: Updated user profile information
 
   /auth/google/callback:
     get:
       tags:
         - Authentication
       summary: Google OAuth callback
-      description: Handle Google OAuth callback
-      parameters:
-        - in: query
-          name: code
-          schema:
-            type: string
-          required: true
-          description: Authorization code from Google
+      description: Callback endpoint for Google OAuth authentication
+      security:
+        - BearerAuth: []
       responses:
-        '200':
-          description: Google authentication successful
-          content:
-            application/json:
+        '302':
+          description: Redirect to frontend with tokens
+          headers:
+            Location:
               schema:
-                type: object
-                properties:
-                  accessToken:
-                    type: string
-                  refreshToken:
-                    type: string
-                  user:
-                    type: object
-        '400':
-          description: Invalid authorization code
-        '401':
-          description: Authentication failed
+                type: string
+              description: Redirect URL with tokens
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

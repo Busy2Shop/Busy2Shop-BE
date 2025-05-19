@@ -419,7 +419,7 @@ paths:
   /shopping-list/{listId}/items:
     post:
       tags:
-        - Shopping List Items
+        - Shopping List
       summary: Add item to shopping list
       security:
         - BearerAuth: [ ]
@@ -489,7 +489,7 @@ paths:
   /shopping-list/{listId}/items/{itemId}:
     put:
       tags:
-        - Shopping List Items
+        - Shopping List
       summary: Update item in shopping list
       security:
         - BearerAuth: [ ]
@@ -558,7 +558,7 @@ paths:
 
     delete:
       tags:
-        - Shopping List Items
+        - Shopping List
       summary: Remove item from shopping list
       security:
         - BearerAuth: [ ]
@@ -607,7 +607,7 @@ paths:
   /shopping-list/{id}/submit:
     post:
       tags:
-        - Shopping List Status Management
+        - Shopping List
       summary: Submit a shopping list
       security:
         - BearerAuth: [ ]
@@ -647,7 +647,7 @@ paths:
   /shopping-list/{id}/status:
     patch:
       tags:
-        - Shopping List Status Management
+        - Shopping List
       summary: Update shopping list status
       security:
         - BearerAuth: [ ]
@@ -700,7 +700,7 @@ paths:
   /shopping-list/{id}/accept:
     post:
       tags:
-        - Shopping List Status Management
+        - Shopping List
       summary: Accept a shopping list (agent only)
       security:
         - BearerAuth: [ ]
@@ -740,7 +740,7 @@ paths:
   /shopping-list/{id}/assign:
     post:
       tags:
-        - Shopping List Status Management
+        - Shopping List
       summary: Assign agent to shopping list
       security:
         - BearerAuth: [ ]
@@ -793,7 +793,7 @@ paths:
   /shopping-list/{id}/prices:
     post:
       tags:
-        - Shopping List Status Management
+        - Shopping List
       summary: Update actual prices (agent only)
       security:
         - BearerAuth: [ ]

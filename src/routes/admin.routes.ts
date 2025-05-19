@@ -1,6 +1,9 @@
 import express, { Router } from 'express';
 import AdminController from '../controllers/Admin/admin.controller';
 import { AdminAuthenticatedController, adminAuth } from '../middlewares/authMiddleware';
+import KycController from '../controllers/kyc.controller';
+import AlatPayController from '../controllers/payment/alatpay.controller';
+import { AuthenticatedController } from '../middlewares/authMiddleware';
 
 const router: Router = express.Router();
 
@@ -46,5 +49,24 @@ router.post(
 );
 router.get('/users', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllUsers));
 router.get('/user/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getUser));
+
+// KYC Management - audit the authentication requeirements
+router.patch(
+    '/kyc/approve',
+    adminAuth('admin'),
+    AdminAuthenticatedController(AuthenticatedController(KycController.approveKycVerification))
+);
+
+// Payment Management
+router.get(
+    '/payments/reconcile',
+    adminAuth('admin'),
+    AdminAuthenticatedController(AuthenticatedController(AlatPayController.reconcileTransactions))
+);
+router.get(
+    '/payments/check-expired',
+    adminAuth('admin'),
+    AdminAuthenticatedController(AuthenticatedController(AlatPayController.checkExpiredTransactions))
+);
 
 export default router;

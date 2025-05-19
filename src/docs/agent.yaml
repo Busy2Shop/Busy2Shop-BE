@@ -519,7 +519,7 @@ paths:
     get:
       summary: Get all locations for the authenticated agent
       tags:
-        - Agent Locations
+        - Agent
       security:
         - BearerAuth: [ ]
       responses:
@@ -539,7 +539,7 @@ paths:
     post:
       summary: Add a new location for the authenticated agent
       tags:
-        - Agent Locations
+        - Agent
       security:
         - BearerAuth: [ ]
       requestBody:
@@ -566,7 +566,7 @@ paths:
     put:
       summary: Update an existing location for the authenticated agent
       tags:
-        - Agent Locations
+        - Agent
       security:
         - BearerAuth: [ ]
       parameters:
@@ -602,7 +602,7 @@ paths:
     delete:
       summary: Delete a location for the authenticated agent
       tags:
-        - Agent Locations
+        - Agent
       security:
         - BearerAuth: [ ]
       parameters:
@@ -627,7 +627,7 @@ paths:
     get:
       summary: Get the current status of the authenticated agent
       tags:
-        - Agent Status
+        - Agent
       security:
         - BearerAuth: [ ]
       responses:
@@ -647,7 +647,7 @@ paths:
     put:
       summary: Update the status of the authenticated agent
       tags:
-        - Agent Status
+        - Agent
       security:
         - BearerAuth: [ ]
       requestBody:

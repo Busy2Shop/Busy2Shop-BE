@@ -22,7 +22,4 @@ router.post(
 // Get verification status
 router.get('/status', AuthenticatedController(KycController.getVerificationStatus));
 
-//Todo: Make this an Admin route for approving KYC
-router.patch('/approve-kyc', AuthenticatedController(KycController.approveKycVerification));
-
 export default router;

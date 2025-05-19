@@ -1,184 +1,36 @@
 openapi: 3.0.0
 info:
-  title: Admin API
-  description: Admin management endpoints for Busy2Shop e-commerce platform
-  version: 1.0.0
-  contact:
-    name: API Support
-    email: support@busy2shop.com
-  license:
-    name: proprietary
-servers:
-  - url: ${protocol}://${host}/api/v0
-    description: Development server
+  title: 'Busy2Shop Admin API'
+  version: '1.0.0'
+  description: 'API documentation for Busy2Shop admin endpoints'
 
-components:
-  schemas:
-    Admin:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier for the admin
-        name:
-          type: string
-          description: Admin's full name
-        email:
-          type: string
-          format: email
-          description: Admin's email address
-        isSuperAdmin:
-          type: boolean
-          description: Whether the admin has super admin privileges
-
-    AdminLoginRequest:
-      type: object
-      properties:
-        email:
-          type: string
-          format: email
-          description: Admin's email address
-      required:
-        - email
-
-    AdminVerifyRequest:
-      type: object
-      properties:
-        email:
-          type: string
-          format: email
-          description: Admin's email address
-        otpCode:
-          type: string
-          description: OTP code sent to admin's email
-      required:
-        - email
-        - otpCode
-
-    CreateAdminRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          description: Admin's full name
-        email:
-          type: string
-          format: email
-          description: Admin's email address
-        isSuperAdmin:
-          type: boolean
-          description: Whether the admin has super admin privileges
-      required:
-        - name
-        - email
-
-    DeleteAdminRequest:
-      type: object
-      properties:
-        adminId:
-          type: string
-          format: uuid
-          description: ID of the admin to delete
-      required:
-        - adminId
-
-    UserActionRequest:
-      type: object
-      properties:
-        userId:
-          type: string
-          format: uuid
-          description: ID of the user to perform action on
-        reason:
-          type: string
-          description: Reason for the action (required for block/unblock)
-      required:
-        - userId
-
-    User:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        firstName:
-          type: string
-        lastName:
-          type: string
-        email:
-          type: string
-          format: email
-        settings:
-          type: object
-          properties:
-            isBlocked:
-              type: boolean
-            isDeactivated:
-              type: boolean
-            isKycVerified:
-              type: boolean
-            meta:
-              type: object
-              description: Block/unblock history (only included for admin queries)
-              properties:
-                blockHistory:
-                  type: array
-                  items:
-                    type: object
-                unblockHistory:
-                  type: array
-                  items:
-                    type: object
-            agentMetaData:
-              type: object
-              description: Only included when userType is 'agent' and the withAgentMeta scope is applied
-              properties:
-                nin:
-                  type: string
-                  description: National ID number
-                images:
-                  type: array
-                  items:
-                    type: string
-                  description: Verification images
-                currentStatus:
-                  type: string
-                  enum: ['available', 'busy', 'away', 'offline']
-                  description: Agent's current status
-                lastStatusUpdate:
-                  type: string
-                  format: date-time
-                  description: ISO timestamp of last status update
-                isAcceptingOrders:
-                  type: boolean
-                  description: Whether agent is currently accepting orders
-
-  securitySchemes:
-    AdminAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+tags:
+  - name: Admin
+    description: Authentication endpoints for admin users
 
 paths:
   /admin/login:
     post:
       tags:
-        - Admin Authentication
-      summary: Login as admin
-      description: Sends a verification code to the admin's email
+        - Admin
+      summary: Admin login
+      description: Initiates the admin login process by sending OTP to admin email
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdminLoginRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AdminLoginRequest'
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Admin's email address
       responses:
-        200:
-          description: Verification code sent successfully
+        '200':
+          description: Verification code sent to admin email
           content:
             application/json:
               schema:
@@ -190,28 +42,32 @@ paths:
                   message:
                     type: string
                     example: Verification code sent to admin email
-        400:
-          description: Invalid request - Bad email format
-        404:
-          description: Admin not found
 
   /admin/verify:
     post:
       tags:
-        - Admin Authentication
+        - Admin
       summary: Verify admin login
-      description: Verifies the OTP code and generates an admin token
+      description: Verifies the OTP sent to admin email and completes login
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AdminVerifyRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/AdminVerifyRequest'
+              type: object
+              required:
+                - email
+                - otpCode
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Admin's email address
+                otpCode:
+                  type: string
+                  description: One-time passcode sent to the admin's email
       responses:
-        200:
+        '200':
           description: Admin login successful
           content:
             application/json:
@@ -229,30 +85,51 @@ paths:
                     properties:
                       adminToken:
                         type: string
+                        description: JWT token for admin authentication
                       admin:
-                        $ref: '#/components/schemas/Admin'
-        400:
-          description: Invalid verification code
+                        type: object
+                        properties:
+                          email:
+                            type: string
+                            format: email
+                          name:
+                            type: string
+                          isSuperAdmin:
+                            type: boolean
 
   /admin/create:
     post:
       tags:
-        - Admin Management
+        - Admin
+      summary: Create new admin
+      description: Creates a new admin user (super admin only)
       security:
-        - AdminAuth: [ ]
-      summary: Create a new admin
-      description: Creates a new admin (requires super admin privileges)
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateAdminRequest'
+              type: object
+              required:
+                - name
+                - email
+              properties:
+                name:
+                  type: string
+                  description: Admin's full name
+                email:
+                  type: string
+                  format: email
+                  description: Admin's email address
+                isSuperAdmin:
+                  type: boolean
+                  description: Whether the new admin is a super admin
       responses:
-        201:
-          description: New admin created successfully
+        '201':
+          description: Admin created successfully
           content:
-            multipart/form-data:
+            application/json:
               schema:
                 type: object
                 properties:
@@ -263,30 +140,29 @@ paths:
                     type: string
                     example: New admin created successfully
                   data:
-                    $ref: '#/components/schemas/Admin'
-        400:
-          description: Admin with this email already exists
-        403:
-          description: Only super admin can create new admins
+                    type: object
+                    description: Newly created admin information
 
   /admin/admins:
     get:
       tags:
-        - Admin Management
-      security:
-        - AdminAuth: [ ]
+        - Admin
       summary: Get all admins
-      description: Retrieves a paginated list of admins with filtering options
+      description: Retrieves a list of all admin users
+      security:
+        - BearerAuth: []
       parameters:
         - in: query
           name: page
           schema:
             type: integer
+            minimum: 1
           description: Page number for pagination
         - in: query
           name: size
           schema:
             type: integer
+            minimum: 1
           description: Number of items per page
         - in: query
           name: q
@@ -296,10 +172,11 @@ paths:
         - in: query
           name: isSuperAdmin
           schema:
-            type: boolean
+            type: string
+            enum: ['true', 'false']
           description: Filter by super admin status
       responses:
-        200:
+        '200':
           description: Admins retrieved successfully
           content:
             application/json:
@@ -315,33 +192,41 @@ paths:
                   data:
                     type: object
                     properties:
-                      admins:
+                      rows:
                         type: array
                         items:
-                          $ref: '#/components/schemas/Admin'
+                          type: object
+                          description: Admin information
                       count:
                         type: integer
-                        description: Total number of admins matching the filter
+                        description: Total number of admins
                       totalPages:
                         type: integer
-                        description: Total number of pages available (when pagination is used)
+                        description: Total number of pages
 
   /admin/delete:
     delete:
       tags:
-        - Admin Management
+        - Admin
+      summary: Delete admin
+      description: Deletes an admin user (super admin only)
       security:
-        - AdminAuth: [ ]
-      summary: Delete an admin
-      description: Deletes an admin by ID (requires super admin privileges)
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DeleteAdminRequest'
+              type: object
+              required:
+                - adminId
+              properties:
+                adminId:
+                  type: string
+                  format: uuid
+                  description: ID of admin to delete
       responses:
-        200:
+        '200':
           description: Admin deleted successfully
           content:
             application/json:
@@ -354,27 +239,33 @@ paths:
                   message:
                     type: string
                     example: Admin deleted successfully
-        403:
-          description: Only super admin can delete admins
-        404:
-          description: Admin not found
 
   /admin/block-user:
     post:
       tags:
-        - User Management
+        - Admin
+      summary: Block user
+      description: Blocks a user from accessing the platform
       security:
-        - AdminAuth: [ ]
-      summary: Block a user
-      description: Blocks a user and adds entry to block history
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserActionRequest'
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                  description: ID of user to block
+                reason:
+                  type: string
+                  description: Reason for blocking the user
       responses:
-        200:
+        '200':
           description: User blocked successfully
           content:
             application/json:
@@ -387,27 +278,33 @@ paths:
                   message:
                     type: string
                     example: User blocked successfully
-        400:
-          description: User is already blocked or user ID is required
-        404:
-          description: User not found
 
   /admin/unblock-user:
     post:
       tags:
-        - User Management
+        - Admin
+      summary: Unblock user
+      description: Unblocks a previously blocked user
       security:
-        - AdminAuth: [ ]
-      summary: Unblock a user
-      description: Unblocks a user and adds entry to unblock history
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UserActionRequest'
+              type: object
+              required:
+                - userId
+              properties:
+                userId:
+                  type: string
+                  format: uuid
+                  description: ID of user to unblock
+                reason:
+                  type: string
+                  description: Reason for unblocking the user
       responses:
-        200:
+        '200':
           description: User unblocked successfully
           content:
             application/json:
@@ -420,33 +317,30 @@ paths:
                   message:
                     type: string
                     example: User unblocked successfully
-        400:
-          description: User is not blocked or user ID is required
-        404:
-          description: User not found
 
   /admin/deactivate-user:
     post:
       tags:
-        - User Management
-      security:
-        - AdminAuth: [ ]
-      summary: Deactivate a user
+        - Admin
+      summary: Deactivate user
       description: Deactivates a user account
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - userId
               properties:
                 userId:
                   type: string
                   format: uuid
-              required:
-                - userId
+                  description: ID of user to deactivate
       responses:
-        200:
+        '200':
           description: User deactivated successfully
           content:
             application/json:
@@ -459,33 +353,30 @@ paths:
                   message:
                     type: string
                     example: User deactivated successfully
-        400:
-          description: User is already deactivated or user ID is required
-        404:
-          description: User not found
 
   /admin/activate-user:
     post:
       tags:
-        - User Management
+        - Admin
+      summary: Activate user
+      description: Activates a previously deactivated user account
       security:
-        - AdminAuth: [ ]
-      summary: Activate a user
-      description: Activates a deactivated user account
+        - BearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required:
+                - userId
               properties:
                 userId:
                   type: string
                   format: uuid
-              required:
-                - userId
+                  description: ID of user to activate
       responses:
-        200:
+        '200':
           description: User activated successfully
           content:
             application/json:
@@ -498,32 +389,27 @@ paths:
                   message:
                     type: string
                     example: User activated successfully
-        400:
-          description: User is already activated or user ID is required
-        404:
-          description: User not found
 
   /admin/users:
     get:
       tags:
-        - User Management
-      security:
-        - AdminAuth: [ ]
+        - Admin
       summary: Get all users
-      description: >
-        Retrieves a list of all users with filtering options.
-        When userType is 'agent', additional agent metadata is included in the response.
-        The meta field is only included in admin API responses.
+      description: Retrieves a list of all platform users with filtering options
+      security:
+        - BearerAuth: []
       parameters:
         - in: query
           name: page
           schema:
             type: integer
+            minimum: 1
           description: Page number for pagination
         - in: query
           name: size
           schema:
             type: integer
+            minimum: 1
           description: Number of items per page
         - in: query
           name: q
@@ -533,21 +419,23 @@ paths:
         - in: query
           name: isBlocked
           schema:
-            type: boolean
+            type: string
+            enum: ['true', 'false']
           description: Filter by blocked status
         - in: query
           name: isDeactivated
           schema:
-            type: boolean
-          description: Filter by deactivation status
+            type: string
+            enum: ['true', 'false']
+          description: Filter by deactivated status
         - in: query
           name: userType
           schema:
             type: string
-            enum: [ agent, customer ]
-          description: Filter by user type. When 'agent' is specified, agent metadata is included in the response.
+            enum: ['agent', 'customer']
+          description: Filter by user type
       responses:
-        200:
+        '200':
           description: Users retrieved successfully
           content:
             application/json:
@@ -563,33 +451,36 @@ paths:
                   data:
                     type: object
                     properties:
-                      users:
+                      rows:
                         type: array
                         items:
-                          $ref: '#/components/schemas/User'
+                          type: object
+                          description: User information
                       count:
                         type: integer
+                        description: Total number of users
                       totalPages:
                         type: integer
+                        description: Total number of pages
 
   /admin/user/{id}:
     get:
       tags:
-        - User Management
+        - Admin
+      summary: Get user by ID
+      description: Retrieves detailed information about a specific user
       security:
-        - AdminAuth: [ ]
-      summary: Get a single user
-      description: Retrieves details for a specific user
+        - BearerAuth: []
       parameters:
         - in: path
           name: id
-          required: true
           schema:
             type: string
             format: uuid
-          description: ID of the user to retrieve
+          required: true
+          description: User ID
       responses:
-        200:
+        '200':
           description: User retrieved successfully
           content:
             application/json:
@@ -603,6 +494,12 @@ paths:
                     type: string
                     example: User retrieved successfully
                   data:
-                    $ref: '#/components/schemas/User'
-        404:
-          description: User not found
+                    type: object
+                    description: Detailed user information
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
