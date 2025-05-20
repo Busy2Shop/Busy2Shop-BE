@@ -84,7 +84,9 @@ export default class UserSettings extends Model<UserSettings | IUserSettings> {
     @IsUUID(4)
     @Unique
     @ForeignKey(() => User)
-    @Column
+    @Column({
+        onDelete: 'CASCADE',
+    })
     userId: string;
 
     @BelongsTo(() => User)

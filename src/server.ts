@@ -23,12 +23,12 @@ async function startServer(): Promise<void> {
         new SocketConfig(server);
         logger.info('Chat Client initialized');
 
+        // Initialize queue system and recurring jobs
+        queues.initializeRecurringJobs(app);
+
         // Start the server and listen on the configured port
         const port = PORT || 8090;
         server.listen(port, () => {
-            // Initialize queue system and recurring jobs
-            queues.initializeRecurringJobs(app);
-
             const address = server.address();
             const host =
                 typeof address === 'string' ? 'localhost' : (address?.address ?? 'localhost');

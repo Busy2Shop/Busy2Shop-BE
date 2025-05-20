@@ -171,7 +171,9 @@ export default class User extends Model<User | IUser> {
     @HasOne(() => Password)
     password: Password;
 
-    @HasOne(() => UserSettings)
+    @HasOne(() => UserSettings, {
+        onDelete: 'CASCADE',
+    })
     settings: UserSettings;
 
     // Association with AgentLocation model
