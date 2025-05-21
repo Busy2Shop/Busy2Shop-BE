@@ -64,7 +64,8 @@ export default class User extends Model<User | IUser> {
         type: DataType.STRING,
         allowNull: false,
         get() {
-            return this.getDataValue('email').trim().toLowerCase();
+            const email = this.getDataValue('email');
+            return email ? email.trim().toLowerCase() : '';
         },
         set(value: string) {
             this.setDataValue('email', value.trim().toLowerCase());

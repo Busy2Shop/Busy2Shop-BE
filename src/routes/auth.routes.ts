@@ -4,8 +4,8 @@ import { basicAuth, AuthenticatedController } from '../middlewares/authMiddlewar
 
 const router = Router();
 
-// Initial signup validation
-router.post('/validate-auth', AuthController.validateAuth);
+// // Initial signup validation
+// router.post('/validate-auth', AuthController.validateAuth);
 
 // Customer signup flow
 router.post('/customer/signup', (req, res) => {

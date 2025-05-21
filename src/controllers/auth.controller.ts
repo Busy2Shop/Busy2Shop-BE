@@ -55,7 +55,7 @@ export default class AuthController {
 
         // Validate required fields
         if (!email || !userType) {
-            throw new BadRequestError('Email, password, and user type are required');
+            throw new BadRequestError('Email is required');
         }
 
         // Check if email is available for the specified user type
@@ -94,7 +94,7 @@ export default class AuthController {
                 html: await new EmailTemplate().accountActivation({ otpCode }),
             });
 
-            return res.status(201).json({
+            return res.status(200).json({
                 status: 'success',
                 message: 'Email verification code sent successfully',
                 data: {
@@ -113,7 +113,7 @@ export default class AuthController {
             const otpCode = await AuthUtil.generateCode({
                 type: 'emailverification',
                 identifier: user.id,
-                expiry: 60 * 10,
+                expiry: 60 * 20,
             });
 
             await emailService.send({
@@ -148,6 +148,7 @@ export default class AuthController {
             status: 'success',
             message: `Email already registered as ${userType}. Please login to continue.`,
             data: {
+                email,
                 userExists: true,
                 isActivated: true,
                 action: 'login',
@@ -158,17 +159,27 @@ export default class AuthController {
     static async verifyEmail(req: Request, res: Response) {
         const { otpCode, email }: { otpCode: string; email: string } = req.body;
 
+        if (!email || !otpCode) {
+            throw new BadRequestError('Email and OTP code are required');
+        }
+
         await Database.transaction(async (transaction: Transaction) => {
             const user = await UserService.viewSingleUserByEmail(email, transaction);
 
-            if (user.status.emailVerified && user.status.activated) throw new BadRequestError('Email already verified');
+            if (!user) {
+                throw new BadRequestError('User not found');
+            }
+
+            if (user.status.emailVerified && user.status.activated) {
+                throw new BadRequestError('Email already verified');
+            }
 
             const validCode = await AuthUtil.compareCode({
                 user,
                 tokenType: 'emailverification',
                 token: otpCode,
             });
-            if (!validCode) throw new BadRequestError('Invalid otp code');
+            if (!validCode) throw new BadRequestError('Invalid OTP code');
 
             await user.update({
                 status: {
