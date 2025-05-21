@@ -157,7 +157,7 @@ export default class UserService {
     static async viewSingleUserByEmail(email: string, transaction?: Transaction): Promise<User> {
         const user: User | null = await User.findOne({
             where: { email },
-            attributes: ['id', 'firstName', 'status'],
+            attributes: ['id', 'firstName', 'status', 'email'],
             transaction,
         });
 

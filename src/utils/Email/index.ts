@@ -87,8 +87,9 @@ export default class EmailService {
         }
 
         return async options => {
-            logger.info('options for sending', options);
-
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { html, ...rest} = options;
+            logger.info('options for sending', rest);
             try {
                 // Use Promise.all to wait for all emails to send
                 await Promise.all(
