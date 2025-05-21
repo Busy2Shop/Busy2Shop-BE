@@ -220,9 +220,11 @@ export default class AuthController {
             password,
         } = req.body;
 
+        console.log({reqBody: req.body});
+
         const userId = req.user.id;
         // Validate required fields
-        await this.validateSignupData({
+        await AuthController.validateSignupData({
             firstName,
             lastName,
             password,

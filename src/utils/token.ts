@@ -102,7 +102,7 @@ class AuthUtil {
                 return { secretKey: JWT_ADMIN_ACCESS_SECRET, expiry: 60 * 60 * 24 * 7 };
             default:
                 // 20min
-                return { secretKey: JWT_SECRET, expiry: 60 * 20 };
+                return { secretKey: JWT_SECRET, expiry: 60 * 60 };
         }
     }
 

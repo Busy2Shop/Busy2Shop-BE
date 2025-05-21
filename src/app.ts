@@ -30,10 +30,10 @@ const corsOptions = {
 
         const allowedOrigins = [
             process.env.FRONTEND_URL,
-            // 'http://localhost:3000',
+            'http://localhost:3000',
         ];
 
-        if (!allowedOrigins.includes(origin)) {
+        if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
             callback(new Error('Not allowed by CORS'));
@@ -70,6 +70,7 @@ app.use(
         secure: NODE_ENV === 'production',
         sameSite: 'lax',
         httpOnly: true,
+        domain: NODE_ENV === 'production' ? process.env.DOMAIN : 'localhost',
     }),
 );
 

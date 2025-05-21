@@ -24,7 +24,7 @@ router.post('/verify-email', AuthController.verifyEmail);
 router.post('/resend-verification', AuthController.resendVerificationEmail);
 
 // Account completion
-router.post('/complete-account', basicAuth('access'), AuthenticatedController(AuthController.completeAccount));
+router.post('/complete-account', basicAuth('setup'), AuthenticatedController(AuthController.completeAccount));
 
 // Authentication
 router.post('/customer/login', (req, res) => {

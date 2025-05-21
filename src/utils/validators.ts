@@ -49,8 +49,8 @@ class Validator {
     }
 
     static isValidPassword(password: string): boolean {
-        const passwordRegex =
-            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$&*-^!])[a-zA-Z\d@#$&*-^!]{6,}$/;
+        //validate password - minimum 6 characters, at least one letter
+        const passwordRegex = /^(?=.*[A-Za-z])[A-Za-z\d]{6,}$/;
         return passwordRegex.test(password);
     }
 
