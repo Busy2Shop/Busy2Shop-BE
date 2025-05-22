@@ -31,6 +31,8 @@ const corsOptions = {
         const allowedOrigins = [
             process.env.FRONTEND_URL,
             'http://localhost:3000',
+            'https://busy2shop.vercel.app',
+            'https://busy2shop.com',
         ];
 
         if (allowedOrigins.includes(origin)) {
