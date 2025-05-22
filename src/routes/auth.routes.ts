@@ -8,9 +8,6 @@ const router = Router();
 // Configure the upload middleware for single file upload
 const upload = uploadMiddleware(UploadType.Single, 'file');
 
-// // Initial signup validation
-// router.post('/validate-auth', AuthController.validateAuth);
-
 // Customer signup flow
 router.post('/customer/signup', (req, res) => {
     req.body.userType = 'customer';
@@ -52,7 +49,11 @@ router.post('/change-password', basicAuth('access'), AuthenticatedController(Aut
 router.get('/me', basicAuth('access'), AuthenticatedController(AuthController.getLoggedUserData));
 router.patch('/me', basicAuth('access'), upload, AuthenticatedController(AuthController.updateUser));
 
-// Social auth - Google callback
+// Google authentication endpoints
 router.post('/google/callback', AuthController.handleGoogleCallback);
+router.post('/google/oauth-callback', AuthController.handleGoogleOAuthCallback);
+
+// Token refresh
+router.post('/refresh', AuthController.refreshToken);
 
 export default router;

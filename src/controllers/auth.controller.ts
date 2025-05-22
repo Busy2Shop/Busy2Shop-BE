@@ -1,3 +1,4 @@
+// src/controllers/auth.controller.ts
 import { Request, Response } from 'express';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 import Validator from '../utils/validators';
@@ -8,7 +9,7 @@ import { Database } from '../models';
 import { emailService, EmailTemplate } from '../utils/Email';
 import UserService, { IDynamicQueryOptions } from '../services/user.service';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
-import { WEBSITE_URL } from '../utils/constants';
+import { WEBSITE_URL, GOOGLE_CLIENT_ID } from '../utils/constants';
 import { Transaction } from 'sequelize';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
 import { OAuth2Client } from 'google-auth-library';
@@ -676,82 +677,178 @@ export default class AuthController {
         });
     }
 
-    static async googleSignIn(req: AuthenticatedRequest, res: Response) {
-        try {
-            // The user object is attached to the request by Passport
-            const user = req.user;
-
-            if (!user) {
-                return res.redirect(`${WEBSITE_URL}/login?error=Authentication failed`);
-            }
-
-            // Generate tokens for the user
-            const accessToken = await AuthUtil.generateToken({
-                type: 'access',
-                user: user,
-            });
-
-            const refreshToken = await AuthUtil.generateToken({
-                type: 'refresh',
-                user: user,
-            });
-
-            // Redirect to the frontend with tokens
-            return res.redirect(
-                `${WEBSITE_URL}/auth/social-callback?accessToken=${accessToken}&refreshToken=${refreshToken}`,
-            );
-        } catch (error) {
-            logger.error('Google sign-in error:', error);
-            return res.redirect(`${WEBSITE_URL}/login?error=Authentication failed`);
-        }
-    }
-
+    /**
+     * Handle Google Sign-In authentication
+     * This method verifies the Google ID token and creates/authenticates the user
+     */
     static async handleGoogleCallback(req: Request, res: Response) {
         try {
             const { id_token } = req.body;
 
             if (!id_token) {
-                throw new BadRequestError('ID token is required');
+                throw new BadRequestError('Google ID token is required');
             }
 
-            // Initialize Google OAuth client
-            const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+            // Debug: Log the token structure (first and last 10 characters for security)
+            logger.info(`Received Google ID token: ${id_token.substring(0, 10)}...${id_token.substring(id_token.length - 10)}`);
 
-            // Verify the Google token
-            const ticket = await client.verifyIdToken({
-                idToken: id_token,
-                audience: process.env.GOOGLE_CLIENT_ID,
+            // Verify Google Client ID is configured
+            if (!GOOGLE_CLIENT_ID) {
+                logger.error('GOOGLE_CLIENT_ID is not configured in environment variables');
+                throw new BadRequestError('Google authentication is not configured');
+            }
+
+            // Debug: Log the Client ID being used for verification
+            logger.info(`Using Google Client ID for verification: ${GOOGLE_CLIENT_ID}`);
+
+            // Try to decode the token payload without verification first to debug
+            try {
+                const tokenParts = id_token.split('.');
+                if (tokenParts.length === 3) {
+                    const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+                    logger.info(`Token audience (aud): ${payload.aud}`);
+                    logger.info(`Token issuer (iss): ${payload.iss}`);
+                    logger.info(`Token expiry (exp): ${new Date(payload.exp * 1000).toISOString()}`);
+
+                    // Check if the audience matches our client ID
+                    if (payload.aud !== GOOGLE_CLIENT_ID) {
+                        logger.error(`Audience mismatch! Token aud: ${payload.aud}, Expected: ${GOOGLE_CLIENT_ID}`);
+                        throw new BadRequestError('Google Client ID mismatch. Token was issued for a different application.');
+                    }
+                }
+            } catch (decodeError) {
+                logger.error('Failed to decode token for debugging:', decodeError);
+            }
+
+            // Create OAuth2Client with explicit configuration
+            const client = new OAuth2Client({
+                clientId: GOOGLE_CLIENT_ID,
+                clientSecret: process.env.GOOGLE_CLIENT_SECRET, // Optional for ID token verification
             });
+
+            let ticket;
+            try {
+                // Verify the Google ID token with detailed error logging
+                ticket = await client.verifyIdToken({
+                    idToken: id_token,
+                    audience: GOOGLE_CLIENT_ID,
+                    // Add additional verification options
+                    maxExpiry: 86400, // 24 hours
+                });
+
+                logger.info('Google token verification successful');
+            } catch (verifyError: any) {
+                logger.error('Google token verification failed:', {
+                    error: verifyError.message,
+                    stack: verifyError.stack,
+                    clientId: GOOGLE_CLIENT_ID,
+                });
+
+                // Provide more specific error messages
+                if (verifyError.message.includes('audience')) {
+                    throw new BadRequestError('Google Client ID mismatch. Please check your configuration.');
+                } else if (verifyError.message.includes('expired')) {
+                    throw new BadRequestError('Google token has expired. Please try signing in again.');
+                } else if (verifyError.message.includes('signature')) {
+                    throw new BadRequestError('Invalid Google token signature.');
+                } else {
+                    throw new BadRequestError(`Google token verification failed: ${verifyError.message}`);
+                }
+            }
 
             const payload = ticket.getPayload();
             if (!payload) {
-                throw new BadRequestError('Invalid Google token');
+                throw new BadRequestError('Invalid Google token payload');
             }
 
-            // Find or create user
-            const user = await UserService.findOrCreateUserByGoogleProfile({
-                email: payload.email!,
-                firstName: payload.given_name!,
-                lastName: payload.family_name!,
-                googleId: payload.sub,
-                displayImage: payload.picture,
-                status: {
-                    activated: true,
-                    emailVerified: true,
-                    userType: 'customer',
-                },
+            const { sub: googleId, email, given_name, family_name, picture, email_verified } = payload;
+
+            logger.info(`Google authentication for email: ${email}, verified: ${email_verified}`);
+
+            if (!email || !email_verified) {
+                throw new BadRequestError('Google email not verified or not available');
+            }
+
+            // Use transaction to ensure data consistency
+            const user = await Database.transaction(async (transaction: Transaction) => {
+                // Check if user already exists
+                const existingUser = await UserService.isEmailExistingWithSettings(email);
+
+                if (existingUser) {
+                    logger.info(`Existing user found for email: ${email}`);
+
+                    // User exists - update Google ID if not set and authenticate
+                    if (!existingUser.googleId) {
+                        await existingUser.update({ googleId }, { transaction });
+                        logger.info(`Updated user with Google ID: ${googleId}`);
+                    }
+
+                    // Ensure the user is activated and email verified
+                    if (!existingUser.status.emailVerified || !existingUser.status.activated) {
+                        await existingUser.update({
+                            status: {
+                                ...existingUser.status,
+                                emailVerified: true,
+                                activated: true,
+                            },
+                            ...(picture && !existingUser.displayImage && { displayImage: picture }),
+                        }, { transaction });
+                        logger.info('Updated user activation status');
+                    }
+
+                    // Ensure user settings exist using the new method
+                    await UserService.createOrUpdateUserSettings(existingUser.id, {
+                        lastLogin: new Date(),
+                    });
+
+                    // Get the full user with settings
+                    const fullUser = await UserService.viewSingleUser(existingUser.id);
+
+                    // Check if account is blocked or deactivated
+                    if (fullUser.settings.isBlocked) {
+                        throw new ForbiddenError('Account has been blocked. Please contact support');
+                    }
+
+                    if (fullUser.settings.isDeactivated) {
+                        throw new ForbiddenError('Account has been deactivated. Please contact support');
+                    }
+
+                    return fullUser;
+                } else {
+                    logger.info(`Creating new user for email: ${email}`);
+
+                    // Create new user account with settings
+                    const newUser = await UserService.findOrCreateUserByGoogleProfile({
+                        email,
+                        firstName: given_name || 'User',
+                        lastName: family_name || '',
+                        googleId,
+                        displayImage: picture,
+                        status: {
+                            activated: true,
+                            emailVerified: true,
+                            userType: 'customer', // Default to customer for Google sign-ins
+                        },
+                    });
+
+                    logger.info(`Created new user with ID: ${newUser.id}`);
+                    return newUser;
+                }
             });
 
-            // Generate tokens
-            const accessToken = await AuthUtil.generateToken({
-                type: 'access',
-                user,
-            });
+            // Generate authentication tokens
+            const accessToken = await AuthUtil.generateToken({ type: 'access', user });
+            const refreshToken = await AuthUtil.generateToken({ type: 'refresh', user });
 
-            const refreshToken = await AuthUtil.generateToken({
-                type: 'refresh',
-                user,
-            });
+            // Update last login (this should now work since settings exist)
+            try {
+                await UserService.createOrUpdateUserSettings(user.id, { lastLogin: new Date() });
+            } catch (settingsError) {
+                logger.error('Failed to update last login:', settingsError);
+                // Don't throw here, just log the error since authentication was successful
+            }
+
+            logger.info(`Google authentication successful for user: ${user.email}`);
 
             res.status(200).json({
                 status: 'success',
@@ -762,12 +859,186 @@ export default class AuthController {
                     refreshToken,
                 },
             });
+
         } catch (error) {
-            logger.error('Google callback error:', error);
-            res.status(400).json({
-                status: 'error',
-                message: error instanceof Error ? error.message : 'Google authentication failed',
+            logger.error('Google authentication error:', error);
+
+            if (error instanceof BadRequestError || error instanceof ForbiddenError) {
+                throw error;
+            }
+
+            throw new BadRequestError('Google authentication failed. Please try again.');
+        }
+    }
+
+    /**
+     * Alternative OAuth 2.0 flow handler (for authorization code flow)
+     */
+    static async handleGoogleOAuthCallback(req: Request, res: Response) {
+        try {
+            const { code, redirect_uri } = req.body;
+
+            if (!code) {
+                throw new BadRequestError('Authorization code is required');
+            }
+
+            if (!GOOGLE_CLIENT_ID) {
+                throw new BadRequestError('Google authentication is not configured');
+            }
+
+            const client = new OAuth2Client(
+                GOOGLE_CLIENT_ID,
+                process.env.GOOGLE_CLIENT_SECRET,
+                redirect_uri
+            );
+
+            // Exchange authorization code for tokens
+            const { tokens } = await client.getToken(code);
+
+            if (!tokens.id_token) {
+                throw new BadRequestError('No ID token received from Google');
+            }
+
+            // Verify the ID token
+            const ticket = await client.verifyIdToken({
+                idToken: tokens.id_token,
+                audience: GOOGLE_CLIENT_ID,
             });
+
+            const payload = ticket.getPayload();
+            if (!payload) {
+                throw new BadRequestError('Invalid Google token payload');
+            }
+
+            const { sub: googleId, email, given_name, family_name, picture, email_verified } = payload;
+
+            if (!email || !email_verified) {
+                throw new BadRequestError('Google email not verified or not available');
+            }
+
+            // Rest of the logic is similar to handleGoogleCallback
+            let user = await UserService.isEmailExisting(email);
+
+            if (user) {
+                if (!user.googleId) {
+                    await user.update({ googleId });
+                }
+
+                if (!user.status.emailVerified || !user.status.activated) {
+                    await user.update({
+                        status: {
+                            ...user.status,
+                            emailVerified: true,
+                            activated: true,
+                        },
+                        ...(picture && !user.displayImage && { displayImage: picture }),
+                    });
+                }
+
+                const fullUser = await UserService.viewSingleUser(user.id);
+                if (fullUser.settings.isBlocked) {
+                    throw new ForbiddenError('Account has been blocked. Please contact support');
+                }
+
+                if (fullUser.settings.isDeactivated) {
+                    throw new ForbiddenError('Account has been deactivated. Please contact support');
+                }
+
+                user = fullUser;
+            } else {
+                user = await UserService.findOrCreateUserByGoogleProfile({
+                    email,
+                    firstName: given_name || 'User',
+                    lastName: family_name || '',
+                    googleId,
+                    displayImage: picture,
+                    status: {
+                        activated: true,
+                        emailVerified: true,
+                        userType: 'customer',
+                    },
+                });
+            }
+
+            const accessToken = await AuthUtil.generateToken({ type: 'access', user });
+            const refreshToken = await AuthUtil.generateToken({ type: 'refresh', user });
+
+            await UserService.updateUserSettings(user.id, { lastLogin: new Date() });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Google OAuth authentication successful',
+                data: {
+                    user: user.dataValues,
+                    accessToken,
+                    refreshToken,
+                },
+            });
+
+        } catch (error) {
+            logger.error('Google OAuth authentication error:', error);
+
+            if (error instanceof BadRequestError || error instanceof ForbiddenError) {
+                throw error;
+            }
+
+            throw new BadRequestError('Google OAuth authentication failed. Please try again.');
+        }
+    }
+
+    /**
+     * Refresh access token using refresh token
+     */
+    static async refreshToken(req: Request, res: Response) {
+        try {
+            const { refreshToken } = req.body;
+
+            if (!refreshToken) {
+                throw new BadRequestError('Refresh token is required');
+            }
+
+            // Verify the refresh token
+            const payload = AuthUtil.verifyToken(refreshToken, 'refresh') as any;
+
+            if (!payload || !payload.user || !payload.user.id) {
+                throw new BadRequestError('Invalid refresh token');
+            }
+
+            // Get the user
+            const user = await UserService.viewSingleUser(payload.user.id);
+
+            if (!user) {
+                throw new BadRequestError('User not found');
+            }
+
+            // Check if account is blocked or deactivated
+            if (user.settings.isBlocked) {
+                throw new ForbiddenError('Account has been blocked. Please contact support');
+            }
+
+            if (user.settings.isDeactivated) {
+                throw new ForbiddenError('Account has been deactivated. Please contact support');
+            }
+
+            // Generate new access token
+            const accessToken = await AuthUtil.generateToken({ type: 'access', user });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Token refreshed successfully',
+                data: {
+                    accessToken,
+                },
+            });
+
+        } catch (error) {
+            logger.error('Token refresh error:', error);
+
+            if (error instanceof BadRequestError || error instanceof ForbiddenError) {
+                throw error;
+            }
+
+            throw new BadRequestError('Failed to refresh token. Please login again.');
         }
     }
 }

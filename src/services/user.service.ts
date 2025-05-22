@@ -56,6 +56,18 @@ export default class UserService {
 
         return existingUser;
     }
+    static async isEmailExistingWithSettings(email: string): Promise<User | null> {
+        const validEmail = Validator.isValidEmail(email);
+        if (!validEmail) throw new BadRequestError('Invalid email');
+
+        // Find a user with the constructed where condition
+        const existingUser: User | null = await User.scope('withSettings').findOne({
+            where: { email },
+            // attributes: ['email', 'id'],
+        });
+
+        return existingUser;
+    }
 
     static async addUser(userData: IUser): Promise<User> {
         const _transaction = await User.create({ ...userData });
@@ -117,7 +129,6 @@ export default class UserService {
                     model: UserSettingsModel,
                     as: 'settings',
                     where: settingsWhere,
-                    // No need to specify attributes - let the scope handle it
                 },
             ],
         };
@@ -205,10 +216,37 @@ export default class UserService {
         return userSettings;
     }
 
+    /**
+     * Create or update user settings - ensures settings always exist
+     */
+    static async createOrUpdateUserSettings(
+        userId: string,
+        settingsData: Partial<IUserSettings>,
+    ): Promise<UserSettings> {
+        let userSettings = await UserSettings.findOne({ where: { userId } });
+
+        if (!userSettings) {
+            // Create new user settings if they don't exist
+            userSettings = await UserSettings.create({
+                userId,
+                joinDate: new Date().toISOString().split('T')[0],
+                ...settingsData,
+            } as IUserSettings);
+        } else {
+            // Update existing settings
+            await userSettings.update(settingsData);
+        }
+
+        return userSettings;
+    }
+
     static async deleteUser(user: User, transaction?: Transaction): Promise<void> {
         transaction ? await user.destroy({ transaction }) : await user.destroy();
     }
 
+    /**
+     * Enhanced findOrCreateUserByGoogleProfile with proper UserSettings creation
+     */
     static async findOrCreateUserByGoogleProfile({
         email,
         firstName,
@@ -232,6 +270,13 @@ export default class UserService {
             // Try to find existing user
             let user = await User.findOne({
                 where: { email },
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                        required: false, // Left join to include users without settings
+                    },
+                ],
                 transaction: t,
             });
 
@@ -248,6 +293,42 @@ export default class UserService {
                     },
                     { transaction: t },
                 );
+
+                // Create user settings for the new user
+                await UserSettings.create(
+                    {
+                        userId: user.id,
+                        joinDate: new Date().toISOString().split('T')[0],
+                        isBlocked: false,
+                        isDeactivated: false,
+                        isKycVerified: false,
+                        lastLogin: new Date(),
+                        // Initialize agent metadata if user is an agent
+                        ...(status.userType === 'agent' && {
+                            agentMetaData: {
+                                nin: '',
+                                images: [],
+                                currentStatus: 'offline',
+                                lastStatusUpdate: new Date().toISOString(),
+                                isAcceptingOrders: false,
+                            },
+                        }),
+                    } as IUserSettings,
+                    { transaction: t },
+                );
+
+                // Re-fetch user with settings
+                user = await User.findOne({
+                    where: { id: user.id },
+                    include: [
+                        {
+                            model: UserSettings,
+                            as: 'settings',
+                        },
+                    ],
+                    transaction: t,
+                });
+
             } else {
                 // Update existing user's Google info
                 await user.update(
@@ -257,10 +338,52 @@ export default class UserService {
                         status: {
                             ...user.status,
                             emailVerified: true,
+                            activated: true,
                         },
                     },
                     { transaction: t },
                 );
+
+                // Ensure user settings exist
+                if (!user.settings) {
+                    await UserSettings.create(
+                        {
+                            userId: user.id,
+                            joinDate: new Date().toISOString().split('T')[0],
+                            isBlocked: false,
+                            isDeactivated: false,
+                            isKycVerified: false,
+                            lastLogin: new Date(),
+                            // Initialize agent metadata if user is an agent
+                            ...(user.status.userType === 'agent' && {
+                                agentMetaData: {
+                                    nin: '',
+                                    images: [],
+                                    currentStatus: 'offline',
+                                    lastStatusUpdate: new Date().toISOString(),
+                                    isAcceptingOrders: false,
+                                },
+                            }),
+                        } as IUserSettings,
+                        { transaction: t },
+                    );
+
+                    // Re-fetch user with settings
+                    user = await User.findOne({
+                        where: { id: user.id },
+                        include: [
+                            {
+                                model: UserSettings,
+                                as: 'settings',
+                            },
+                        ],
+                        transaction: t,
+                    });
+                }
+            }
+
+            if (!user) {
+                throw new Error('Failed to create or retrieve user');
             }
 
             return user;
