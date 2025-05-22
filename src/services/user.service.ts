@@ -3,7 +3,7 @@ import User, { IUser } from '../models/user.model';
 import { NotFoundError, BadRequestError } from '../utils/customErrors';
 import Validator from '../utils/validators';
 import Pagination, { IPaging } from '../utils/pagination';
-import { Sequelize } from '../models';
+import { Database, Sequelize } from '../models';
 import UserSettings, { IUserSettings } from '../models/userSettings.model';
 
 export interface IViewUsersQuery {
@@ -209,61 +209,61 @@ export default class UserService {
         transaction ? await user.destroy({ transaction }) : await user.destroy();
     }
 
-    static async findOrCreateUserByGoogleProfile(profileData: {
+    static async findOrCreateUserByGoogleProfile({
+        email,
+        firstName,
+        lastName,
+        googleId,
+        displayImage,
+        status,
+    }: {
         email: string;
         firstName: string;
         lastName: string;
-        username?: string;
         googleId: string;
         displayImage?: string;
         status: {
             activated: boolean;
             emailVerified: boolean;
+            userType: 'customer' | 'agent';
         };
-    }): Promise<User> {
-        // Check if user with this email already exists
-        const user = await User.findOne({
-            where: { email: profileData.email },
-        });
+    }) {
+        return await Database.transaction(async (t: Transaction) => {
+            // Try to find existing user
+            let user = await User.findOne({
+                where: { email },
+                transaction: t,
+            });
 
-        if (user) {
-            // User exists, update googleId if not already set
-            if (!user.googleId) {
-                await user.update({
-                    googleId: profileData.googleId,
-                    displayImage: profileData.displayImage ?? user.displayImage,
-                });
-            }
-
-            // Update email verification status if not already verified
-            if (!user.status.emailVerified) {
-                await user.update({
-                    status: {
-                        ...user.status,
-                        emailVerified: true,
+            if (!user) {
+                // Create new user if not found
+                user = await User.create(
+                    {
+                        email,
+                        firstName,
+                        lastName,
+                        googleId,
+                        displayImage,
+                        status,
                     },
-                });
+                    { transaction: t },
+                );
+            } else {
+                // Update existing user's Google info
+                await user.update(
+                    {
+                        googleId,
+                        displayImage: displayImage || user.displayImage,
+                        status: {
+                            ...user.status,
+                            emailVerified: true,
+                        },
+                    },
+                    { transaction: t },
+                );
             }
 
             return user;
-        }
-
-        // Create a new user
-        const newUserData: IUser = {
-            email: profileData.email,
-            firstName: profileData.firstName,
-            lastName: profileData.lastName,
-            displayImage: profileData.displayImage,
-            googleId: profileData.googleId,
-            status: {
-                userType: 'customer',
-                emailVerified: true,
-                activated: true,
-            },
-        };
-
-        // Create the user
-        const newUser = await this.addUser(newUserData);
-        return newUser;
+        });
     }
 }

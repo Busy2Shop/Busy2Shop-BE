@@ -11,6 +11,7 @@ import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { WEBSITE_URL } from '../utils/constants';
 import { Transaction } from 'sequelize';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
+import { OAuth2Client } from 'google-auth-library';
 
 export default class AuthController {
     /**
@@ -220,7 +221,7 @@ export default class AuthController {
             password,
         } = req.body;
 
-        console.log({reqBody: req.body});
+        console.log({ reqBody: req.body });
 
         const userId = req.user.id;
         // Validate required fields
@@ -228,6 +229,8 @@ export default class AuthController {
             firstName,
             lastName,
             password,
+            email: req.user.email,
+            userType: req.user.status.userType,
         });
 
         // Get user and verify email is verified
@@ -700,6 +703,71 @@ export default class AuthController {
         } catch (error) {
             logger.error('Google sign-in error:', error);
             return res.redirect(`${WEBSITE_URL}/login?error=Authentication failed`);
+        }
+    }
+
+    static async handleGoogleCallback(req: Request, res: Response) {
+        try {
+            const { id_token } = req.body;
+
+            if (!id_token) {
+                throw new BadRequestError('ID token is required');
+            }
+
+            // Initialize Google OAuth client
+            const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+            // Verify the Google token
+            const ticket = await client.verifyIdToken({
+                idToken: id_token,
+                audience: process.env.GOOGLE_CLIENT_ID,
+            });
+
+            const payload = ticket.getPayload();
+            if (!payload) {
+                throw new BadRequestError('Invalid Google token');
+            }
+
+            // Find or create user
+            const user = await UserService.findOrCreateUserByGoogleProfile({
+                email: payload.email!,
+                firstName: payload.given_name!,
+                lastName: payload.family_name!,
+                googleId: payload.sub,
+                displayImage: payload.picture,
+                status: {
+                    activated: true,
+                    emailVerified: true,
+                    userType: 'customer',
+                },
+            });
+
+            // Generate tokens
+            const accessToken = await AuthUtil.generateToken({
+                type: 'access',
+                user,
+            });
+
+            const refreshToken = await AuthUtil.generateToken({
+                type: 'refresh',
+                user,
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Google authentication successful',
+                data: {
+                    user: user.dataValues,
+                    accessToken,
+                    refreshToken,
+                },
+            });
+        } catch (error) {
+            logger.error('Google callback error:', error);
+            res.status(400).json({
+                status: 'error',
+                message: error instanceof Error ? error.message : 'Google authentication failed',
+            });
         }
     }
 }

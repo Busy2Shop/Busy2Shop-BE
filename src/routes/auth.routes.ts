@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import AuthController from '../controllers/auth.controller';
 import { basicAuth, AuthenticatedController } from '../middlewares/authMiddleware';
+import { uploadMiddleware, UploadType } from '../middlewares/uploadMiddleware';
 
 const router = Router();
+
+// Configure the upload middleware for single file upload
+const upload = uploadMiddleware(UploadType.Single, 'file');
 
 // // Initial signup validation
 // router.post('/validate-auth', AuthController.validateAuth);
@@ -37,7 +41,7 @@ router.post('/agent/login', (req, res) => {
     return AuthController.login(req, res);
 });
 
-router.post('/logout', basicAuth('access'), AuthenticatedController(AuthController.logout));
+router.get('/logout', basicAuth('access'), AuthenticatedController(AuthController.logout));
 
 // Password management
 router.post('/forgot-password', AuthController.forgotPassword);
@@ -46,9 +50,9 @@ router.post('/change-password', basicAuth('access'), AuthenticatedController(Aut
 
 // User data
 router.get('/me', basicAuth('access'), AuthenticatedController(AuthController.getLoggedUserData));
-router.put('/me', basicAuth('access'), AuthenticatedController(AuthController.updateUser));
+router.patch('/me', basicAuth('access'), upload, AuthenticatedController(AuthController.updateUser));
 
-// Social auth
-router.get('/google/callback', AuthenticatedController(AuthController.googleSignIn));
+// Social auth - Google callback
+router.post('/google/callback', AuthController.handleGoogleCallback);
 
 export default router;

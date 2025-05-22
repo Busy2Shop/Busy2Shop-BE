@@ -11,16 +11,16 @@ import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
 import swaggerUi from 'swagger-ui-express';
 import { updateSwaggerHost } from './swagger.config';
-import passport from 'passport';
+// import passport from 'passport';
 import { getServerHealth } from './views/serverHealthCheck';
 import cookieParser from 'cookie-parser';
 import cookieSession from 'cookie-session';
 import { NODE_ENV, SESSION_SECRET } from './utils/constants';
-import FederationLoginConfig from './clients/passport.config';
+// import FederationLoginConfig from './clients/passport.config';
 const app = express();
 
 // Initialize Passport configuration
-new FederationLoginConfig();
+// new FederationLoginConfig();
 
 // Configure CORS
 const corsOptions = {
@@ -75,8 +75,8 @@ app.use(
 );
 
 // Passport middleware
-app.use(passport.initialize());
-app.use(passport.session());
+// app.use(passport.initialize());
+// app.use(passport.session());
 
 // Request logging middleware
 app.use(
