@@ -42,6 +42,7 @@ router.get('/logout', basicAuth('access'), AuthenticatedController(AuthControlle
 
 // Password management
 router.post('/forgot-password', AuthController.forgotPassword);
+router.post('/verify-password-reset', AuthController.verifyPasswordReset);
 router.post('/reset-password', AuthController.resetPassword);
 router.post('/change-password', basicAuth('access'), AuthenticatedController(AuthController.changePassword));
 

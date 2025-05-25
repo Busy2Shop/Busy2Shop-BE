@@ -6,8 +6,8 @@ import { certificate } from './certificateTemplate';
 import { adminLogin } from './adminLogin';
 
 class EmailTemplate {
-    forgotPassword = async ({ link, name }: { link: string; name: string }) => {
-        return container(forgotPassword({ link, name }));
+    forgotPassword = async ({ otpCode, name }: { otpCode: string; name: string }) => {
+        return container(forgotPassword({ otpCode, name }));
     };
     accountActivation = async ({ otpCode }: { otpCode: string; }) => {
         return container(accountActivation(otpCode));

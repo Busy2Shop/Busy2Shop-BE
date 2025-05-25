@@ -1,4 +1,4 @@
-export const forgotPassword = ({ link, name }: { link: string; name: string }) => {
+export const forgotPassword = ({ otpCode, name }: { otpCode: string; name: string }) => {
     return `
 <table style="width: 95%; max-width: 670px; margin: 20px auto; background: #fff; border-radius: 3px; text-align: center; box-shadow: 0 6px 18px 0 rgba(0,0,0,.06);" >
     <tr>
@@ -11,18 +11,14 @@ export const forgotPassword = ({ link, name }: { link: string; name: string }) =
                     Hi ${name},
                 </h1>
                 <p style="color: #1e1e2d; font-size: 18px; margin: 10px 0;">We received a request to reset your password for your Busy2Shop account.</p>
-                <p style="color: #1e1e2d; font-size: 16px; margin: 10px 0;">To reset your password, please click the link below:</p>
+                <p style="color: #1e1e2d; font-size: 16px; margin: 10px 0;">To reset your password, please use the following one-time passcode (OTP):</p>
             </div>
             <div style="margin-top: 15px;">
-                <a href=${link} style="text-decoration: none; display: inline-block; background: #F04950; color: #fff; font-weight: 800; text-transform: uppercase; font-size: 20px; padding: 10px 24px; border-radius: 5px; width: 100%;">
-                    Reset Password
-                </a>
-                <p style="color: #1e1e2d; font-size: 16px; margin-top: 10px;">Or copy and paste the following link into your browser:</p>
-                <div style="background: #eee; padding: 10px; border-radius: 5px; word-wrap: break-word; margin-top: 10px;">
-                    <code style="font-size: 14px;">${link}</code>
+                <div style="background: #F04950; color: #fff; font-weight: 800; text-transform: uppercase; font-size: 20px; padding: 10px 24px; display: inline-block; border-radius: 5px; width: 100px;">
+                    ${otpCode}
                 </div>
             </div>
-            <p style="color: #1e1e2d; font-size: 16px; margin: 20px 0;">If you did not request a password reset, you can ignore this email.</p>
+            <p style="color: #1e1e2d; font-size: 16px; margin: 20px 0;">Please enter this code on our website to reset your password. If you did not request a password reset, you can ignore this email.</p>
         </td>
     </tr>
     <tr>

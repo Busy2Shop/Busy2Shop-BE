@@ -3,13 +3,13 @@ import { Request, Response } from 'express';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 import Validator from '../utils/validators';
 import Password from '../models/password.model';
-import { AuthUtil } from '../utils/token';
+import { AuthUtil, TokenCacheUtil } from '../utils/token';
 import { logger } from '../utils/logger';
 import { Database } from '../models';
 import { emailService, EmailTemplate } from '../utils/Email';
 import UserService, { IDynamicQueryOptions } from '../services/user.service';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
-import { WEBSITE_URL, GOOGLE_CLIENT_ID } from '../utils/constants';
+import { GOOGLE_CLIENT_ID } from '../utils/constants';
 import { Transaction } from 'sequelize';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
 import { OAuth2Client } from 'google-auth-library';
@@ -330,9 +330,7 @@ export default class AuthController {
     }
 
     static async forgotPassword(req: Request, res: Response) {
-        const { email, redirectUrl } = req.body;
-
-        console.log({ email, redirectUrl });
+        const { email } = req.body;
 
         const user = await UserService.viewSingleUserByEmail(email);
 
@@ -340,43 +338,48 @@ export default class AuthController {
             throw new BadRequestError('Oops User not found');
         }
 
-        const resetToken = await AuthUtil.generateCode({
+        const otpCode = await AuthUtil.generateCode({
             type: 'passwordreset',
             identifier: user.id,
-            expiry: 60 * 10,
+            expiry: 60 * 10, // 10 minutes expiry
         });
-        const redirectLink: string = redirectUrl ?? `${WEBSITE_URL}/reset-password`;
 
-        const resetLink = `${redirectLink}?prst=${resetToken}&e=${encodeURIComponent(email)}`;
+        // Generate validation hash
+        const validationHash = await AuthUtil.generateValidationHash({
+            email,
+            type: 'password-reset',
+            expiry: 60 * 10, // 10 minutes expiry
+        });
 
-        const templateData = {
-            link: resetLink,
-            name: user.firstName,
-        };
-
-        //TODO: Send email with the reset password link with the resetToken as query param
         await emailService.send({
             email: 'batch',
-            subject: 'Password Reset ',
+            subject: 'Password Reset Code',
             from: 'auth',
             isPostmarkTemplate: true,
             postMarkTemplateAlias: 'password-reset',
             postmarkInfo: [
                 {
-                    postMarkTemplateData: templateData,
+                    postMarkTemplateData: { 
+                        otpCode,
+                        name: user.firstName,
+                    },
                     recipientEmail: email,
                 },
             ],
             html: await new EmailTemplate().forgotPassword({
-                link: resetLink,
+                otpCode,
                 name: user.firstName,
             }),
         });
 
         res.status(200).json({
             status: 'success',
-            message: 'Reset password instructions sent successfully',
-            data: null,
+            message: 'Password reset code sent successfully',
+            data: {
+                email,
+                validationHash,
+                action: 'verify_reset_code',
+            },
         });
     }
 
@@ -387,6 +390,8 @@ export default class AuthController {
             newPassword,
         }: { resetToken: string; email: string; newPassword: string } = req.body;
 
+        console.log({ reqbody: req.body });
+
         const validPassword = Validator.isValidPassword(newPassword);
         if (!validPassword) {
             throw new BadRequestError('Invalid password format');
@@ -394,13 +399,11 @@ export default class AuthController {
 
         const user = await UserService.viewSingleUserByEmail(email);
 
-        const validCode = await AuthUtil.compareCode({
-            user,
-            tokenType: 'passwordreset',
-            token: resetToken,
-        });
-
-        if (!validCode) {
+        // Verify the validation hash
+        const hashKey = `validation_hash:${email}:password-reset`;
+        const storedHash = await TokenCacheUtil.getTokenFromCache(hashKey);
+        
+        if (!storedHash || storedHash !== resetToken) {
             throw new BadRequestError('Invalid reset token');
         }
 
@@ -417,12 +420,12 @@ export default class AuthController {
                 throw new ForbiddenError('Please contact support');
             }
         } else {
-            // await Password.update({ password: newPassword }, { where: { id: password.id } });
             password.password = newPassword;
             await password.save();
         }
 
-        // await AuthUtil.deleteToken({ user, tokenType: 'passwordreset', tokenClass: 'token' });
+        // Delete the validation hash after successful password reset
+        await TokenCacheUtil.deleteTokenFromCache(hashKey);
 
         res.status(200).json({
             status: 'success',
@@ -677,10 +680,6 @@ export default class AuthController {
         });
     }
 
-    /**
-     * Handle Google Sign-In authentication
-     * This method verifies the Google ID token and creates/authenticates the user
-     */
     static async handleGoogleCallback(req: Request, res: Response) {
         try {
             const { id_token } = req.body;
@@ -871,9 +870,6 @@ export default class AuthController {
         }
     }
 
-    /**
-     * Alternative OAuth 2.0 flow handler (for authorization code flow)
-     */
     static async handleGoogleOAuthCallback(req: Request, res: Response) {
         try {
             const { code, redirect_uri } = req.body;
@@ -986,9 +982,6 @@ export default class AuthController {
         }
     }
 
-    /**
-     * Refresh access token using refresh token
-     */
     static async refreshToken(req: Request, res: Response) {
         try {
             const { refreshToken } = req.body;
@@ -1040,5 +1033,44 @@ export default class AuthController {
 
             throw new BadRequestError('Failed to refresh token. Please login again.');
         }
+    }
+
+    static async verifyPasswordReset(req: Request, res: Response) {
+        const { otpCode, email } = req.body;
+
+        if (!email || !otpCode) {
+            throw new BadRequestError('Email and OTP code are required');
+        }
+
+        const user = await UserService.viewSingleUserByEmail(email);
+
+        if (!user) {
+            throw new BadRequestError('User not found');
+        }
+
+        const validCode = await AuthUtil.compareCode({
+            user,
+            tokenType: 'passwordreset',
+            token: otpCode,
+        });
+
+        if (!validCode) {
+            throw new BadRequestError('Invalid OTP code');
+        }
+
+        // Delete the used OTP code
+        await AuthUtil.deleteToken({
+            user,
+            tokenType: 'passwordreset',
+            tokenClass: 'code',
+        });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'OTP code verified successfully',
+            data: {
+                email: user.email,
+            },
+        });
     }
 }

@@ -5,7 +5,7 @@ import {
     JWT_ADMIN_ACCESS_SECRET,
     JWT_REFRESH_SECRET,
 } from './constants';
-import { v4 as uuidv4 } from 'uuid';
+// import { v4 as uuidv4 } from 'uuid';
 import { redisClient } from './redis';
 import { UnauthorizedError, TokenExpiredError, JsonWebTokenError } from './customErrors';
 import {
@@ -141,12 +141,12 @@ class AuthUtil {
 
     static async generateCode({ type, identifier, expiry }: GenerateCodeData) {
         const tokenKey = `${type}_code:${identifier}`;
-        let token: number | string;
-        if (type === 'passwordreset') {
-            token = uuidv4();
-        } else {
-            token = Math.floor(100000 + Math.random() * 900000).toString();
-        }
+        // let token: number | string;
+        // if (type === 'passwordreset') {
+        //     token = uuidv4();
+        // } else {
+        // }
+        const token = Math.floor(100000 + Math.random() * 900000).toString();
 
         await TokenCacheUtil.saveTokenToCache({ key: tokenKey, token, expiry });
 
@@ -205,6 +205,13 @@ class AuthUtil {
     static async deleteToken({ user, tokenType, tokenClass }: DeleteToken) {
         const tokenKey = `${tokenType}_${tokenClass}:${user.id}`;
         await TokenCacheUtil.deleteTokenFromCache(tokenKey);
+    }
+
+    static async generateValidationHash({ email, type, expiry }: { email: string; type: string; expiry: number }) {
+        const hash = jwt.sign({ email, type }, JWT_SECRET, { expiresIn: expiry });
+        const hashKey = `validation_hash:${email}:${type}`;
+        await TokenCacheUtil.saveTokenToCache({ key: hashKey, token: hash, expiry });
+        return hash;
     }
 }
 
