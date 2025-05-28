@@ -4,19 +4,24 @@ import { AuthenticatedController, basicAuth } from '../middlewares/authMiddlewar
 
 const router = Router();
 
-// Public routes
+router.get('/', HomeController.getHomePage);
+
 router.get('/featured/products', HomeController.getFeaturedProducts);
+
 router.get('/featured/markets', HomeController.getFeaturedMarkets);
+
 router.get('/nearby/markets', HomeController.getNearbyMarkets);
-router.get('/trending/products', HomeController.getTrendingProducts);
+
 router.get('/banners', HomeController.getBanners);
+
 router.get('/search', HomeController.search);
 
-// Protected routes
+router.get('/stats', HomeController.getDashboardStats);
+
 router.get(
     '/recommendations',
     basicAuth('access'),
     AuthenticatedController(HomeController.getRecommendations),
 );
 
-export default router; 
+export default router;
