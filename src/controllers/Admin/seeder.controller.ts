@@ -77,7 +77,7 @@ class SeederController {
             logger.info('Starting database seeding process...');
 
             // Read the JSON file
-            const jsonFilePath = path.join(__dirname, '../data/seed-data.json');
+            const jsonFilePath = path.join(__dirname, '../../data/seed-data.json');
 
             let seedData: SeedData;
 

@@ -144,3 +144,5 @@ dump.rdb
 
 #IDE files
 /.idea
+
+src/data
