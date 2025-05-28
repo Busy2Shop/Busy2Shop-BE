@@ -14,6 +14,7 @@ import chatRoute from './chat.routes';
 import notificationRoutes from './notification.routes';
 import alatPayRoute from './payment/alatpay.routes';
 import seederRoute from './seeder.routes';
+import homeRoute from './home.routes';
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.use('/chat', chatRoute);
 router.use('/notifications', notificationRoutes);
 router.use('/payment/alatpay', alatPayRoute);
 router.use('/seeder', seederRoute);
+router.use('/home', homeRoute);
 
 export default router;
