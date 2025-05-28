@@ -13,6 +13,7 @@ import AdminRoutes from './admin.routes';
 import chatRoute from './chat.routes';
 import notificationRoutes from './notification.routes';
 import alatPayRoute from './payment/alatpay.routes';
+import seederRoute from './seeder.routes';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/admin', AdminRoutes);
 router.use('/chat', chatRoute);
 router.use('/notifications', notificationRoutes);
 router.use('/payment/alatpay', alatPayRoute);
+router.use('/seeder', seederRoute);
 
 export default router;
