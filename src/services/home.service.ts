@@ -75,7 +75,7 @@ export class HomeService {
         const daysSinceCreation = Math.floor(
             (new Date().getTime() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24)
         );
-        
+
         if (daysSinceCreation <= 7) {
             score += 20;
             reasons.push('Recently added');
@@ -88,9 +88,9 @@ export class HomeService {
         if (item.reviews && item.reviews.length > 0) {
             const avgRating = item.reviews.reduce((sum: number, review: any) => sum + review.rating, 0) / item.reviews.length;
             const reviewCount = item.reviews.length;
-            
+
             score += Math.min(avgRating * 5, 25); // Max 25 points for rating
-            
+
             if (reviewCount >= 10) {
                 score += 15;
                 reasons.push('Well-reviewed');
@@ -118,7 +118,7 @@ export class HomeService {
         // User context factors
         if (context.userContext) {
             // User's previous shopping history
-            if (context.userContext.orderHistory?.includes(item.id) || 
+            if (context.userContext.orderHistory?.includes(item.id) ||
                 context.userContext.orderHistory?.includes(item.marketId)) {
                 score += 25;
                 reasons.push('Based on your history');
@@ -126,7 +126,7 @@ export class HomeService {
 
             // User preferences
             if (context.userContext.preferences) {
-                const hasPreferredCategory = context.userContext.preferences.some(pref => 
+                const hasPreferredCategory = context.userContext.preferences.some(pref =>
                     item.categories?.some((cat: any) => cat.name.toLowerCase().includes(pref.toLowerCase()))
                 );
                 if (hasPreferredCategory) {
@@ -156,10 +156,10 @@ export class HomeService {
         // Time context factors
         if (context.timeContext) {
             const hour = context.timeContext.getHours();
-            
+
             // Boost food-related content during meal times
-            if (item.marketType === 'supermarket' || 
-                item.categories?.some((cat: any) => 
+            if (item.marketType === 'supermarket' ||
+                item.categories?.some((cat: any) =>
                     ['food', 'grocery', 'restaurant'].includes(cat.name.toLowerCase())
                 )) {
                 if ((hour >= 11 && hour <= 13) || (hour >= 18 && hour <= 20)) {
@@ -237,7 +237,7 @@ export class HomeService {
                                 as: 'categories',
                                 attributes: ['id', 'name', 'icon'],
                                 through: { attributes: [] },
-                                where: context?.filters?.categories ? 
+                                where: context?.filters?.categories ?
                                     { id: { [Op.in]: context.filters.categories } } : undefined,
                                 required: !!context?.filters?.categories,
                             },
@@ -294,7 +294,7 @@ export class HomeService {
                     locationContext: context?.locationContext,
                     timeContext: new Date(),
                 });
-                
+
                 return {
                     product,
                     score: score.score,
@@ -357,7 +357,7 @@ export class HomeService {
                         as: 'categories',
                         attributes: ['id', 'name', 'icon', 'isPinned'],
                         through: { attributes: [] },
-                        where: context?.filters?.categories ? 
+                        where: context?.filters?.categories ?
                             { id: { [Op.in]: context.filters.categories } } : undefined,
                         required: false,
                     },
@@ -417,7 +417,7 @@ export class HomeService {
             // Score and rank markets
             const scoredMarkets = markets.map(market => {
                 const marketData = market.get({ plain: true });
-                
+
                 // Add category boost for pinned categories
                 let categoryBoost = 0;
                 if (marketData.categories) {
@@ -429,7 +429,7 @@ export class HomeService {
                     locationContext: context?.locationContext,
                     timeContext: new Date(),
                 });
-                
+
                 return {
                     market,
                     score: score.score + categoryBoost,
@@ -502,7 +502,7 @@ export class HomeService {
                     ],
                 },
                 group: ['Category.id'],
-                having: fn('COUNT', col('markets.id')), // Only categories with markets
+                having: literal('COUNT(markets.id) > 0'), // Only categories with markets
                 limit: limit * 2,
                 order: [
                     ['isPinned', 'DESC'],
@@ -519,17 +519,17 @@ export class HomeService {
                     locationContext: context?.locationContext,
                     timeContext: new Date(),
                 });
-                
+
                 // Boost score based on market count and activity
-                const marketBoost = Math.min(categoryData.marketCount * 2, 20);
-                const activityBoost = Math.min(categoryData.recentActivity * 3, 30);
-                
+                const marketBoost = Math.min((categoryData as any).marketCount * 2, 20);
+                const activityBoost = Math.min((categoryData as any).recentActivity * 3, 30);
+
                 return {
                     category,
                     score: score.score + marketBoost + activityBoost,
                     reasons: [
                         ...score.reasons,
-                        ...(marketBoost > 0 ? [`${categoryData.marketCount} markets available`] : []),
+                        ...(marketBoost > 0 ? [`${(categoryData as any).marketCount} markets available`] : []),
                         ...(activityBoost > 0 ? ['Recent customer activity'] : []),
                     ],
                 };
@@ -598,7 +598,7 @@ export class HomeService {
      * Get personalized recommendations with machine learning-like approach
      */
     async getRecommendations(
-        userId: string, 
+        userId: string,
         limit: number = 10,
         context?: {
             locationContext?: LocationContext;
@@ -655,15 +655,17 @@ export class HomeService {
 
             userOrders.forEach(order => {
                 if (order.marketId) marketIds.add(order.marketId);
-                
+
                 order.items.forEach(item => {
                     if (item.product?.id) productIds.add(item.product.id);
                     if (item.product?.marketId) marketIds.add(item.product.marketId);
                 });
 
-                order.market?.categories?.forEach(category => {
-                    categoryNames.add(category.name);
-                });
+                if (order.market?.categories) {
+                    order.market.categories.forEach(category => {
+                        categoryNames.add(category.name);
+                    });
+                }
             });
 
             userContext.orderHistory = [...marketIds, ...productIds];
@@ -745,7 +747,7 @@ export class HomeService {
                     },
                 ],
                 where: {
-                    productId: { [Op.ne]: null },
+                    productId: { [Op.not]: null },
                 },
                 group: ['productId'],
                 having: literal('COUNT(*) >= 2'), // Minimum order threshold
@@ -871,7 +873,7 @@ export class HomeService {
                         locationContext: context?.locationContext,
                         timeContext: new Date(),
                     });
-                    
+
                     return {
                         product,
                         finalScore: (Number(product.get('relevanceScore')) || 0) + (contextScore.score * 0.3),
@@ -945,7 +947,7 @@ export class HomeService {
     async getBanners(): Promise<Banner[]> {
         try {
             // Get dynamic banners based on featured content
-            const [featuredMarkets, featuredProducts, featuredCategories] = await Promise.all([
+            const [featuredMarkets, , featuredCategories] = await Promise.all([
                 this.getFeaturedMarkets(3),
                 this.getFeaturedProducts(3),
                 this.getFeaturedCategories(3),

@@ -2,6 +2,7 @@ import { FindAndCountOptions, Op, literal, fn, col } from 'sequelize';
 import Product, { IProduct } from '../models/product.model';
 import Market from '../models/market.model';
 import Category from '../models/category.model';
+import User from '../models/user.model';
 import ShoppingListItem from '../models/shoppingListItem.model';
 import ShoppingList from '../models/shoppingList.model';
 import Review from '../models/review.model';
@@ -205,33 +206,41 @@ export default class ProductService {
             });
         }
 
+        // Build attributes object for additional fields
+        const attributesConfig: any = {
+            include: [],
+        };
+
+        // Add calculated fields for sorting
+        if (sortBy === 'rating') {
+            attributesConfig.include.push([
+                fn('AVG', col('reviews.rating')),
+                'avg_rating',
+            ]);
+        }
+
+        if (sortBy === 'popularity') {
+            attributesConfig.include.push([
+                literal(`(
+                    SELECT COUNT(*)
+                    FROM "shoppingListItems" sli
+                    INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
+                    WHERE sli."productId" = "Product".id 
+                    AND sl.status IN ('completed', 'processing')
+                    AND sl."createdAt" >= NOW() - INTERVAL '30 days'
+                )`),
+                'order_count',
+            ]);
+        }
+
         // Basic query options
         const queryOptions: FindAndCountOptions<Product> = {
             where,
             include: includes,
-            attributes: {
-                include: [
-                    // Add calculated fields for sorting
-                    ...(sortBy === 'rating' ? [[
-                        fn('AVG', col('reviews.rating')),
-                        'avg_rating',
-                    ]] : []),
-                    ...(sortBy === 'popularity' ? [[
-                        literal(`(
-                            SELECT COUNT(*)
-                            FROM "shoppingListItems" sli
-                            INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
-                            WHERE sli."productId" = "Product".id 
-                            AND sl.status IN ('completed', 'processing')
-                            AND sl."createdAt" >= NOW() - INTERVAL '30 days'
-                        )`),
-                        'order_count',
-                    ]] : []),
-                ],
-            },
+            ...(attributesConfig.include.length > 0 && { attributes: attributesConfig }),
             ...(sortBy === 'rating' && {
                 group: ['Product.id', 'market.id'],
-                having: fn('COUNT', col('reviews.id')),
+                having: literal('COUNT(reviews.id) >= 0'),
             }),
             order: getOrderClause() as any,
         };
@@ -286,7 +295,7 @@ export default class ProductService {
                     as: 'reviews',
                     attributes: ['id', 'rating', 'comment', 'createdAt'],
                     include: [{
-                        model: 'User',
+                        model: User,
                         as: 'reviewer',
                         attributes: ['id', 'firstName', 'lastName'],
                     }],
@@ -347,7 +356,7 @@ export default class ProductService {
 
         // Check if the market belongs to this owner (unless it's an admin updating pin status)
         const market = await Market.findByPk(product.marketId);
-        if (!market || (market.ownerId !== ownerId && !dataToUpdate.hasOwnProperty('isPinned'))) {
+        if (!market || (market.ownerId !== ownerId && !Object.prototype.hasOwnProperty.call(dataToUpdate, 'isPinned'))) {
             throw new ForbiddenError('You are not authorized to update this product');
         }
 
