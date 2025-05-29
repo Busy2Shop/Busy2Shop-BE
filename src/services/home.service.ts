@@ -1,4 +1,4 @@
-import { Op, literal, fn, col } from 'sequelize';
+import { Op, literal, fn, col, QueryTypes } from 'sequelize';
 import Product from '../models/product.model';
 import Market from '../models/market.model';
 import Category from '../models/category.model';
@@ -217,6 +217,40 @@ export class HomeService {
                 }
             }
 
+            // Build attributes configuration properly
+            const attributesConfig: any = {
+                include: [
+                    // Get order frequency for popularity scoring
+                    [
+                        literal(`(
+                        SELECT COUNT(*)
+                        FROM "shoppingListItems" sli
+                        INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
+                        WHERE sli."productId" = "Product".id 
+                        AND sl.status IN ('completed', 'processing')
+                        AND sl."createdAt" >= NOW() - INTERVAL '30 days'
+                    )`),
+                        'orderCount',
+                    ],
+                ],
+            };
+
+            // Add distance calculation if location context provided
+            if (context?.locationContext?.latitude && context?.locationContext?.longitude) {
+                attributesConfig.include.push([
+                    literal(`
+                    (6371 * acos(
+                        cos(radians(${context.locationContext.latitude})) * 
+                        cos(radians(CAST(market.location->>'latitude' AS DECIMAL))) * 
+                        cos(radians(CAST(market.location->>'longitude' AS DECIMAL)) - radians(${context.locationContext.longitude})) + 
+                        sin(radians(${context.locationContext.latitude})) * 
+                        sin(radians(CAST(market.location->>'latitude' AS DECIMAL)))
+                    ))
+                `),
+                    'distance',
+                ]);
+            }
+
             // Get products with comprehensive data
             const products = await Product.findAll({
                 where: whereConditions,
@@ -251,37 +285,7 @@ export class HomeService {
                         limit: 100, // Limit for performance
                     },
                 ],
-                attributes: {
-                    include: [
-                        // Get order frequency for popularity scoring
-                        [
-                            literal(`(
-                                SELECT COUNT(*)
-                                FROM "shoppingListItems" sli
-                                INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
-                                WHERE sli."productId" = "Product".id 
-                                AND sl.status IN ('completed', 'processing')
-                                AND sl."createdAt" >= NOW() - INTERVAL '30 days'
-                            )`),
-                            'orderCount',
-                        ],
-                        // Add distance calculation if location context provided - FIXED
-                        ...(context?.locationContext?.latitude && context?.locationContext?.longitude ? [
-                            [
-                                literal(`
-                                    (6371 * acos(
-                                        cos(radians(${context.locationContext.latitude})) * 
-                                        cos(radians(CAST(market.location->>'latitude' AS DECIMAL))) * 
-                                        cos(radians(CAST(market.location->>'longitude' AS DECIMAL)) - radians(${context.locationContext.longitude})) + 
-                                        sin(radians(${context.locationContext.latitude})) * 
-                                        sin(radians(CAST(market.location->>'latitude' AS DECIMAL)))
-                                    ))
-                                `),
-                                'distance',
-                            ],
-                        ] : []),
-                    ],
-                },
+                attributes: attributesConfig,
                 limit: limit * 3, // Get more items to score and filter
                 order: [
                     ['isPinned', 'DESC'],
@@ -345,6 +349,49 @@ export class HomeService {
                 whereConditions.marketType = { [Op.in]: context.filters.marketTypes };
             }
 
+            // Build attributes configuration properly
+            const attributesConfig: any = {
+                include: [
+                    // Market popularity based on orders
+                    [
+                        literal(`(
+                        SELECT COUNT(*)
+                        FROM "shoppingLists" sl
+                        WHERE sl."marketId" = "Market".id 
+                        AND sl.status IN ('completed', 'processing')
+                        AND sl."createdAt" >= NOW() - INTERVAL '30 days'
+                    )`),
+                        'orderCount',
+                    ],
+                    // Product count in market
+                    [
+                        literal(`(
+                        SELECT COUNT(*)
+                        FROM "products" p
+                        WHERE p."marketId" = "Market".id 
+                        AND p."isAvailable" = true
+                    )`),
+                        'productCount',
+                    ],
+                ],
+            };
+
+            // Add distance calculation if location context provided
+            if (context?.locationContext?.latitude && context?.locationContext?.longitude) {
+                attributesConfig.include.push([
+                    literal(`
+                    (6371 * acos(
+                        cos(radians(${context.locationContext.latitude})) * 
+                        cos(radians(CAST(location->>'latitude' AS DECIMAL))) * 
+                        cos(radians(CAST(location->>'longitude' AS DECIMAL)) - radians(${context.locationContext.longitude})) + 
+                        sin(radians(${context.locationContext.latitude})) * 
+                        sin(radians(CAST(location->>'latitude' AS DECIMAL)))
+                    ))
+                `),
+                    'distance',
+                ]);
+            }
+
             const markets = await Market.findAll({
                 where: whereConditions,
                 include: [
@@ -371,46 +418,7 @@ export class HomeService {
                         limit: 100,
                     },
                 ],
-                attributes: {
-                    include: [
-                        // Market popularity based on orders
-                        [
-                            literal(`(
-                                SELECT COUNT(*)
-                                FROM "shoppingLists" sl
-                                WHERE sl."marketId" = "Market".id 
-                                AND sl.status IN ('completed', 'processing')
-                                AND sl."createdAt" >= NOW() - INTERVAL '30 days'
-                            )`),
-                            'orderCount',
-                        ],
-                        // Product count in market
-                        [
-                            literal(`(
-                                SELECT COUNT(*)
-                                FROM "products" p
-                                WHERE p."marketId" = "Market".id 
-                                AND p."isAvailable" = true
-                            )`),
-                            'productCount',
-                        ],
-                        // Distance calculation - FIXED
-                        ...(context?.locationContext?.latitude && context?.locationContext?.longitude ? [
-                            [
-                                literal(`
-                                    (6371 * acos(
-                                        cos(radians(${context.locationContext.latitude})) * 
-                                        cos(radians(CAST(location->>'latitude' AS DECIMAL))) * 
-                                        cos(radians(CAST(location->>'longitude' AS DECIMAL)) - radians(${context.locationContext.longitude})) + 
-                                        sin(radians(${context.locationContext.latitude})) * 
-                                        sin(radians(CAST(location->>'latitude' AS DECIMAL)))
-                                    ))
-                                `),
-                                'distance',
-                            ],
-                        ] : []),
-                    ],
-                },
+                attributes: attributesConfig,
                 limit: limit * 3,
                 order: [
                     ['isPinned', 'DESC'],
@@ -422,7 +430,7 @@ export class HomeService {
             const scoredMarkets = markets.map(market => {
                 const marketData = market.get({ plain: true });
 
-                // Add category boost for pinned categories - FIXED
+                // Add category boost for pinned categories
                 let categoryBoost = 0;
                 if (marketData.categories && Array.isArray(marketData.categories)) {
                     categoryBoost = marketData.categories.filter((cat: any) => cat.isPinned).length * 10;
@@ -457,6 +465,7 @@ export class HomeService {
             throw new BadRequestError('Failed to fetch featured markets');
         }
     }
+
 
     /**
      * Get featured categories with intelligent sorting
@@ -706,70 +715,46 @@ export class HomeService {
             const startDate = new Date();
             startDate.setDate(startDate.getDate() - days);
 
-            // Get trending products based on order velocity and growth
-            const trendingData = await ShoppingListItem.findAll({
-                attributes: [
-                    'productId',
-                    [fn('COUNT', col('ShoppingListItem.id')), 'totalOrders'],
-                    [
-                        literal(`COUNT(*) / ${days}`),
-                        'dailyAverage',
-                    ],
-                    // Growth rate compared to previous period
-                    [
-                        literal(`(
-                            COUNT(*) - COALESCE((
-                                SELECT COUNT(*)
-                                FROM "shoppingListItems" sli2
-                                INNER JOIN "shoppingLists" sl2 ON sli2."shoppingListId" = sl2.id
-                                WHERE sli2."productId" = "ShoppingListItem"."productId"
-                                AND sl2."createdAt" >= '${new Date(startDate.getTime() - (days * 24 * 60 * 60 * 1000)).toISOString()}'
-                                AND sl2."createdAt" < '${startDate.toISOString()}'
-                                AND sl2.status IN ('completed', 'processing')
-                            ), 0)
-                        ) / GREATEST(COALESCE((
-                            SELECT COUNT(*)
-                            FROM "shoppingListItems" sli2
-                            INNER JOIN "shoppingLists" sl2 ON sli2."shoppingListId" = sl2.id
-                            WHERE sli2."productId" = "ShoppingListItem"."productId"
-                            AND sl2."createdAt" >= '${new Date(startDate.getTime() - (days * 24 * 60 * 60 * 1000)).toISOString()}'
-                            AND sl2."createdAt" < '${startDate.toISOString()}'
-                            AND sl2.status IN ('completed', 'processing')
-                        ), 1))`),
-                        'growthRate',
-                    ],
-                ],
-                include: [
-                    {
-                        model: ShoppingList,
-                        as: 'shoppingList',
-                        where: {
-                            createdAt: { [Op.gte]: startDate },
-                            status: { [Op.in]: ['completed', 'processing'] },
-                        },
-                        attributes: [],
-                    },
-                ],
-                where: {
-                    productId: { [Op.ne]: null }, // FIXED: Use Op.ne instead of Op.not
-                },
-                group: ['productId'],
-                having: literal('COUNT(*) >= 2'), // Minimum order threshold
-                order: [
-                    [literal('growthRate'), 'DESC'],
-                    [literal('totalOrders'), 'DESC'],
-                ],
-                limit: limit * 2,
-                raw: true,
-            });
-            
+            // Simplified approach: Get products with most orders in the timeframe
+            // and calculate trend based on frequency
+            const trendingQuery = `
+            SELECT 
+                p.id as "productId",
+                COUNT(sli.id) as "totalOrders",
+                COUNT(sli.id)::float / ${days} as "dailyAverage",
+                p.name,
+                p.price,
+                p."createdAt"
+            FROM "products" p
+            INNER JOIN "shoppingListItems" sli ON p.id = sli."productId"
+            INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
+            WHERE sl."createdAt" >= $1
+                AND sl.status IN ('completed', 'processing')
+                AND p."isAvailable" = true
+            GROUP BY p.id, p.name, p.price, p."createdAt"
+            HAVING COUNT(sli.id) >= 2
+            ORDER BY 
+                COUNT(sli.id) DESC,
+                COUNT(sli.id)::float / ${days} DESC,
+                p."createdAt" DESC
+            LIMIT $2
+        `;
 
-            if (trendingData.length === 0) {
+            // Execute raw query to get trending product IDs
+            const trendingResults = await Product.sequelize!.query(trendingQuery, {
+                bind: [startDate.toISOString(), limit * 2],
+                type: QueryTypes.SELECT,
+            }) as any[];
+
+            if (!trendingResults || trendingResults.length === 0) {
+                // Fallback to featured products if no trending data
                 return await this.getFeaturedProducts(limit);
             }
 
-            // Get full product details
-            const productIds = trendingData.map((item: any) => item.productId);
+            // Get the product IDs from the trending results
+            const productIds = trendingResults.map((item: any) => item.productId);
+
+            // Get full product details with relationships
             const products = await Product.findAll({
                 where: {
                     id: { [Op.in]: productIds },
@@ -785,15 +770,47 @@ export class HomeService {
                     {
                         model: Review,
                         as: 'reviews',
-                        attributes: ['rating'],
+                        attributes: ['rating', 'createdAt'],
                         separate: true,
+                        limit: 10, // Limit reviews for performance
                     },
                 ],
+                attributes: {
+                    include: [
+                        // Add trending metadata
+                        [
+                            literal(`(
+                            SELECT COUNT(*)
+                            FROM "shoppingListItems" sli
+                            INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
+                            WHERE sli."productId" = "Product".id 
+                            AND sl.status IN ('completed', 'processing')
+                            AND sl."createdAt" >= '${startDate.toISOString()}'
+                        )`),
+                            'trendingScore',
+                        ],
+                    ],
+                },
             });
 
-            // Sort products by trending data order
+            // Sort products by the order from trending results and add trend metadata
             const sortedProducts = productIds
-                .map(id => products.find(p => p.id === id))
+                .map(id => {
+                    const product = products.find(p => p.id === id);
+                    if (product) {
+                        const trendData = trendingResults.find((t: any) => t.productId === id);
+                        if (trendData) {
+                            // Add trending metadata to the product
+                            (product as any).trendingMetadata = {
+                                totalOrders: parseInt(trendData.totalOrders),
+                                dailyAverage: parseFloat(trendData.dailyAverage),
+                                timeframe,
+                                rank: productIds.indexOf(id) + 1,
+                            };
+                        }
+                    }
+                    return product;
+                })
                 .filter(p => p)
                 .slice(0, limit);
 
@@ -801,7 +818,15 @@ export class HomeService {
 
         } catch (error) {
             logger.error('Error fetching trending products:', error);
-            return await this.getFeaturedProducts(limit);
+            // Fallback to featured products with high activity
+            try {
+                return await this.getFeaturedProducts(limit, {
+                    filters: { includeOutOfStock: false },
+                });
+            } catch (fallbackError) {
+                logger.error('Error fetching fallback featured products:', fallbackError);
+                return [];
+            }
         }
     }
 
