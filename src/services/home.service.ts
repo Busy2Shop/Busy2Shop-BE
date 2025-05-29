@@ -265,19 +265,21 @@ export class HomeService {
                             )`),
                             'orderCount',
                         ],
-                        // Add distance calculation if location context provided
-                        ...(context?.locationContext?.latitude && context?.locationContext?.longitude ? [[
-                            literal(`
-                                (6371 * acos(
-                                    cos(radians(${context.locationContext.latitude})) * 
-                                    cos(radians(CAST(market.location->>'latitude' AS DECIMAL))) * 
-                                    cos(radians(CAST(market.location->>'longitude' AS DECIMAL)) - radians(${context.locationContext.longitude})) + 
-                                    sin(radians(${context.locationContext.latitude})) * 
-                                    sin(radians(CAST(market.location->>'latitude' AS DECIMAL)))
-                                ))
-                            `),
-                            'distance',
-                        ]] : []),
+                        // Add distance calculation if location context provided - FIXED
+                        ...(context?.locationContext?.latitude && context?.locationContext?.longitude ? [
+                            [
+                                literal(`
+                                    (6371 * acos(
+                                        cos(radians(${context.locationContext.latitude})) * 
+                                        cos(radians(CAST(market.location->>'latitude' AS DECIMAL))) * 
+                                        cos(radians(CAST(market.location->>'longitude' AS DECIMAL)) - radians(${context.locationContext.longitude})) + 
+                                        sin(radians(${context.locationContext.latitude})) * 
+                                        sin(radians(CAST(market.location->>'latitude' AS DECIMAL)))
+                                    ))
+                                `),
+                                'distance',
+                            ],
+                        ] : []),
                     ],
                 },
                 limit: limit * 3, // Get more items to score and filter
@@ -392,19 +394,21 @@ export class HomeService {
                             )`),
                             'productCount',
                         ],
-                        // Distance calculation
-                        ...(context?.locationContext?.latitude && context?.locationContext?.longitude ? [[
-                            literal(`
-                                (6371 * acos(
-                                    cos(radians(${context.locationContext.latitude})) * 
-                                    cos(radians(CAST(location->>'latitude' AS DECIMAL))) * 
-                                    cos(radians(CAST(location->>'longitude' AS DECIMAL)) - radians(${context.locationContext.longitude})) + 
-                                    sin(radians(${context.locationContext.latitude})) * 
-                                    sin(radians(CAST(location->>'latitude' AS DECIMAL)))
-                                ))
-                            `),
-                            'distance',
-                        ]] : []),
+                        // Distance calculation - FIXED
+                        ...(context?.locationContext?.latitude && context?.locationContext?.longitude ? [
+                            [
+                                literal(`
+                                    (6371 * acos(
+                                        cos(radians(${context.locationContext.latitude})) * 
+                                        cos(radians(CAST(location->>'latitude' AS DECIMAL))) * 
+                                        cos(radians(CAST(location->>'longitude' AS DECIMAL)) - radians(${context.locationContext.longitude})) + 
+                                        sin(radians(${context.locationContext.latitude})) * 
+                                        sin(radians(CAST(location->>'latitude' AS DECIMAL)))
+                                    ))
+                                `),
+                                'distance',
+                            ],
+                        ] : []),
                     ],
                 },
                 limit: limit * 3,
@@ -418,9 +422,9 @@ export class HomeService {
             const scoredMarkets = markets.map(market => {
                 const marketData = market.get({ plain: true });
 
-                // Add category boost for pinned categories
+                // Add category boost for pinned categories - FIXED
                 let categoryBoost = 0;
-                if (marketData.categories) {
+                if (marketData.categories && Array.isArray(marketData.categories)) {
                     categoryBoost = marketData.categories.filter((cat: any) => cat.isPinned).length * 10;
                 }
 
@@ -747,7 +751,7 @@ export class HomeService {
                     },
                 ],
                 where: {
-                    productId: { [Op.not]: null },
+                    productId: { [Op.ne]: null }, // FIXED: Use Op.ne instead of Op.not
                 },
                 group: ['productId'],
                 having: literal('COUNT(*) >= 2'), // Minimum order threshold
@@ -758,6 +762,7 @@ export class HomeService {
                 limit: limit * 2,
                 raw: true,
             });
+            
 
             if (trendingData.length === 0) {
                 return await this.getFeaturedProducts(limit);

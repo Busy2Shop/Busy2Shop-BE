@@ -149,4 +149,5 @@ export interface IMarket {
     };
     isActive?: boolean;
     ownerId?: string;
+    categories?: Category[];
 }
