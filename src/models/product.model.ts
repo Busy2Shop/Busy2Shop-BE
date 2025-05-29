@@ -81,6 +81,12 @@ export default class Product extends Model<Product | IProduct> {
     })
     isAvailable: boolean;
 
+    @Column({
+        type: DataType.BOOLEAN,
+        defaultValue: false,
+    })
+    isPinned: boolean;
+
     @IsUUID(4)
     @ForeignKey(() => Market)
     @Column
@@ -89,7 +95,7 @@ export default class Product extends Model<Product | IProduct> {
     @BelongsTo(() => Market)
     market: Market;
 
-    @HasMany(() => Review, 'productId') // Change 'reviewerId' to 'productId'
+    @HasMany(() => Review, 'productId')
     reviews: Review[];
 }
 
@@ -105,6 +111,7 @@ export interface IProduct {
     stockQuantity?: number;
     attributes?: object;
     isAvailable?: boolean;
+    isPinned?: boolean; // Add to interface
     marketId: string;
     market?: Market;
     reviews?: Review[];
