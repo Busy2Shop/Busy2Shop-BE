@@ -562,7 +562,7 @@ export default class AuthController {
 
         const validPassword = userPassword.isValidPassword(password);
         if (!validPassword) {
-            throw new BadRequestError('Invalid password');
+            throw new BadRequestError(`Invalid credentials combination for ${userType}`);
         }
 
         // Check if account is blocked

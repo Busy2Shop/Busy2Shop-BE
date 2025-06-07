@@ -1,22 +1,22 @@
 import { Router } from 'express';
 import HomeController from '../controllers/home.controller';
-import { AuthenticatedController, basicAuth, optionalAuth } from '../middlewares/authMiddleware';
+import { AuthenticatedController, basicAuth } from '../middlewares/authMiddleware';
 
 const router = Router();
 
 // Main home page endpoint with intelligent content curation
-router.get('/', optionalAuth, HomeController.getHomePage);
+router.get('/', HomeController.getHomePage);
 
 // Featured content endpoints with advanced algorithms
-router.get('/featured/products', optionalAuth, HomeController.getFeaturedProducts);
-router.get('/featured/markets', optionalAuth, HomeController.getFeaturedMarkets);
-router.get('/featured/categories', optionalAuth, HomeController.getFeaturedCategories);
+router.get('/featured/products', HomeController.getFeaturedProducts);
+router.get('/featured/markets', HomeController.getFeaturedMarkets);
+router.get('/featured/categories', HomeController.getFeaturedCategories);
 
 // Location-based discovery
-router.get('/nearby/markets', optionalAuth, HomeController.getNearbyMarkets);
+router.get('/nearby/markets', HomeController.getNearbyMarkets);
 
 // Trending and popular content
-router.get('/trending/products', optionalAuth, HomeController.getTrendingProducts);
+router.get('/trending/products', HomeController.getTrendingProducts);
 
 // Personalized content (requires authentication)
 router.get(
@@ -33,10 +33,10 @@ router.get(
 );
 
 // Dynamic banners and promotional content
-router.get('/banners', optionalAuth, HomeController.getBanners);
+router.get('/banners', HomeController.getBanners);
 
 // Enhanced search with intelligent ranking
-router.get('/search', optionalAuth, HomeController.search);
+router.get('/search', HomeController.search);
 
 // Analytics and statistics
 router.get('/stats', HomeController.getDashboardStats);
