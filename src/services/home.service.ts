@@ -1,4 +1,4 @@
-import { Op, literal, fn, col, QueryTypes } from 'sequelize';
+import { Op, literal, QueryTypes } from 'sequelize';
 import Product from '../models/product.model';
 import Market from '../models/market.model';
 import Category from '../models/category.model';
@@ -224,8 +224,8 @@ export class HomeService {
                     [
                         literal(`(
                         SELECT COUNT(*)
-                        FROM "shoppingListItems" sli
-                        INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
+                        FROM "ShoppingListItems" sli
+                        INNER JOIN "ShoppingLists" sl ON sli."shoppingListId" = sl.id
                         WHERE sli."productId" = "Product".id 
                         AND sl.status IN ('completed', 'processing')
                         AND sl."createdAt" >= NOW() - INTERVAL '30 days'
@@ -251,9 +251,9 @@ export class HomeService {
                 ]);
             }
 
-            // Get products with comprehensive data
-            const products = await Product.findAll({
-                where: whereConditions,
+            // 1. Try pinned and available
+            let products = await Product.findAll({
+                where: { ...whereConditions, isPinned: true },
                 include: [
                     {
                         model: Market,
@@ -292,6 +292,121 @@ export class HomeService {
                     ['createdAt', 'DESC'],
                 ],
             });
+
+            // 2. Fallback: available only
+            if (!products || products.length === 0) {
+                products = await Product.findAll({
+                    where: { ...whereConditions },
+                    include: [
+                        {
+                            model: Market,
+                            as: 'market',
+                            attributes: ['id', 'name', 'address', 'marketType', 'images', 'isPinned', 'location'],
+                            where: {
+                                isActive: true,
+                                ...(context?.filters?.marketTypes && {
+                                    marketType: { [Op.in]: context.filters.marketTypes },
+                                }),
+                            },
+                            include: [
+                                {
+                                    model: Category,
+                                    as: 'categories',
+                                    attributes: ['id', 'name', 'icon'],
+                                    through: { attributes: [] },
+                                    where: context?.filters?.categories ?
+                                        { id: { [Op.in]: context.filters.categories } } : undefined,
+                                    required: !!context?.filters?.categories,
+                                },
+                            ],
+                        },
+                        {
+                            model: Review,
+                            as: 'reviews',
+                            attributes: ['rating', 'createdAt'],
+                            separate: true,
+                            limit: 100, // Limit for performance
+                        },
+                    ],
+                    attributes: attributesConfig,
+                    limit: limit * 3, // Get more items to score and filter
+                    order: [
+                        ['createdAt', 'DESC'],
+                    ],
+                });
+            }
+
+            // 3. Fallback: any product with filters (remove isAvailable)
+            if (!products || products.length === 0) {
+                const baseWhere = { ...whereConditions };
+                delete baseWhere.isAvailable;
+                delete baseWhere.isPinned;
+                products = await Product.findAll({
+                    where: baseWhere,
+                    include: [
+                        {
+                            model: Market,
+                            as: 'market',
+                            attributes: ['id', 'name', 'address', 'marketType', 'images', 'isPinned', 'location'],
+                            where: {
+                                isActive: true,
+                                ...(context?.filters?.marketTypes && {
+                                    marketType: { [Op.in]: context.filters.marketTypes },
+                                }),
+                            },
+                            include: [
+                                {
+                                    model: Category,
+                                    as: 'categories',
+                                    attributes: ['id', 'name', 'icon'],
+                                    through: { attributes: [] },
+                                    where: context?.filters?.categories ?
+                                        { id: { [Op.in]: context.filters.categories } } : undefined,
+                                    required: !!context?.filters?.categories,
+                                },
+                            ],
+                        },
+                        {
+                            model: Review,
+                            as: 'reviews',
+                            attributes: ['rating', 'createdAt'],
+                            separate: true,
+                            limit: 100, // Limit for performance
+                        },
+                    ],
+                    attributes: attributesConfig,
+                    limit: limit * 3, // Get more items to score and filter
+                    order: [
+                        ['createdAt', 'DESC'],
+                    ],
+                });
+            }
+
+            // 4. Fallback: any product, no filters
+            if (!products || products.length === 0) {
+                products = await Product.findAll({
+                    include: [
+                        {
+                            model: Market,
+                            as: 'market',
+                            attributes: ['id', 'name', 'address', 'marketType', 'images', 'isPinned', 'location'],
+                            where: { isActive: true },
+                        },
+                        {
+                            model: Review,
+                            as: 'reviews',
+                            attributes: ['rating', 'createdAt'],
+                            separate: true,
+                            limit: 100, // Limit for performance
+                        },
+                    ],
+                    attributes: attributesConfig,
+                    limit: limit * 3, // Get more items to score and filter
+                    order: [
+                        ['createdAt', 'DESC'],
+                    ],
+                });
+            }
 
             // Score and rank products
             const scoredProducts = products.map(product => {
@@ -356,7 +471,7 @@ export class HomeService {
                     [
                         literal(`(
                         SELECT COUNT(*)
-                        FROM "shoppingLists" sl
+                        FROM "ShoppingLists" sl
                         WHERE sl."marketId" = "Market".id 
                         AND sl.status IN ('completed', 'processing')
                         AND sl."createdAt" >= NOW() - INTERVAL '30 days'
@@ -367,7 +482,7 @@ export class HomeService {
                     [
                         literal(`(
                         SELECT COUNT(*)
-                        FROM "products" p
+                        FROM "Products" p
                         WHERE p."marketId" = "Market".id 
                         AND p."isAvailable" = true
                     )`),
@@ -496,16 +611,25 @@ export class HomeService {
                 ],
                 attributes: {
                     include: [
-                        [fn('COUNT', col('markets.id')), 'marketCount'],
+                        [
+                            literal(`(
+                                SELECT COUNT(*)
+                                FROM "MarketCategories" mc
+                                INNER JOIN "Markets" m ON mc."marketId" = m.id
+                                WHERE mc."categoryId" = "Category".id
+                                  AND m."isActive" = true
+                            )`),
+                            'marketCount',
+                        ],
                         // Recent activity in category
                         [
                             literal(`(
                                 SELECT COUNT(*)
-                                FROM "shoppingListItems" sli
-                                INNER JOIN "products" p ON sli."productId" = p.id
-                                INNER JOIN "markets" m ON p."marketId" = m.id
-                                INNER JOIN "marketCategories" mc ON m.id = mc."marketId"
-                                INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
+                                FROM "ShoppingListItems" sli
+                                INNER JOIN "Products" p ON sli."productId" = p.id
+                                INNER JOIN "Markets" m ON p."marketId" = m.id
+                                INNER JOIN "MarketCategories" mc ON m.id = mc."marketId"
+                                INNER JOIN "ShoppingLists" sl ON sli."shoppingListId" = sl.id
                                 WHERE mc."categoryId" = "Category".id
                                 AND sl.status IN ('completed', 'processing')
                                 AND sl."createdAt" >= NOW() - INTERVAL '7 days'
@@ -515,12 +639,27 @@ export class HomeService {
                     ],
                 },
                 group: ['Category.id'],
-                having: literal('COUNT(markets.id) > 0'), // Only categories with markets
                 limit: limit * 2,
                 order: [
                     ['isPinned', 'DESC'],
-                    [literal('recentActivity'), 'DESC'],
-                    [literal('marketCount'), 'DESC'],
+                    [literal(`(
+                        SELECT COUNT(*)
+                        FROM "ShoppingListItems" sli
+                        INNER JOIN "Products" p ON sli."productId" = p.id
+                        INNER JOIN "Markets" m ON p."marketId" = m.id
+                        INNER JOIN "MarketCategories" mc ON m.id = mc."marketId"
+                        INNER JOIN "ShoppingLists" sl ON sli."shoppingListId" = sl.id
+                        WHERE mc."categoryId" = "Category".id
+                          AND sl.status IN ('completed', 'processing')
+                          AND sl."createdAt" >= NOW() - INTERVAL '7 days'
+                    )`), 'DESC'],
+                    [literal(`(
+                        SELECT COUNT(*)
+                        FROM "MarketCategories" mc
+                        INNER JOIN "Markets" m ON mc."marketId" = m.id
+                        WHERE mc."categoryId" = "Category".id
+                          AND m."isActive" = true
+                    )`), 'DESC'],
                 ],
             });
 
@@ -725,9 +864,9 @@ export class HomeService {
                 p.name,
                 p.price,
                 p."createdAt"
-            FROM "products" p
-            INNER JOIN "shoppingListItems" sli ON p.id = sli."productId"
-            INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
+            FROM "Products" p
+            INNER JOIN "ShoppingListItems" sli ON p.id = sli."productId"
+            INNER JOIN "ShoppingLists" sl ON sli."shoppingListId" = sl.id
             WHERE sl."createdAt" >= $1
                 AND sl.status IN ('completed', 'processing')
                 AND p."isAvailable" = true
@@ -781,8 +920,8 @@ export class HomeService {
                         [
                             literal(`(
                             SELECT COUNT(*)
-                            FROM "shoppingListItems" sli
-                            INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
+                            FROM "ShoppingListItems" sli
+                            INNER JOIN "ShoppingLists" sl ON sli."shoppingListId" = sl.id
                             WHERE sli."productId" = "Product".id 
                             AND sl.status IN ('completed', 'processing')
                             AND sl."createdAt" >= '${startDate.toISOString()}'
@@ -868,52 +1007,129 @@ export class HomeService {
                             as: 'market',
                             attributes: ['id', 'name', 'address', 'marketType', 'images'],
                             where: { isActive: true },
+                            include: [
+                                {
+                                    model: Category,
+                                    as: 'categories',
+                                    attributes: ['id', 'name'],
+                                    through: { attributes: [] },
+                                },
+                            ],
                         },
                     ],
                     attributes: {
                         include: [
-                            // Search relevance score
+                            // Base relevance score
                             [
                                 literal(`
                                     CASE 
-                                        WHEN LOWER(name) = '${searchQuery}' THEN 100
-                                        WHEN LOWER(name) LIKE '${searchQuery}%' THEN 80
-                                        WHEN LOWER(name) LIKE '%${searchQuery}%' THEN 60
-                                        WHEN LOWER(description) LIKE '%${searchQuery}%' THEN 40
-                                        WHEN barcode LIKE '%${searchQuery}%' THEN 30
+                                        WHEN LOWER("Product"."name") = '${searchQuery}' THEN 100
+                                        WHEN LOWER("Product"."name") LIKE '${searchQuery}%' THEN 80
+                                        WHEN LOWER("Product"."name") LIKE '%${searchQuery}%' THEN 60
+                                        WHEN LOWER("Product"."description") LIKE '%${searchQuery}%' THEN 40
+                                        WHEN "Product"."barcode" LIKE '%${searchQuery}%' THEN 30
                                         ELSE 10
                                     END
                                 `),
-                                'relevanceScore',
+                                'baseRelevanceScore',
+                            ],
+                            // Market reputation score
+                            [
+                                literal(`(
+                                    SELECT COALESCE(AVG(r.rating), 0)
+                                    FROM "Reviews" r
+                                    WHERE r."marketId" = "Product"."marketId"
+                                )`),
+                                'marketRating',
+                            ],
+                            // Recent activity score
+                            [
+                                literal(`(
+                                    SELECT COUNT(*)
+                                    FROM "ShoppingListItems" sli
+                                    INNER JOIN "ShoppingLists" sl ON sli."shoppingListId" = sl.id
+                                    WHERE sli."productId" = "Product"."id"
+                                    AND sl.status IN ('completed', 'processing')
+                                    AND sl."createdAt" >= NOW() - INTERVAL '30 days'
+                                )`),
+                                'recentOrders',
                             ],
                         ],
                     },
                     limit: limit * 2,
                     order: [
-                        [literal('relevanceScore'), 'DESC'],
+                        [literal(`
+                            CASE 
+                                WHEN LOWER("Product"."name") = '${searchQuery}' THEN 100
+                                WHEN LOWER("Product"."name") LIKE '${searchQuery}%' THEN 80
+                                WHEN LOWER("Product"."name") LIKE '%${searchQuery}%' THEN 60
+                                WHEN LOWER("Product"."description") LIKE '%${searchQuery}%' THEN 40
+                                WHEN "Product"."barcode" LIKE '%${searchQuery}%' THEN 30
+                                ELSE 10
+                            END
+                        `), 'DESC'],
                         ['isPinned', 'DESC'],
+                        [literal(`(
+                            SELECT COALESCE(AVG(r.rating), 0)
+                            FROM "Reviews" r
+                            WHERE r."marketId" = "Product"."marketId"
+                        )`), 'DESC'],
+                        [literal(`(
+                            SELECT COUNT(*)
+                            FROM "ShoppingListItems" sli
+                            INNER JOIN "ShoppingLists" sl ON sli."shoppingListId" = sl.id
+                            WHERE sli."productId" = "Product"."id"
+                            AND sl.status IN ('completed', 'processing')
+                            AND sl."createdAt" >= NOW() - INTERVAL '30 days'
+                        )`), 'DESC'],
                         ['createdAt', 'DESC'],
                     ],
                 });
 
                 // Apply context scoring to search results
                 const scoredProducts = products.map(product => {
-                    const contextScore = this.calculateContentScore(product.get({ plain: true }), {
+                    const productData = product.get({ plain: true });
+                    const contextScore = this.calculateContentScore(productData, {
                         userContext: context?.userContext,
                         locationContext: context?.locationContext,
                         timeContext: new Date(),
                     });
 
+                    // Calculate final score with weighted components
+                    const baseScore = Number(product.get('baseRelevanceScore')) || 0;
+                    const marketScore = Number(product.get('marketRating')) || 0;
+                    const activityScore = Number(product.get('recentOrders')) || 0;
+                    const contextScoreValue = contextScore.score;
+
+                    // Weighted scoring formula
+                    const finalScore = (
+                        baseScore * 0.4 +           // Base relevance (40%)
+                        marketScore * 0.2 +         // Market reputation (20%)
+                        activityScore * 0.2 +       // Recent activity (20%)
+                        contextScoreValue * 0.2     // Context score (20%)
+                    );
+
                     return {
                         product,
-                        finalScore: (Number(product.get('relevanceScore')) || 0) + (contextScore.score * 0.3),
+                        finalScore,
+                        scoreDetails: {
+                            baseScore,
+                            marketScore,
+                            activityScore,
+                            contextScore: contextScoreValue,
+                            reasons: contextScore.reasons,
+                        },
                     };
                 });
 
                 results.products = scoredProducts
                     .sort((a, b) => b.finalScore - a.finalScore)
                     .slice(0, limit)
-                    .map(item => item.product);
+                    .map(item => {
+                        // Add score metadata to product
+                        (item.product as any).scoreDetails = item.scoreDetails;
+                        return item.product;
+                    });
             }
 
             // Similar enhanced logic for markets and categories...

@@ -88,14 +88,14 @@ export default class HomeController {
                 featuredCategories,
                 trendingProducts,
                 banners,
-                stats,
+                // stats,
             ] = await Promise.all([
                 homeService.getFeaturedProducts(baseLimit, context),
                 homeService.getFeaturedMarkets(baseLimit - 2, context),
                 homeService.getFeaturedCategories(baseLimit - 2, context),
                 homeService.getTrendingProducts(baseLimit, 'weekly'),
                 homeService.getBanners(),
-                homeService.getMarketStats(),
+                // homeService.getMarketStats(),
             ]);
 
             // Add performance metadata for debugging (only in development)
@@ -125,7 +125,7 @@ export default class HomeController {
                     count: banners.length,
                     algorithm: 'dynamic_content_generation',
                 },
-                stats,
+                // stats,
             };
 
             // Add personalization metadata if user is authenticated
@@ -462,7 +462,7 @@ export default class HomeController {
                 },
                 insights: {
                     message: `These products are trending ${timeframe} based on order growth and customer engagement`,
-                    nextUpdate: this.getNextUpdateTime(timeframe),
+                    nextUpdate: HomeController.getNextUpdateTime(timeframe),
                 },
             });
 
@@ -621,7 +621,7 @@ export default class HomeController {
 
             // Add search suggestions if requested and results are limited
             if (includeSuggestions && totalResults < 5) {
-                responseData.suggestions = this.generateSearchSuggestions(query.trim(), results);
+                responseData.suggestions = HomeController.generateSearchSuggestions(query.trim(), results);
             }
 
             // Add search analytics
@@ -632,7 +632,7 @@ export default class HomeController {
                     markets: results.markets?.length || 0,
                     categories: results.categories?.length || 0,
                 },
-                searchScore: this.calculateSearchQuality(results, query.trim()),
+                searchScore: HomeController.calculateSearchQuality(results, query.trim()),
             };
 
             res.status(200).json({
@@ -878,11 +878,12 @@ export default class HomeController {
             case 'daily':
                 now.setHours(24, 0, 0, 0);
                 break;
-            case 'weekly':{
+            case 'weekly': {
                 const daysUntilMonday = (8 - now.getDay()) % 7;
                 now.setDate(now.getDate() + daysUntilMonday);
                 now.setHours(0, 0, 0, 0);
-                break;}
+                break;
+            }
             case 'monthly':
                 now.setMonth(now.getMonth() + 1, 1);
                 now.setHours(0, 0, 0, 0);
