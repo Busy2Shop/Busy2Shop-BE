@@ -11,6 +11,7 @@ router.get('/', HomeController.getHomePage);
 router.get('/featured/products', HomeController.getFeaturedProducts);
 router.get('/featured/markets', HomeController.getFeaturedMarkets);
 router.get('/featured/categories', HomeController.getFeaturedCategories);
+router.get('/featured/data', HomeController.getFeaturedData);
 
 // Location-based discovery
 router.get('/nearby/markets', HomeController.getNearbyMarkets);
@@ -41,5 +42,7 @@ router.get('/search', HomeController.search);
 // Analytics and statistics
 router.get('/stats', HomeController.getDashboardStats);
 
+// Suggested shopping lists
+router.get('/suggested-lists', HomeController.getSuggestedShoppingLists);
 
 export default router;

@@ -87,14 +87,14 @@ export default class HomeController {
                 featuredMarkets,
                 featuredCategories,
                 trendingProducts,
-                banners,
+                // banners,
                 // stats,
             ] = await Promise.all([
                 homeService.getFeaturedProducts(baseLimit, context),
                 homeService.getFeaturedMarkets(baseLimit - 2, context),
                 homeService.getFeaturedCategories(baseLimit - 2, context),
                 homeService.getTrendingProducts(baseLimit, 'weekly'),
-                homeService.getBanners(),
+                // homeService.getBanners(),
                 // homeService.getMarketStats(),
             ]);
 
@@ -120,11 +120,11 @@ export default class HomeController {
                     count: trendingProducts.length,
                     algorithm: 'growth_velocity_analysis',
                 },
-                banners: {
-                    items: banners,
-                    count: banners.length,
-                    algorithm: 'dynamic_content_generation',
-                },
+                // banners: {
+                //     items: banners,
+                //     count: banners.length,
+                //     algorithm: 'dynamic_content_generation',
+                // },
                 // stats,
             };
 
@@ -478,6 +478,223 @@ export default class HomeController {
                 error: true,
                 message: 'Failed to retrieve trending products',
                 errorCode: 'TRENDING_PRODUCTS_ERROR',
+            });
+        }
+    }
+
+    /**
+     * Get combined featured data for efficient frontend loading
+     */
+    static async getFeaturedData(req: Request, res: Response) {
+        try {
+            const limit = parseInt(req.query.limit as string) || 8;
+            const includeProducts = req.query.includeProducts === 'true';
+
+            const context = HomeController.buildContext(req);
+            const homeService = new HomeService();
+
+            // Get featured categories with optional products
+            let featuredCategories;
+            if (includeProducts) {
+                // Use category service to get categories with products
+                const categoryService = await import('../services/category.service');
+                const categoriesResult = await categoryService.default.viewCategories({
+                    isPinned: true,
+                    includeProducts: true,
+                    size: limit,
+                });
+                featuredCategories = categoriesResult.categories;
+            } else {
+                featuredCategories = await homeService.getFeaturedCategories(limit, context);
+            }
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Featured data retrieved successfully',
+                data: {
+                    featuredCategories: {
+                        items: featuredCategories,
+                        count: featuredCategories.length,
+                        algorithm: 'activity_based_with_market_density',
+                        withProducts: includeProducts,
+                    },
+                },
+                meta: {
+                    timestamp: new Date().toISOString(),
+                    version: '2.0',
+                    context: {
+                        personalized: !!context.userContext,
+                        locationBased: !!context.locationContext,
+                        filtered: !!context.filters,
+                    },
+                },
+            });
+
+        } catch (error) {
+            logger.error('Error in getFeaturedData:', error);
+
+            res.status(500).json({
+                status: 'error',
+                error: true,
+                message: 'Failed to retrieve featured data',
+                errorCode: 'FEATURED_DATA_ERROR',
+            });
+        }
+    }
+
+    /**
+     * Get suggested shopping list templates for homepage
+     */
+    static async getSuggestedShoppingLists(req: Request, res: Response) {
+        try {
+            const limit = parseInt(req.query.limit as string) || 4;
+            const category = req.query.category as string;
+
+            if (limit < 1 || limit > 20) {
+                throw new BadRequestError('Limit must be between 1 and 20');
+            }
+
+            const suggestedLists = [
+                {
+                    id: 'weekly-groceries',
+                    title: 'Weekly Grocery Essentials',
+                    description: 'Everything you need for a week of home cooking',
+                    items: ['Rice', 'Beans', 'Tomatoes', 'Onions', 'Oil', 'Salt', 'Milk', 'Bread'],
+                    marketType: 'Supermarket',
+                    estimatedTime: '2-3 hours',
+                    estimatedCost: '₦8,500 - ₦12,000',
+                    image: '/images/weekly-groceries.jpg',
+                    popular: true,
+                    category: 'grocery',
+                    itemCount: 8,
+                    tags: ['essential', 'weekly', 'family'],
+                },
+                {
+                    id: 'party-essentials',
+                    title: 'Weekend Party Supplies',
+                    description: 'Get ready to host the perfect weekend gathering',
+                    items: ['Drinks', 'Snacks', 'Ice', 'Cups', 'Napkins', 'Meat', 'Seasoning'],
+                    marketType: 'Local Market',
+                    estimatedTime: '1-2 hours',
+                    estimatedCost: '₦15,000 - ₦25,000',
+                    image: '/images/party-supplies.jpg',
+                    popular: false,
+                    category: 'entertainment',
+                    itemCount: 7,
+                    tags: ['party', 'weekend', 'social'],
+                },
+                {
+                    id: 'healthy-living',
+                    title: 'Healthy Living Basket',
+                    description: 'Fresh ingredients for nutritious meals',
+                    items: ['Vegetables', 'Fruits', 'Fish', 'Whole grains', 'Nuts', 'Yogurt'],
+                    marketType: 'Fresh Market',
+                    estimatedTime: '1-2 hours',
+                    estimatedCost: '₦6,000 - ₦10,000',
+                    image: '/images/healthy-basket.jpg',
+                    popular: false,
+                    category: 'health',
+                    itemCount: 6,
+                    tags: ['healthy', 'fresh', 'organic'],
+                },
+                {
+                    id: 'breakfast-week',
+                    title: 'Breakfast for the Week',
+                    description: 'Start every morning right with these essentials',
+                    items: ['Eggs', 'Bread', 'Butter', 'Jam', 'Cereals', 'Milk', 'Fruits', 'Tea'],
+                    marketType: 'Supermarket',
+                    estimatedTime: '30-45 mins',
+                    estimatedCost: '₦4,500 - ₦7,000',
+                    image: '/images/breakfast-essentials.jpg',
+                    popular: true,
+                    category: 'breakfast',
+                    itemCount: 8,
+                    tags: ['morning', 'quick', 'essential'],
+                },
+                {
+                    id: 'student-budget',
+                    title: 'Student Budget Pack',
+                    description: 'Affordable essentials for students on a budget',
+                    items: ['Noodles', 'Rice', 'Beans', 'Eggs', 'Onions', 'Tomatoes'],
+                    marketType: 'Local Market',
+                    estimatedTime: '45 mins',
+                    estimatedCost: '₦2,500 - ₦4,000',
+                    image: '/images/student-budget.jpg',
+                    popular: true,
+                    category: 'budget',
+                    itemCount: 6,
+                    tags: ['budget', 'student', 'affordable'],
+                },
+                {
+                    id: 'baby-care',
+                    title: 'Baby Care Essentials',
+                    description: 'Everything you need for your little one',
+                    items: ['Baby food', 'Diapers', 'Baby formula', 'Wet wipes', 'Baby oil'],
+                    marketType: 'Pharmacy/Supermarket',
+                    estimatedTime: '1 hour',
+                    estimatedCost: '₦8,000 - ₦15,000',
+                    image: '/images/baby-care.jpg',
+                    popular: false,
+                    category: 'baby',
+                    itemCount: 5,
+                    tags: ['baby', 'care', 'essential'],
+                },
+            ];
+
+            // Filter by category if specified
+            let filteredLists = suggestedLists;
+            if (category) {
+                filteredLists = suggestedLists.filter(list =>
+                    list.category.toLowerCase() === category.toLowerCase()
+                );
+            }
+
+            // Sort by popularity and limit results
+            const sortedLists = filteredLists
+                .sort((a, b) => {
+                    // Popular items first, then by category relevance
+                    if (a.popular && !b.popular) return -1;
+                    if (!a.popular && b.popular) return 1;
+                    return 0;
+                })
+                .slice(0, limit);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Suggested shopping lists retrieved successfully',
+                data: {
+                    lists: sortedLists,
+                    count: sortedLists.length,
+                    totalAvailable: filteredLists.length,
+                    filters: {
+                        category: category || 'all',
+                        limit,
+                    },
+                },
+                meta: {
+                    categories: ['grocery', 'entertainment', 'health', 'breakfast', 'budget', 'baby'],
+                    suggestions: {
+                        'For busy families': ['weekly-groceries', 'breakfast-week'],
+                        'For social gatherings': ['party-essentials'],
+                        'For health-conscious': ['healthy-living'],
+                        'For budget-conscious': ['student-budget'],
+                        'For new parents': ['baby-care'],
+                    },
+                },
+            });
+
+        } catch (error) {
+            logger.error('Error in getSuggestedShoppingLists:', error);
+
+            if (error instanceof BadRequestError) {
+                throw error;
+            }
+
+            res.status(500).json({
+                status: 'error',
+                error: true,
+                message: 'Failed to retrieve suggested shopping lists',
+                errorCode: 'SUGGESTED_LISTS_ERROR',
             });
         }
     }

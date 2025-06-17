@@ -1,6 +1,7 @@
 import { FindAndCountOptions, Op, Transaction } from 'sequelize';
 import Category, { ICategory } from '../models/category.model';
 import Market from '../models/market.model';
+import Product from '../models/product.model';
 import { BadRequestError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 
@@ -9,6 +10,7 @@ export interface IViewCategoriesQuery {
     size?: number;
     q?: string; // Search query
     isPinned?: boolean;
+    includeProducts?: boolean; // Add support for including products
 }
 
 export default class CategoryService {
@@ -28,7 +30,7 @@ export default class CategoryService {
     static async viewCategories(
         queryData?: IViewCategoriesQuery,
     ): Promise<{ categories: Category[]; count: number; totalPages?: number }> {
-        const { page, size, q: query, isPinned } = queryData || {};
+        const { page, size, q: query, isPinned, includeProducts } = queryData || {};
 
         const where: Record<string | symbol, unknown> = {};
 
@@ -45,17 +47,32 @@ export default class CategoryService {
             where.isPinned = isPinned;
         }
 
+        // Build include array based on includeProducts parameter
+        const includeArray: any[] = [
+            {
+                model: Market,
+                as: 'markets',
+                attributes: ['id', 'name', 'marketType', 'address', 'images', 'isPinned'],
+                through: { attributes: [] }, // Exclude join table attributes
+                ...(includeProducts && {
+                    include: [
+                        {
+                            model: Product,
+                            as: 'products',
+                            attributes: ['id', 'name', 'description', 'price', 'discountPrice', 'images', 'isAvailable', 'isPinned'],
+                            where: { isAvailable: true }, // Only include available products
+                            required: false, // LEFT JOIN to include markets even without products
+                            limit: 10, // Limit products per market to avoid large responses
+                        },
+                    ],
+                }),
+            },
+        ];
+
         // Basic query options
         const queryOptions: FindAndCountOptions<Category> = {
             where,
-            include: [
-                {
-                    model: Market,
-                    as: 'markets',
-                    attributes: ['id', 'name'],
-                    through: { attributes: [] }, // Exclude join table attributes
-                },
-            ],
+            include: includeArray,
         };
 
         // Handle pagination

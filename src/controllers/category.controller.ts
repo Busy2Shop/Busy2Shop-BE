@@ -53,7 +53,7 @@ export default class CategoryController {
     }
 
     static async getAllCategories(req: Request, res: Response) {
-        const { page, size, q, isPinned } = req.query;
+        const { page, size, q, isPinned, includeProducts } = req.query;
 
         const queryParams: Record<string, unknown> = {};
 
@@ -66,6 +66,10 @@ export default class CategoryController {
 
         if (isPinned !== undefined) {
             queryParams.isPinned = isPinned === 'true';
+        }
+
+        if (includeProducts !== undefined) {
+            queryParams.includeProducts = includeProducts === 'true';
         }
 
         const categories = await CategoryService.viewCategories(queryParams);
