@@ -17,7 +17,7 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
     @IsUUID(4)
     @PrimaryKey
     @Default(DataType.UUIDV4)
-    @Column
+    @Column(DataType.UUID)
     id: string;
 
     @Column({
@@ -36,29 +36,32 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
         type: DataType.STRING,
         allowNull: true,
     })
-    unit: string; // e.g., kg, pcs, etc.
+    unit: string | null; // e.g., kg, pcs, etc.
 
     @Column({
         type: DataType.TEXT,
         allowNull: true,
     })
-    notes: string;
+    notes: string | null;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: true, // Null for local markets or when the price is unknown
     })
-    estimatedPrice: number;
+    estimatedPrice: number | null;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: true, // Actual price added by agent when purchased
     })
-    actualPrice: number;
+    actualPrice: number | null;
 
     @IsUUID(4)
     @ForeignKey(() => ShoppingList)
-    @Column
+    @Column({
+        type: DataType.UUID,
+        allowNull: false,
+    })
     shoppingListId: string;
 
     @BelongsTo(() => ShoppingList)
@@ -67,9 +70,10 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
     @IsUUID(4)
     @ForeignKey(() => Product)
     @Column({
+        type: DataType.UUID,
         allowNull: true, // Can be null if the item isn't linked to a specific product
     })
-    productId: string;
+    productId: string | null;
 
     @BelongsTo(() => Product)
     product: Product;
@@ -79,10 +83,10 @@ export interface IShoppingListItem {
     id?: string;
     name: string;
     quantity?: number;
-    unit?: string;
-    notes?: string;
-    estimatedPrice?: number;
-    actualPrice?: number;
+    unit?: string | null;
+    notes?: string | null;
+    estimatedPrice?: number | null;
+    actualPrice?: number | null;
     shoppingListId: string;
-    productId?: string;
+    productId?: string | null;
 }

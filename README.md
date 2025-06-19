@@ -1,6 +1,41 @@
 # Go to this web address to see the swagger documentation.
 http://localhost:8000/api-docs
 
+# **Redis Queue Configuration**
+
+The application uses BullMQ for job queues with Redis as the backing store. All queue keys are prefixed to avoid conflicts and improve organization.
+
+## Environment Variables
+
+Add these variables to your `.env` file:
+
+```env
+# Redis Configuration
+REDIS_CONNECTION_URL=redis://localhost:6379
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# Queue Configuration (optional)
+REDIS_QUEUE_PREFIX=busy2shop:queues:
+
+# Bull Board Authentication
+BULL_BOARD_USER=admin
+BULL_BOARD_PASS=your_secure_password
+```
+
+## Queue Prefix
+
+All queue keys in Redis are prefixed with `busy2shop:queues:` by default. This helps:
+- Organize queue keys in Redis
+- Avoid conflicts with other applications using the same Redis instance
+- Make it easier to identify and manage queue-related keys
+
+You can customize the prefix by setting the `REDIS_QUEUE_PREFIX` environment variable.
+
+## Bull Board Access
+
+The Bull Board UI is available at `/admin/queues` and requires basic authentication using the credentials defined in `BULL_BOARD_USER` and `BULL_BOARD_PASS`.
+
 # **Base Git Workflow Documentation**
 Git Repository Structure
 

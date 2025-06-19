@@ -6,6 +6,7 @@ import { INotification } from '../models/notification.model';
 import TransactionService from '../services/transaction.service';
 import AlatPayService from '../services/payment/alatpay.service';
 import { TransactionStatus } from '../models/transaction.model';
+import { connection } from './connection';
 
 // Define job data interface
 interface PaymentWebhookJobData {
@@ -29,12 +30,7 @@ export const paymentWebhookQueue = new Queue<PaymentWebhookJobData>('payment-web
 
 export const paymentExpiryCheckQueue = new Queue<PaymentExpiryCheckJobData>(
     'payment-expiry-check',
-    {
-        connection: {
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT || '6379'),
-        },
-    },
+    { connection },
 );
 
 // Process webhook jobs
@@ -77,12 +73,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
             throw error;
         }
     },
-    {
-        connection: {
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT || '6379'),
-        },
-    },
+    { connection },
 );
 
 // Process expiry check jobs
@@ -118,12 +109,7 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
             throw error;
         }
     },
-    {
-        connection: {
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT || '6379'),
-        },
-    },
+    { connection },
 );
 
 // Error handling

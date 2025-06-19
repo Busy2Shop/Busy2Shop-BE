@@ -10,6 +10,7 @@ router.get('/', HomeController.getHomePage);
 // Featured content endpoints with advanced algorithms
 router.get('/featured/products', HomeController.getFeaturedProducts);
 router.get('/featured/markets', HomeController.getFeaturedMarkets);
+router.get('/featured/markets-with-products', HomeController.getFeaturedMarketsWithProducts);
 router.get('/featured/categories', HomeController.getFeaturedCategories);
 router.get('/featured/data', HomeController.getFeaturedData);
 

@@ -92,9 +92,103 @@ export default class ShoppingList extends Model<ShoppingList | IShoppingList> {
     })
     paymentProcessedAt: Date;
 
+    // New fields for suggested lists and flexible functionality
+    @Column({
+        type: DataType.ENUM('user', 'admin', 'system'),
+        defaultValue: 'user',
+    })
+    creatorType: 'user' | 'admin' | 'system';
+
+    @Column({
+        type: DataType.ENUM('personal', 'suggested', 'template'),
+        defaultValue: 'personal',
+    })
+    listType: 'personal' | 'suggested' | 'template';
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    category: string; // 'grocery', 'health', 'entertainment', etc.
+
+    @Column({
+        type: DataType.ARRAY(DataType.STRING),
+        allowNull: true,
+    })
+    tags: string[]; // ['essential', 'weekly', 'family']
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    estimatedTime: string; // '30-45 mins', '1-2 hours'
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    estimatedCost: string; // '₦5,000 - ₦8,000'
+
+    @Column({
+        type: DataType.DECIMAL(10, 2),
+        allowNull: true,
+    })
+    minPrice: number;
+
+    @Column({
+        type: DataType.DECIMAL(10, 2),
+        allowNull: true,
+    })
+    maxPrice: number;
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    marketType: string; // 'supermarket', 'local_market', 'pharmacy', etc.
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    image: string;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        defaultValue: false,
+    })
+    isPopular: boolean;
+
+    @Column({
+        type: DataType.BOOLEAN,
+        defaultValue: true,
+    })
+    isActive: boolean;
+
+    @Column({
+        type: DataType.INTEGER,
+        defaultValue: 0,
+    })
+    sortOrder: number;
+
+    @IsUUID(4)
+    @ForeignKey(() => User)
+    @Column({
+        allowNull: true, // Null for system-created lists
+    })
+    createdBy: string;
+
+    @BelongsTo(() => User, 'createdBy')
+    creator: User;
+
     // Relationships
     @HasMany(() => ShoppingListItem)
     items: ShoppingListItem[];
+
+    // Virtual fields
+    get itemCount(): number {
+        return this.items ? this.items.length : 0;
+    }
 }
 
 export interface IShoppingList {
@@ -109,4 +203,19 @@ export interface IShoppingList {
     paymentId?: string;
     paymentStatus?: 'pending' | 'completed' | 'failed' | 'expired';
     paymentProcessedAt?: Date;
+    // New fields for suggested lists
+    creatorType?: 'user' | 'admin' | 'system';
+    listType?: 'personal' | 'suggested' | 'template';
+    category?: string;
+    tags?: string[];
+    estimatedTime?: string;
+    estimatedCost?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    marketType?: string;
+    image?: string;
+    isPopular?: boolean;
+    isActive?: boolean;
+    sortOrder?: number;
+    createdBy?: string;
 }

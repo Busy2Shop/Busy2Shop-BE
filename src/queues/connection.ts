@@ -6,4 +6,5 @@ export const connection: ConnectionOptions = {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
     retryStrategy: (times: number) => Math.min(times * 50, 2000),
+    keyPrefix: 'busy2shop',
 };

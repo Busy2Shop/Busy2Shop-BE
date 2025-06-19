@@ -4,6 +4,7 @@ import { AdminAuthenticatedController, adminAuth } from '../middlewares/authMidd
 import KycController from '../controllers/kyc.controller';
 import AlatPayController from '../controllers/payment/alatpay.controller';
 import { AuthenticatedController } from '../middlewares/authMiddleware';
+import suggestedListsRoutes from './admin/suggestedLists.routes';
 
 const router: Router = express.Router();
 
@@ -68,5 +69,8 @@ router.get(
     adminAuth('admin'),
     AdminAuthenticatedController(AuthenticatedController(AlatPayController.checkExpiredTransactions))
 );
+
+// Suggested Lists Management
+router.use('/shopping-lists', adminAuth('admin'), suggestedListsRoutes);
 
 export default router;

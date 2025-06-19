@@ -3,6 +3,9 @@ import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { HomeService, LocationContext, UserContext, ContentFilters } from '../services/home.service';
 import { BadRequestError } from '../utils/customErrors';
 import { logger } from '../utils/logger';
+import ShoppingList from '../models/shoppingList.model';
+import ShoppingListItem from '../models/shoppingListItem.model';
+import Market from '../models/market.model';
 
 export default class HomeController {
     /**
@@ -423,6 +426,72 @@ export default class HomeController {
     }
 
     /**
+     * Get featured markets with their top products for supermarket section
+     */
+    static async getFeaturedMarketsWithProducts(req: Request, res: Response) {
+        try {
+            const limit = parseInt(req.query.limit as string) || 6;
+            const productsPerMarket = parseInt(req.query.productsPerMarket as string) || 6;
+
+            if (limit < 1 || limit > 20) {
+                throw new BadRequestError('Limit must be between 1 and 20');
+            }
+
+            if (productsPerMarket < 1 || productsPerMarket > 10) {
+                throw new BadRequestError('Products per market must be between 1 and 10');
+            }
+
+            const context = HomeController.buildContext(req);
+            const homeService = new HomeService();
+
+            const marketsWithProducts = await homeService.getFeaturedMarketsWithProducts(
+                limit,
+                productsPerMarket,
+                context
+            );
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Featured markets with products retrieved successfully',
+                data: {
+                    markets: marketsWithProducts,
+                    count: marketsWithProducts.length,
+                    productsPerMarket,
+                    context: {
+                        personalized: !!context.userContext,
+                        locationBased: !!context.locationContext,
+                        filtered: !!context.filters,
+                    },
+                },
+                meta: {
+                    algorithm: 'market_product_quality_scoring',
+                    factors: [
+                        'market_popularity',
+                        'product_availability',
+                        'product_quality',
+                        'user_preferences',
+                        'location_proximity'
+                    ],
+                },
+            });
+
+        } catch (error) {
+            logger.error('Error in getFeaturedMarketsWithProducts:', error);
+
+            if (error instanceof BadRequestError) {
+                throw error;
+            }
+
+            res.status(500).json({
+                status: 'error',
+                error: true,
+                message: 'Failed to retrieve featured markets with products',
+                errorCode: 'FEATURED_MARKETS_PRODUCTS_ERROR',
+            });
+        }
+    }
+
+    /**
      * Get trending products with time-series analysis
      */
     static async getTrendingProducts(req: Request, res: Response) {
@@ -547,110 +616,187 @@ export default class HomeController {
      */
     static async getSuggestedShoppingLists(req: Request, res: Response) {
         try {
-            const limit = parseInt(req.query.limit as string) || 4;
+            const limit = parseInt(req.query.limit as string) || 6;
             const category = req.query.category as string;
 
             if (limit < 1 || limit > 20) {
                 throw new BadRequestError('Limit must be between 1 and 20');
             }
 
-            const suggestedLists = [
-                {
-                    id: 'weekly-groceries',
-                    title: 'Weekly Grocery Essentials',
-                    description: 'Everything you need for a week of home cooking',
-                    items: ['Rice', 'Beans', 'Tomatoes', 'Onions', 'Oil', 'Salt', 'Milk', 'Bread'],
-                    marketType: 'Supermarket',
-                    estimatedTime: '2-3 hours',
-                    estimatedCost: '₦8,500 - ₦12,000',
-                    image: '/images/weekly-groceries.jpg',
-                    popular: true,
-                    category: 'grocery',
-                    itemCount: 8,
-                    tags: ['essential', 'weekly', 'family'],
-                },
-                {
-                    id: 'party-essentials',
-                    title: 'Weekend Party Supplies',
-                    description: 'Get ready to host the perfect weekend gathering',
-                    items: ['Drinks', 'Snacks', 'Ice', 'Cups', 'Napkins', 'Meat', 'Seasoning'],
-                    marketType: 'Local Market',
-                    estimatedTime: '1-2 hours',
-                    estimatedCost: '₦15,000 - ₦25,000',
-                    image: '/images/party-supplies.jpg',
-                    popular: false,
-                    category: 'entertainment',
-                    itemCount: 7,
-                    tags: ['party', 'weekend', 'social'],
-                },
-                {
-                    id: 'healthy-living',
-                    title: 'Healthy Living Basket',
-                    description: 'Fresh ingredients for nutritious meals',
-                    items: ['Vegetables', 'Fruits', 'Fish', 'Whole grains', 'Nuts', 'Yogurt'],
-                    marketType: 'Fresh Market',
-                    estimatedTime: '1-2 hours',
-                    estimatedCost: '₦6,000 - ₦10,000',
-                    image: '/images/healthy-basket.jpg',
-                    popular: false,
-                    category: 'health',
-                    itemCount: 6,
-                    tags: ['healthy', 'fresh', 'organic'],
-                },
-                {
-                    id: 'breakfast-week',
-                    title: 'Breakfast for the Week',
-                    description: 'Start every morning right with these essentials',
-                    items: ['Eggs', 'Bread', 'Butter', 'Jam', 'Cereals', 'Milk', 'Fruits', 'Tea'],
-                    marketType: 'Supermarket',
-                    estimatedTime: '30-45 mins',
-                    estimatedCost: '₦4,500 - ₦7,000',
-                    image: '/images/breakfast-essentials.jpg',
-                    popular: true,
-                    category: 'breakfast',
-                    itemCount: 8,
-                    tags: ['morning', 'quick', 'essential'],
-                },
-                {
-                    id: 'student-budget',
-                    title: 'Student Budget Pack',
-                    description: 'Affordable essentials for students on a budget',
-                    items: ['Noodles', 'Rice', 'Beans', 'Eggs', 'Onions', 'Tomatoes'],
-                    marketType: 'Local Market',
-                    estimatedTime: '45 mins',
-                    estimatedCost: '₦2,500 - ₦4,000',
-                    image: '/images/student-budget.jpg',
-                    popular: true,
-                    category: 'budget',
-                    itemCount: 6,
-                    tags: ['budget', 'student', 'affordable'],
-                },
-                {
-                    id: 'baby-care',
-                    title: 'Baby Care Essentials',
-                    description: 'Everything you need for your little one',
-                    items: ['Baby food', 'Diapers', 'Baby formula', 'Wet wipes', 'Baby oil'],
-                    marketType: 'Pharmacy/Supermarket',
-                    estimatedTime: '1 hour',
-                    estimatedCost: '₦8,000 - ₦15,000',
-                    image: '/images/baby-care.jpg',
-                    popular: false,
-                    category: 'baby',
-                    itemCount: 5,
-                    tags: ['baby', 'care', 'essential'],
-                },
-            ];
+            // Build query for suggested lists from database
+            const whereClause: any = {
+                listType: 'suggested',
+                isActive: true,
+            };
 
-            // Filter by category if specified
-            let filteredLists = suggestedLists;
             if (category) {
-                filteredLists = suggestedLists.filter(list =>
-                    list.category.toLowerCase() === category.toLowerCase()
+                whereClause.category = category;
+            }
+
+            // Fetch from database with enhanced model
+            const suggestedListsFromDB = await ShoppingList.findAll({
+                where: whereClause,
+                include: [
+                    {
+                        model: ShoppingListItem,
+                        as: 'items',
+                        attributes: ['id', 'name', 'quantity', 'unit', 'estimatedPrice', 'productId'],
+                    },
+                    {
+                        model: Market,
+                        as: 'market',
+                        attributes: ['id', 'name', 'location', 'marketType'],
+                        required: false,
+                    },
+                ],
+                order: [
+                    ['sortOrder', 'ASC'],
+                    ['isPopular', 'DESC'],
+                    ['createdAt', 'DESC'],
+                ],
+                limit,
+            });
+
+            // Transform to frontend format
+            let suggestedLists = suggestedListsFromDB.map(list => ({
+                id: list.id,
+                title: list.name,
+                description: list.notes || `A curated ${list.category || 'shopping'} list for your convenience`,
+                items: list.items || [],
+                marketType: list.marketType || (list.market?.marketType || 'General Market'),
+                estimatedTime: list.estimatedTime || '1-2 hours',
+                estimatedCost: list.estimatedCost || '₦5,000 - ₦10,000',
+                image: list.image || `/images/${list.category || 'default'}-list.jpg`,
+                popular: list.isPopular || false,
+                category: list.category || 'general',
+                itemCount: list.items?.length || 0,
+                tags: list.tags || [],
+                recommendedMarketId: list.marketId || null,
+                minPrice: list.minPrice || null,
+                maxPrice: list.maxPrice || null,
+            }));
+
+            // Fallback to sample data if no suggested lists in database
+            if (suggestedLists.length === 0) {
+                suggestedLists = [
+                    {
+                        id: 'weekly-groceries-sample',
+                        title: 'Weekly Grocery Essentials',
+                        description: 'Everything you need for a week of home cooking',
+                        items: [
+                            {
+                                id: '1',
+                                name: 'Rice',
+                                quantity: 1,
+                                unit: 'bag',
+                                notes: null,
+                                estimatedPrice: 2500,
+                                actualPrice: null,
+                                shoppingListId: 'weekly-groceries-sample',
+                                productId: null
+                            } as any,
+                            {
+                                id: '2',
+                                name: 'Beans',
+                                quantity: 1,
+                                unit: 'cup',
+                                notes: null,
+                                estimatedPrice: 1500,
+                                actualPrice: null,
+                                shoppingListId: 'weekly-groceries-sample',
+                                productId: null
+                            } as any,
+                            {
+                                id: '3',
+                                name: 'Tomatoes',
+                                quantity: 3,
+                                unit: 'pieces',
+                                notes: null,
+                                estimatedPrice: 800,
+                                actualPrice: null,
+                                shoppingListId: 'weekly-groceries-sample',
+                                productId: null
+                            } as any,
+                            {
+                                id: '4',
+                                name: 'Onions',
+                                quantity: 2,
+                                unit: 'pieces',
+                                notes: null,
+                                estimatedPrice: 500,
+                                actualPrice: null,
+                                shoppingListId: 'weekly-groceries-sample',
+                                productId: null
+                            } as any,
+                            {
+                                id: '5',
+                                name: 'Cooking Oil',
+                                quantity: 1,
+                                unit: 'bottle',
+                                notes: null,
+                                estimatedPrice: 1800,
+                                actualPrice: null,
+                                shoppingListId: 'weekly-groceries-sample',
+                                productId: null
+                            } as any,
+                            {
+                                id: '6',
+                                name: 'Salt',
+                                quantity: 1,
+                                unit: 'pack',
+                                notes: null,
+                                estimatedPrice: 200,
+                                actualPrice: null,
+                                shoppingListId: 'weekly-groceries-sample',
+                                productId: null
+                            } as any,
+                            {
+                                id: '7',
+                                name: 'Milk',
+                                quantity: 1,
+                                unit: 'carton',
+                                notes: null,
+                                estimatedPrice: 1200,
+                                actualPrice: null,
+                                shoppingListId: 'weekly-groceries-sample',
+                                productId: null
+                            } as any,
+                            {
+                                id: '8',
+                                name: 'Bread',
+                                quantity: 1,
+                                unit: 'loaf',
+                                notes: null,
+                                estimatedPrice: 500,
+                                actualPrice: null,
+                                shoppingListId: 'weekly-groceries-sample',
+                                productId: null
+                            } as any,
+                        ],
+                        marketType: 'Supermarket',
+                        estimatedTime: '2-3 hours',
+                        estimatedCost: '₦8,500 - ₦12,000',
+                        image: '/images/weekly-groceries.jpg',
+                        popular: true,
+                        category: 'grocery',
+                        itemCount: 8,
+                        tags: ['essential', 'weekly', 'family'],
+                        recommendedMarketId: null,
+                        minPrice: 8500,
+                        maxPrice: 12000,
+                    },
+                ];
+            }
+
+            // Apply category filter if needed (for both DB and fallback data)
+            if (category && suggestedLists.length > 0) {
+                suggestedLists = suggestedLists.filter(list =>
+                    list.category?.toLowerCase() === category.toLowerCase()
                 );
             }
 
-            // Sort by popularity and limit results
-            const sortedLists = filteredLists
+            // Sort and limit (already limited from DB query, but fallback data might need it)
+            const sortedLists = suggestedLists
                 .sort((a, b) => {
                     // Popular items first, then by category relevance
                     if (a.popular && !b.popular) return -1;
@@ -659,26 +805,34 @@ export default class HomeController {
                 })
                 .slice(0, limit);
 
+            // Get available categories from actual data
+            const availableCategories = [...new Set(suggestedLists.map(list => list.category).filter(Boolean))];
+
             res.status(200).json({
                 status: 'success',
                 message: 'Suggested shopping lists retrieved successfully',
                 data: {
                     lists: sortedLists,
                     count: sortedLists.length,
-                    totalAvailable: filteredLists.length,
+                    totalAvailable: suggestedLists.length,
                     filters: {
                         category: category || 'all',
                         limit,
                     },
+                    source: suggestedListsFromDB.length > 0 ? 'database' : 'fallback',
                 },
                 meta: {
-                    categories: ['grocery', 'entertainment', 'health', 'breakfast', 'budget', 'baby'],
-                    suggestions: {
-                        'For busy families': ['weekly-groceries', 'breakfast-week'],
-                        'For social gatherings': ['party-essentials'],
-                        'For health-conscious': ['healthy-living'],
-                        'For budget-conscious': ['student-budget'],
-                        'For new parents': ['baby-care'],
+                    categories: availableCategories,
+                    analytics: {
+                        popularLists: sortedLists.filter(l => l.popular).length,
+                        averageItemCount: sortedLists.length > 0 ?
+                            Math.round(sortedLists.reduce((sum, list) => sum + list.itemCount, 0) / sortedLists.length) : 0,
+                        categoriesRepresented: availableCategories.length,
+                    },
+                    recommendations: {
+                        message: suggestedListsFromDB.length === 0 ?
+                            'Consider adding more suggested lists through the admin panel' :
+                            'Use these curated lists to save time and ensure nothing is forgotten',
                     },
                 },
             });
