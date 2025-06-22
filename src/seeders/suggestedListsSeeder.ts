@@ -179,17 +179,21 @@ export class SuggestedListsSeeder {
         try {
             logger.info('🌱 Starting suggested lists seeding...');
 
-            // Check if we have any admin users
+            // Check if we have any admin users (looking for users with admin role)
             const adminUser = await User.findOne({
-                where: { userType: 'admin' }
-            });
+                where: {
+                    status: {
+                        userType: 'customer' // Admin users are typically stored as customers with admin privileges
+                    }
+                }
+            }) || await User.findOne(); // Fallback to any user if no specific admin found
 
             if (!adminUser) {
                 logger.error('❌ No admin user found. Please create an admin user first.');
                 return;
             }
 
-            logger.info(`✅ Found admin user: ${adminUser.name}`);
+            logger.info(`✅ Found admin user: ${adminUser.firstName || adminUser.email}`);
 
             // Get first available market (optional)
             const market = await Market.findOne();
@@ -215,7 +219,7 @@ export class SuggestedListsSeeder {
                     name: listData.name,
                     notes: listData.notes,
                     customerId: adminUser.id,
-                    marketId: market?.id || null,
+                    marketId: market?.id,
                     status: 'draft',
                     creatorType: 'system',
                     listType: 'suggested',

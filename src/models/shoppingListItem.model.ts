@@ -52,6 +52,12 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
 
     @Column({
         type: DataType.DECIMAL(10, 2),
+        allowNull: true, // User-provided price when product has no preset price
+    })
+    userProvidedPrice: number | null;
+
+    @Column({
+        type: DataType.DECIMAL(10, 2),
         allowNull: true, // Actual price added by agent when purchased
     })
     actualPrice: number | null;
@@ -86,6 +92,7 @@ export interface IShoppingListItem {
     unit?: string | null;
     notes?: string | null;
     estimatedPrice?: number | null;
+    userProvidedPrice?: number | null;
     actualPrice?: number | null;
     shoppingListId: string;
     productId?: string | null;

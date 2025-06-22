@@ -372,17 +372,19 @@ export default class ShoppingListService {
         await this.updateShoppingListTotal(listId);
     }
 
+    /**
+     * Update shopping list total calculation to include user-provided prices
+     */
     private static async updateShoppingListTotal(listId: string): Promise<void> {
         const items = await ShoppingListItem.findAll({
             where: { shoppingListId: listId },
         });
 
-        // Calculate new total
+        // Calculate new total using estimated price or user-provided price
         let estimatedTotal = 0;
         for (const item of items) {
-            if (item.estimatedPrice) {
-                estimatedTotal += item.estimatedPrice * (item.quantity || 1);
-            }
+            const priceToUse = item.estimatedPrice || item.userProvidedPrice || 0;
+            estimatedTotal += priceToUse * (item.quantity || 1);
         }
 
         // Update the shopping list
@@ -590,39 +592,261 @@ export default class ShoppingListService {
         agentId: string,
         items: { itemId: string; actualPrice: number }[],
     ): Promise<ShoppingList> {
-        const list = await this.getShoppingList(listId);
+        return await Database.transaction(async (transaction: Transaction) => {
+            const list = await this.getShoppingList(listId, transaction);
 
-        // Check if the agent is assigned to this list
-        if (list.agentId !== agentId) {
-            throw new ForbiddenError('You are not assigned to this shopping list');
-        }
+            // Only the assigned agent can update actual prices
+            if (list.agentId !== agentId) {
+                throw new ForbiddenError('You are not assigned to this shopping list');
+            }
 
-        // Can only update prices if the list is in accepted or processing status
-        if (!['accepted', 'processing'].includes(list.status)) {
-            throw new BadRequestError('Cannot update prices in the current list status');
-        }
-
-        // Update items one by one
-        await Database.transaction(async (transaction: Transaction) => {
-            for (const { itemId, actualPrice } of items) {
-                const item = await ShoppingListItem.findOne({
-                    where: {
-                        id: itemId,
-                        shoppingListId: listId,
+            // Update each item's actual price
+            for (const item of items) {
+                await ShoppingListItem.update(
+                    { actualPrice: item.actualPrice },
+                    {
+                        where: {
+                            id: item.itemId,
+                            shoppingListId: listId,
+                        },
+                        transaction,
                     },
-                    transaction,
-                });
+                );
+            }
 
-                if (!item) {
-                    throw new NotFoundError(
-                        `Item with ID ${itemId} not found in this shopping list`,
+            // Recalculate totals
+            await this.updateShoppingListTotal(listId);
+
+            return await this.getShoppingList(listId, transaction);
+        });
+    }
+
+    /**
+     * Copy a suggested list to a user's personal shopping list
+     */
+    static async copySuggestedListToPersonal(
+        suggestedListId: string,
+        customerId: string,
+        marketId?: string,
+    ): Promise<ShoppingList> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            // Get the suggested list with items
+            const suggestedList = await ShoppingList.findOne({
+                where: {
+                    id: suggestedListId,
+                    listType: 'suggested',
+                    isActive: true,
+                },
+                include: [
+                    {
+                        model: ShoppingListItem,
+                        as: 'items',
+                        include: [
+                            {
+                                model: Product,
+                                as: 'product',
+                                required: false,
+                            },
+                        ],
+                    },
+                ],
+                transaction,
+            });
+
+            if (!suggestedList) {
+                throw new NotFoundError('Suggested list not found or inactive');
+            }
+
+            // Create a new personal list based on the suggested list
+            const personalList = await ShoppingList.create(
+                {
+                    name: suggestedList.name,
+                    notes: `Copied from: ${suggestedList.name}`,
+                    customerId,
+                    marketId: marketId || suggestedList.marketId,
+                    status: 'draft',
+                    creatorType: 'user',
+                    listType: 'personal',
+                    sourceSuggestedListId: suggestedListId,
+                    isReadOnly: false,
+                },
+                { transaction },
+            );
+
+            // Copy items from suggested list
+            if (suggestedList.items && suggestedList.items.length > 0) {
+                for (const originalItem of suggestedList.items) {
+                    // Determine the price to use
+                    let estimatedPrice = originalItem.estimatedPrice;
+                    let userProvidedPrice = null;
+
+                    // If the item has a product and the product has no price, leave estimatedPrice null
+                    if (originalItem.product && originalItem.product.price === null) {
+                        estimatedPrice = null;
+                        // User will need to provide price later
+                    }
+
+                    await ShoppingListItem.create(
+                        {
+                            name: originalItem.name,
+                            quantity: originalItem.quantity,
+                            unit: originalItem.unit,
+                            notes: originalItem.notes,
+                            estimatedPrice,
+                            userProvidedPrice,
+                            productId: originalItem.productId,
+                            shoppingListId: personalList.id,
+                        },
+                        { transaction },
                     );
                 }
-
-                await item.update({ actualPrice }, { transaction });
             }
+
+            // Update estimated total
+            await this.updateShoppingListTotal(personalList.id);
+
+            // Return the created list with items
+            return await ShoppingList.findByPk(personalList.id, {
+                include: [
+                    {
+                        model: ShoppingListItem,
+                        as: 'items',
+                        include: [
+                            {
+                                model: Product,
+                                as: 'product',
+                                required: false,
+                            },
+                        ],
+                    },
+                    {
+                        model: Market,
+                        as: 'market',
+                        attributes: ['id', 'name', 'marketType', 'address'],
+                    },
+                ],
+                transaction,
+            }) as ShoppingList;
+        });
+    }
+
+    /**
+     * Get all suggested lists for users to browse
+     */
+    static async getSuggestedLists(
+        queryData?: IViewShoppingListsQuery & { category?: string; popular?: boolean },
+    ): Promise<{ lists: ShoppingList[]; count: number; totalPages?: number }> {
+        const { category, popular } = queryData || {};
+
+        const where: Record<string, unknown> = {
+            listType: 'suggested',
+            isActive: true,
+        };
+
+        if (category) {
+            where.category = category;
+        }
+
+        if (popular !== undefined) {
+            where.isPopular = popular;
+        }
+
+        const queryOptions: FindAndCountOptions<ShoppingList> = {
+            where,
+            include: [
+                {
+                    model: ShoppingListItem,
+                    as: 'items',
+                    include: [
+                        {
+                            model: Product,
+                            as: 'product',
+                            required: false,
+                        },
+                    ],
+                },
+                {
+                    model: Market,
+                    as: 'market',
+                    attributes: ['id', 'name', 'marketType', 'address'],
+                    required: false,
+                },
+            ],
+            order: [
+                ['isPopular', 'DESC'],
+                ['sortOrder', 'ASC'],
+                ['createdAt', 'DESC'],
+            ],
+        };
+
+        return this.executePaginatedListQuery(queryOptions, queryData);
+    }
+
+    /**
+     * Enhanced add item to list with user price support
+     */
+    static async addItemToListWithPrice(
+        listId: string,
+        customerId: string,
+        itemData: IShoppingListItem & { userProvidedPrice?: number },
+    ): Promise<ShoppingListItem> {
+        const list = await this.getShoppingList(listId);
+
+        // Check if the user is the owner of the list
+        if (list.customerId !== customerId) {
+            throw new ForbiddenError('You are not authorized to modify this shopping list');
+        }
+
+        // Can only add items if the list is in draft status
+        if (list.status !== 'draft') {
+            throw new BadRequestError('Cannot add items to a submitted shopping list');
+        }
+
+        // Check if the list is read-only (system/suggested list)
+        if (list.isReadOnly) {
+            throw new BadRequestError('Cannot modify a read-only list');
+        }
+
+        let finalEstimatedPrice = itemData.estimatedPrice;
+        let userProvidedPrice = itemData.userProvidedPrice || null;
+
+        // If product ID is provided, get its information
+        if (itemData.productId) {
+            const product = await Product.findByPk(itemData.productId);
+            if (!product) {
+                throw new NotFoundError('Product not found');
+            }
+
+            // Use product information for the item
+            itemData.name = product.name;
+
+            // Handle pricing logic
+            if (product.price !== null) {
+                // Product has a price, use it
+                finalEstimatedPrice = product.discountPrice || product.price;
+                userProvidedPrice = null; // Clear user provided price
+            } else {
+                // Product has no price, require user to provide one
+                if (!itemData.userProvidedPrice) {
+                    throw new BadRequestError(
+                        'This product has no preset price. Please provide your expected price.',
+                    );
+                }
+                finalEstimatedPrice = null;
+                userProvidedPrice = itemData.userProvidedPrice;
+            }
+        }
+
+        const newItem = await ShoppingListItem.create({
+            ...itemData,
+            estimatedPrice: finalEstimatedPrice,
+            userProvidedPrice,
+            shoppingListId: listId,
         });
 
-        return await this.getShoppingList(listId);
+        // Update estimated total of the shopping list
+        await this.updateShoppingListTotal(listId);
+
+        return newItem;
     }
 }

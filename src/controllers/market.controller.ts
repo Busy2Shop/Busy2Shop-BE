@@ -3,6 +3,9 @@
 import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import MarketService from '../services/market.service';
+import ProductService from '../services/product.service';
+import CategoryService from '../services/category.service';
+import Category from '../models/category.model';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
 
@@ -95,15 +98,166 @@ export default class MarketController {
         });
     }
 
+    static async getFeaturedMarkets(req: Request, res: Response) {
+        const { limit } = req.query;
+
+        const queryParams: Record<string, unknown> = {
+            isPinned: true,
+        };
+
+        if (limit) {
+            queryParams.size = Number(limit);
+        }
+
+        const markets = await MarketService.viewMarkets(queryParams);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Featured markets retrieved successfully',
+            data: markets,
+        });
+    }
+
+    static async searchMarkets(req: Request, res: Response) {
+        const { query, page, size, marketType, lat, lng, distance } = req.query;
+
+        if (!query || typeof query !== 'string') {
+            throw new BadRequestError('Search query is required');
+        }
+
+        const queryParams: Record<string, unknown> = {
+            q: query,
+        };
+
+        if (page && size) {
+            queryParams.page = Number(page);
+            queryParams.size = Number(size);
+        }
+
+        if (marketType) queryParams.marketType = marketType as string;
+
+        // Add location parameters if provided
+        if (lat && lng) {
+            queryParams.lat = Number(lat);
+            queryParams.lng = Number(lng);
+            queryParams.distance = distance ? Number(distance) : 5;
+        }
+
+        const markets = await MarketService.viewMarkets(queryParams);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Market search completed successfully',
+            data: markets,
+        });
+    }
+
     static async getMarket(req: Request, res: Response) {
         const { id } = req.params;
+        const { includeProducts, includeCategories, productsLimit } = req.query;
 
         const market = await MarketService.viewSingleMarket(id);
+
+        // Optionally include products using the correct method
+        if (includeProducts === 'true') {
+            const productLimit = productsLimit ? Number(productsLimit) : 20;
+            const productsResult = await ProductService.viewMarketProducts(id, {
+                page: 1,
+                size: productLimit,
+            });
+            market.products = productsResult.products;
+        }
+
+        // Optionally include categories
+        if (includeCategories === 'true') {
+            const categories = await Category.findAll({
+                include: [{
+                    model: require('../models/market.model').default,
+                    as: 'markets',
+                    where: { id },
+                    through: { attributes: [] },
+                }],
+            });
+            market.categories = categories;
+        }
 
         res.status(200).json({
             status: 'success',
             message: 'Market retrieved successfully',
             data: market,
+        });
+    }
+
+    static async getMarketProducts(req: Request, res: Response) {
+        const { id } = req.params;
+        const { page, limit, search, sortBy, categoryId, minPrice, maxPrice, isAvailable } = req.query;
+
+        const queryParams: Record<string, unknown> = {
+            page: page ? Number(page) : 1,
+            size: limit ? Number(limit) : 20,
+        };
+
+        if (search) queryParams.q = search as string;
+        if (sortBy) queryParams.sortBy = sortBy as string;
+        if (categoryId) queryParams.categoryId = categoryId as string;
+        if (minPrice) queryParams.minPrice = Number(minPrice);
+        if (maxPrice) queryParams.maxPrice = Number(maxPrice);
+        if (isAvailable !== undefined) queryParams.isAvailable = isAvailable === 'true';
+
+        const products = await ProductService.viewMarketProducts(id, queryParams);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Market products retrieved successfully',
+            data: products,
+        });
+    }
+
+    static async searchMarketProducts(req: Request, res: Response) {
+        const { id } = req.params;
+        const { query, page, limit, sortBy, categoryId, minPrice, maxPrice } = req.query;
+
+        if (!query || typeof query !== 'string') {
+            throw new BadRequestError('Search query is required');
+        }
+
+        const queryParams: Record<string, unknown> = {
+            q: query,
+            page: page ? Number(page) : 1,
+            size: limit ? Number(limit) : 20,
+        };
+
+        if (sortBy) queryParams.sortBy = sortBy as string;
+        if (categoryId) queryParams.categoryId = categoryId as string;
+        if (minPrice) queryParams.minPrice = Number(minPrice);
+        if (maxPrice) queryParams.maxPrice = Number(maxPrice);
+
+        const products = await ProductService.viewMarketProducts(id, queryParams);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Product search completed successfully',
+            data: products,
+        });
+    }
+
+    static async getMarketCategories(req: Request, res: Response) {
+        const { id } = req.params;
+
+        // Get categories that are associated with this market
+        const categories = await Category.findAll({
+            include: [{
+                model: require('../models/market.model').default,
+                as: 'markets',
+                where: { id },
+                through: { attributes: [] },
+            }],
+        });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Market categories retrieved successfully',
+            data: categories,
         });
     }
 

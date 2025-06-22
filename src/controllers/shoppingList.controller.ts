@@ -298,4 +298,105 @@ export default class ShoppingListController {
             data: updatedList,
         });
     }
+
+    /**
+     * Get all suggested lists for users to browse
+     */
+    static async getSuggestedLists(req: AuthenticatedRequest, res: Response) {
+        const { page = 1, size = 20, category, popular } = req.query;
+
+        const result = await ShoppingListService.getSuggestedLists({
+            page: Number(page),
+            size: Number(size),
+            category: category as string,
+            popular: popular === 'true',
+        });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Suggested lists retrieved successfully',
+            data: {
+                lists: result.lists,
+                pagination: {
+                    currentPage: Number(page),
+                    totalPages: result.totalPages,
+                    totalItems: result.count,
+                    itemsPerPage: Number(size),
+                },
+            },
+        });
+    }
+
+    /**
+     * Copy a suggested list to user's personal shopping list
+     */
+    static async copySuggestedList(req: AuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+        const { marketId } = req.body;
+
+        const personalList = await ShoppingListService.copySuggestedListToPersonal(
+            id,
+            req.user.id,
+            marketId,
+        );
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Suggested list copied to your shopping lists successfully',
+            data: personalList,
+        });
+    }
+
+    /**
+     * Add item to shopping list with user-provided price support
+     */
+    static async addItemWithPrice(req: AuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+        const { productId, name, quantity, unit, notes, userProvidedPrice } = req.body;
+
+        if (!name) {
+            throw new BadRequestError('Item name is required');
+        }
+
+        const newItem = await ShoppingListService.addItemToListWithPrice(id, req.user.id, {
+            productId,
+            name,
+            quantity: quantity || 1,
+            unit,
+            notes,
+            userProvidedPrice,
+            shoppingListId: id,
+        });
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Item added to shopping list successfully',
+            data: newItem,
+        });
+    }
+
+    /**
+     * Update item with user-provided price
+     */
+    static async updateItemPrice(req: AuthenticatedRequest, res: Response) {
+        const { id, itemId } = req.params;
+        const { userProvidedPrice, quantity } = req.body;
+
+        const updateData: Partial<any> = {};
+        if (userProvidedPrice !== undefined) updateData.userProvidedPrice = userProvidedPrice;
+        if (quantity !== undefined) updateData.quantity = quantity;
+
+        const updatedItem = await ShoppingListService.updateListItem(
+            id,
+            itemId,
+            req.user.id,
+            updateData,
+        );
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Item updated successfully',
+            data: updatedItem,
+        });
+    }
 }

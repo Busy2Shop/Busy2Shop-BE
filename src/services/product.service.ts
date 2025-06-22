@@ -160,10 +160,10 @@ export default class ProductService {
                         return [
                             [literal(`
                                 CASE 
-                                    WHEN LOWER(name) = LOWER('${query}') THEN 100
-                                    WHEN LOWER(name) LIKE LOWER('${query}%') THEN 80
-                                    WHEN LOWER(name) LIKE LOWER('%${query}%') THEN 60
-                                    WHEN LOWER(description) LIKE LOWER('%${query}%') THEN 40
+                                    WHEN LOWER("Product"."name") = LOWER('${query}') THEN 100
+                                    WHEN LOWER("Product"."name") LIKE LOWER('${query}%') THEN 80
+                                    WHEN LOWER("Product"."name") LIKE LOWER('%${query}%') THEN 60
+                                    WHEN LOWER("Product"."description") LIKE LOWER('%${query}%') THEN 40
                                     ELSE 20
                                 END
                             `), 'DESC'],

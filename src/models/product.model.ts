@@ -35,9 +35,9 @@ export default class Product extends Model<Product | IProduct> {
 
     @Column({
         type: DataType.DECIMAL(10, 2),
-        allowNull: false,
+        allowNull: true,
     })
-    price: number;
+    price: number | null;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
@@ -103,7 +103,7 @@ export interface IProduct {
     id?: string;
     name: string;
     description?: string;
-    price: number;
+    price: number | null;
     discountPrice?: number;
     images?: string[];
     barcode?: string;
@@ -111,7 +111,7 @@ export interface IProduct {
     stockQuantity?: number;
     attributes?: object;
     isAvailable?: boolean;
-    isPinned?: boolean; // Add to interface
+    isPinned?: boolean;
     marketId: string;
     market?: Market;
     reviews?: Review[];

@@ -7,6 +7,11 @@ const router = Router();
 // All routes are protected
 router.use(basicAuth('access'));
 
+// Suggested lists routes
+router.get('/suggested', AuthenticatedController(ShoppingListController.getSuggestedLists));
+router.post('/suggested/:id/copy', AuthenticatedController(ShoppingListController.copySuggestedList));
+
+// Standard shopping list routes
 router.post('/', AuthenticatedController(ShoppingListController.createShoppingList));
 router.get('/', AuthenticatedController(ShoppingListController.getUserShoppingLists));
 router.get('/agent', AuthenticatedController(ShoppingListController.getAgentAssignedLists));
@@ -14,11 +19,16 @@ router.get('/:id', AuthenticatedController(ShoppingListController.getShoppingLis
 router.put('/:id', AuthenticatedController(ShoppingListController.updateShoppingList));
 router.delete('/:id', AuthenticatedController(ShoppingListController.deleteShoppingList));
 
-// Item management
+// Enhanced item management with pricing support
 router.post('/:listId/items', AuthenticatedController(ShoppingListController.addItemToList));
+router.post('/:id/items/with-price', AuthenticatedController(ShoppingListController.addItemWithPrice));
 router.put(
     '/:listId/items/:itemId',
     AuthenticatedController(ShoppingListController.updateListItem),
+);
+router.patch(
+    '/:id/items/:itemId/price',
+    AuthenticatedController(ShoppingListController.updateItemPrice),
 );
 router.delete(
     '/:listId/items/:itemId',

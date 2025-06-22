@@ -8,7 +8,16 @@ const upload = uploadMiddleware(UploadType.Array, 'files', 5);
 
 // Public routes
 router.get('/', MarketController.getAllMarkets);
+router.get('/featured', MarketController.getFeaturedMarkets);
+router.get('/search', MarketController.searchMarkets);
 router.get('/:id', MarketController.getMarket);
+
+// Market products routes
+router.get('/:id/products', MarketController.getMarketProducts);
+router.get('/:id/products/search', MarketController.searchMarketProducts);
+
+// Market categories routes
+router.get('/:id/categories', MarketController.getMarketCategories);
 
 // Protected routes
 router.post(

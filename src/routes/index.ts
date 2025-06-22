@@ -14,12 +14,13 @@ import chatRoute from './chat.routes';
 import notificationRoutes from './notification.routes';
 import alatPayRoute from './payment/alatpay.routes';
 import seederRoute from './seeder.routes';
+import seedRoute from './seed.routes';
 import homeRoute from './home.routes';
 
 const router = Router();
 
 router.use('/auth', authRoute);
-router.use('/market', marketRoute);
+router.use('/markets', marketRoute);
 router.use('/category', categoryRoute);
 router.use('/product', productRoute);
 router.use('/shopping-list', shoppingListRoute);
@@ -33,6 +34,7 @@ router.use('/chat', chatRoute);
 router.use('/notifications', notificationRoutes);
 router.use('/payment/alatpay', alatPayRoute);
 router.use('/seeder', seederRoute);
+router.use('/seed', seedRoute);
 router.use('/home', homeRoute);
 
 export default router;

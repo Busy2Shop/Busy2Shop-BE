@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Response } from 'express';
-import { AuthenticatedRequest } from '../../middlewares/authMiddleware';
+import { AdminAuthenticatedRequest } from '../../middlewares/authMiddleware';
 import ShoppingListService from '../../services/shoppingList.service';
 import ShoppingList from '../../models/shoppingList.model';
 import ShoppingListItem from '../../models/shoppingListItem.model';
@@ -13,11 +13,8 @@ export default class SuggestedListsController {
     /**
      * Create a new suggested shopping list (Admin only)
      */
-    static async createSuggestedList(req: AuthenticatedRequest, res: Response) {
-        // Only admins can create suggested lists
-        if (req.user.status.userType !== 'admin') {
-            throw new ForbiddenError('Only admins can create suggested lists');
-        }
+    static async createSuggestedList(req: AdminAuthenticatedRequest, res: Response) {
+        // Admin authentication is handled by middleware
 
         const {
             name,
@@ -45,7 +42,7 @@ export default class SuggestedListsController {
             {
                 name,
                 notes,
-                customerId: req.user.id, // Use admin as customer for creation
+                customerId: '00000000-0000-0000-0000-000000000000', // System user ID for admin-created lists
                 marketId,
                 status: 'draft',
                 creatorType: 'admin',
@@ -60,7 +57,7 @@ export default class SuggestedListsController {
                 isPopular: isPopular || false,
                 isActive: true,
                 sortOrder: sortOrder || 0,
-                createdBy: req.user.id,
+                createdBy: '00000000-0000-0000-0000-000000000000', // System creator ID
                 tags: tags || [],
             },
             items || [],
@@ -76,11 +73,8 @@ export default class SuggestedListsController {
     /**
      * Get all suggested lists with admin features
      */
-    static async getAllSuggestedLists(req: AuthenticatedRequest, res: Response) {
-        // Only admins can access all suggested lists
-        if (req.user.status.userType !== 'admin') {
-            throw new ForbiddenError('Only admins can access all suggested lists');
-        }
+    static async getAllSuggestedLists(req: AdminAuthenticatedRequest, res: Response) {
+        // Admin authentication is handled by middleware
 
         const { page = 1, size = 20, category, active, popular, search } = req.query;
 
@@ -161,7 +155,7 @@ export default class SuggestedListsController {
     /**
      * Get a specific suggested list by ID
      */
-    static async getSuggestedList(req: AuthenticatedRequest, res: Response) {
+    static async getSuggestedList(req: AdminAuthenticatedRequest, res: Response) {
         const { id } = req.params;
 
         const list = await ShoppingList.findOne({
@@ -198,11 +192,8 @@ export default class SuggestedListsController {
     /**
      * Update a suggested list (Admin only)
      */
-    static async updateSuggestedList(req: AuthenticatedRequest, res: Response) {
-        // Only admins can update suggested lists
-        if (req.user.status.userType !== 'admin') {
-            throw new ForbiddenError('Only admins can update suggested lists');
-        }
+    static async updateSuggestedList(req: AdminAuthenticatedRequest, res: Response) {
+        // Admin authentication is handled by middleware
 
         const { id } = req.params;
         const {
@@ -275,11 +266,8 @@ export default class SuggestedListsController {
     /**
      * Delete a suggested list (Admin only)
      */
-    static async deleteSuggestedList(req: AuthenticatedRequest, res: Response) {
-        // Only admins can delete suggested lists
-        if (req.user.status.userType !== 'admin') {
-            throw new ForbiddenError('Only admins can delete suggested lists');
-        }
+    static async deleteSuggestedList(req: AdminAuthenticatedRequest, res: Response) {
+        // Admin authentication is handled by middleware
 
         const { id } = req.params;
 
@@ -303,11 +291,8 @@ export default class SuggestedListsController {
     /**
      * Bulk operations for suggested lists
      */
-    static async bulkUpdateSuggestedLists(req: AuthenticatedRequest, res: Response) {
-        // Only admins can perform bulk operations
-        if (req.user.status.userType !== 'admin') {
-            throw new ForbiddenError('Only admins can perform bulk operations');
-        }
+    static async bulkUpdateSuggestedLists(req: AdminAuthenticatedRequest, res: Response) {
+        // Admin authentication is handled by middleware
 
         const { action, listIds, updateData } = req.body;
 
@@ -370,7 +355,7 @@ export default class SuggestedListsController {
             status: 'success',
             message: `Bulk ${action} operation completed successfully`,
             data: {
-                affectedRows: result[0] || result, // result[0] for update operations, result for delete
+                affectedRows: Array.isArray(result) ? result[0] : result, // result[0] for update operations, result for delete
                 action,
                 listIds,
             },
@@ -380,11 +365,8 @@ export default class SuggestedListsController {
     /**
      * Get suggested lists analytics
      */
-    static async getSuggestedListsAnalytics(req: AuthenticatedRequest, res: Response) {
-        // Only admins can access analytics
-        if (req.user.status.userType !== 'admin') {
-            throw new ForbiddenError('Only admins can access analytics');
-        }
+    static async getSuggestedListsAnalytics(req: AdminAuthenticatedRequest, res: Response) {
+        // Admin authentication is handled by middleware
 
         const totalSuggested = await ShoppingList.count({
             where: { listType: 'suggested' }
@@ -454,11 +436,8 @@ export default class SuggestedListsController {
     /**
      * Copy user list to suggested list (Admin only)
      */
-    static async convertToSuggestedList(req: AuthenticatedRequest, res: Response) {
-        // Only admins can convert lists
-        if (req.user.status.userType !== 'admin') {
-            throw new ForbiddenError('Only admins can convert lists to suggested lists');
-        }
+    static async convertToSuggestedList(req: AdminAuthenticatedRequest, res: Response) {
+        // Admin authentication is handled by middleware
 
         const { id } = req.params;
         const {
@@ -485,7 +464,7 @@ export default class SuggestedListsController {
             {
                 name: `${originalList.name} (Suggested)`,
                 notes: `Converted from user list: ${originalList.notes || ''}`,
-                customerId: req.user.id,
+                customerId: '00000000-0000-0000-0000-000000000000', // System user ID
                 marketId: originalList.marketId,
                 status: 'draft',
                 creatorType: 'admin',
@@ -498,7 +477,7 @@ export default class SuggestedListsController {
                 isPopular: isPopular || false,
                 isActive: true,
                 sortOrder: 0,
-                createdBy: req.user.id,
+                createdBy: '00000000-0000-0000-0000-000000000000', // System creator ID
                 tags: tags || [],
             },
             originalList.items?.map(item => ({
@@ -508,6 +487,7 @@ export default class SuggestedListsController {
                 notes: item.notes,
                 estimatedPrice: item.estimatedPrice,
                 productId: item.productId,
+                shoppingListId: '', // This will be set by the service
             })) || [],
         );
 

@@ -166,6 +166,19 @@ export default class ShoppingList extends Model<ShoppingList | IShoppingList> {
     isActive: boolean;
 
     @Column({
+        type: DataType.BOOLEAN,
+        defaultValue: false,
+    })
+    isReadOnly: boolean; // For system/suggested lists that shouldn't be edited
+
+    @IsUUID(4)
+    @Column({
+        type: DataType.UUID,
+        allowNull: true, // Reference to source suggested list if this is a copy
+    })
+    sourceSuggestedListId: string | null;
+
+    @Column({
         type: DataType.INTEGER,
         defaultValue: 0,
     })
@@ -216,6 +229,8 @@ export interface IShoppingList {
     image?: string;
     isPopular?: boolean;
     isActive?: boolean;
+    isReadOnly?: boolean;
+    sourceSuggestedListId?: string | null;
     sortOrder?: number;
     createdBy?: string;
 }
