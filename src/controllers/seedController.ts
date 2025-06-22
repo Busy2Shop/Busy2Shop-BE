@@ -4,6 +4,7 @@ import ShoppingListItem from '../models/shoppingListItem.model';
 import User from '../models/user.model';
 import Product from '../models/product.model';
 import Market from '../models/market.model';
+import MealSeeder from '../seeders/mealSeeder';
 import { logger } from '../utils/logger';
 import { Op } from 'sequelize';
 
@@ -501,6 +502,50 @@ export default class SeedController {
             res.status(500).json({
                 status: 'error',
                 message: 'Failed to clear shopping lists',
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+        }
+    }
+
+    /**
+     * Seed meals with ingredients
+     * GET /api/v0/seed/meals
+     */
+    static async seedMeals(req: Request, res: Response) {
+        try {
+            const result = await MealSeeder.seedMeals();
+
+            res.status(200).json({
+                status: 'success',
+                ...result
+            });
+        } catch (error) {
+            logger.error('❌ Meal seeding failed:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to seed meals',
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+        }
+    }
+
+    /**
+     * Clear all meals
+     * DELETE /api/v0/seed/meals
+     */
+    static async clearMeals(req: Request, res: Response) {
+        try {
+            const result = await MealSeeder.clearMeals();
+
+            res.status(200).json({
+                status: 'success',
+                ...result
+            });
+        } catch (error) {
+            logger.error('❌ Failed to clear meals:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to clear meals',
                 error: error instanceof Error ? error.message : 'Unknown error',
             });
         }

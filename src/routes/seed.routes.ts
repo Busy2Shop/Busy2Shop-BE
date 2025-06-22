@@ -149,4 +149,80 @@ router.get('/shopping-lists', SeedController.seedShoppingLists);
  */
 router.delete('/shopping-lists', SeedController.clearShoppingLists);
 
+/**
+ * @swagger
+ * /api/v0/seed/meals:
+ *   get:
+ *     summary: Seed meals with ingredients
+ *     description: Creates sample Nigerian meals with their ingredients for the shop-by-ingredient feature
+ *     tags: [Seeding]
+ *     responses:
+ *       200:
+ *         description: Meals seeded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: Meals seeded successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     mealsCreated:
+ *                       type: number
+ *                     meals:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                           name:
+ *                             type: string
+ *                           category:
+ *                             type: string
+ *                           cuisine:
+ *                             type: string
+ *                           servings:
+ *                             type: number
+ *                           difficulty:
+ *                             type: string
+ *                           isPopular:
+ *                             type: boolean
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/meals', SeedController.seedMeals);
+
+/**
+ * @swagger
+ * /api/v0/seed/meals:
+ *   delete:
+ *     summary: Clear all meals
+ *     description: Removes all meals and ingredients from the database
+ *     tags: [Seeding]
+ *     responses:
+ *       200:
+ *         description: Meals cleared successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: success
+ *                 message:
+ *                   type: string
+ *                   example: All meals and ingredients cleared successfully
+ *       500:
+ *         description: Internal server error
+ */
+router.delete('/meals', SeedController.clearMeals);
+
 export default router; 

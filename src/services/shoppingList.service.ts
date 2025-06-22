@@ -51,17 +51,59 @@ export default class ShoppingListService {
 
     static async createShoppingList(
         listData: IShoppingList,
-        items: IShoppingListItem[] = [],
+        items: Omit<IShoppingListItem, 'shoppingListId'>[] = [],
     ): Promise<ShoppingList> {
         // Validate required fields
         if (!listData.name || !listData.customerId) {
             throw new BadRequestError('Shopping list name and user ID are required');
         }
 
+        // Enhanced duplicate prevention - check for existing lists with the same name
+        const existingListsWithSameName = await ShoppingList.findAll({
+            where: {
+                customerId: listData.customerId,
+                name: listData.name.trim(),
+                status: {
+                    [Op.ne]: 'cancelled' // Exclude cancelled lists from duplicate check
+                }
+            }
+        });
+
+        let finalListName = listData.name.trim();
+        
+        if (existingListsWithSameName.length > 0) {
+            // Check if there are any draft lists with the same name - remove them to prevent duplication
+            const draftDuplicates = existingListsWithSameName.filter(list => list.status === 'draft');
+            
+            if (draftDuplicates.length > 0) {
+                console.log(`Found ${draftDuplicates.length} draft list(s) with same name. Removing duplicates...`);
+                
+                await Database.transaction(async (transaction: Transaction) => {
+                    for (const draftList of draftDuplicates) {
+                        // Delete items first
+                        await ShoppingListItem.destroy({
+                            where: { shoppingListId: draftList.id },
+                            transaction,
+                        });
+                        // Then delete the list
+                        await draftList.destroy({ transaction });
+                    }
+                });
+            } else {
+                // If non-draft lists exist with same name, create unique name
+                const timestamp = new Date().toISOString().slice(-13, -8);
+                finalListName = `${listData.name.trim()} (${timestamp})`;
+                console.log(`Creating list with unique name: "${finalListName}"`);
+            }
+        }
+
         // Use a transaction to ensure all operations succeed or fail together
         return await Database.transaction(async (transaction: Transaction) => {
-            // Create the shopping list
-            const newList = await ShoppingList.create({ ...listData }, { transaction });
+            // Create the shopping list with final name
+            const newList = await ShoppingList.create({ 
+                ...listData, 
+                name: finalListName 
+            }, { transaction });
 
             // Add items if provided
             if (items.length > 0) {

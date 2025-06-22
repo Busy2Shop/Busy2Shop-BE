@@ -487,7 +487,6 @@ export default class SuggestedListsController {
                 notes: item.notes,
                 estimatedPrice: item.estimatedPrice,
                 productId: item.productId,
-                shoppingListId: '', // This will be set by the service
             })) || [],
         );
 
