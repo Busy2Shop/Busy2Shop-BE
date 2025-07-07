@@ -64,9 +64,9 @@ export default class ShoppingListService {
                 customerId: listData.customerId,
                 name: listData.name.trim(),
                 status: {
-                    [Op.ne]: 'cancelled' // Exclude cancelled lists from duplicate check
-                }
-            }
+                    [Op.ne]: 'cancelled', // Exclude cancelled lists from duplicate check
+                },
+            },
         });
 
         let finalListName = listData.name.trim();
@@ -102,7 +102,9 @@ export default class ShoppingListService {
             // Create the shopping list with final name
             const newList = await ShoppingList.create({ 
                 ...listData, 
-                name: finalListName 
+                name: finalListName,
+                // Set category based on name patterns
+                category: listData.category || this.inferCategory(finalListName),
             }, { transaction });
 
             // Add items if provided
@@ -134,7 +136,7 @@ export default class ShoppingListService {
     static async viewUserShoppingLists(
         customerId: string,
         queryData?: IViewShoppingListsQuery,
-    ): Promise<{ lists: ShoppingList[]; count: number; totalPages?: number }> {
+    ): Promise<{ lists: ShoppingList[]; count: number; totalPages?: number; listsByMarket?: Record<string, ShoppingList[]>; specialLists?: { todaysLists: ShoppingList[]; mealLists: ShoppingList[] } }> {
         const { status, marketId } = queryData || {};
 
         const where: Record<string, unknown> = { customerId };
@@ -172,8 +174,47 @@ export default class ShoppingListService {
             order: [['updatedAt', 'DESC']],
         };
 
-        // Handle pagination
-        return this.executePaginatedListQuery(queryOptions, queryData);
+        // Get paginated results
+        const result = await this.executePaginatedListQuery(queryOptions, queryData);
+        
+        // Organize lists by market for better frontend display
+        const listsByMarket: Record<string, ShoppingList[]> = {};
+        const todaysLists: ShoppingList[] = [];
+        const mealLists: ShoppingList[] = [];
+        
+        result.lists.forEach(list => {
+            // Check if it's a Today's Shopping List
+            if (list.name.includes('Today\'s Collection') || list.category === 'todays_collection') {
+                todaysLists.push(list);
+            }
+            // Check if it's a Meal Ingredients list
+            else if (list.name.includes('servings') || list.category === 'meal_ingredients') {
+                mealLists.push(list);
+            }
+            // Otherwise, organize by market
+            else if (list.marketId) {
+                const marketName = list.market?.name || 'Unknown Market';
+                if (!listsByMarket[marketName]) {
+                    listsByMarket[marketName] = [];
+                }
+                listsByMarket[marketName].push(list);
+            } else {
+                // Lists without a market go to a "General" category
+                if (!listsByMarket['General']) {
+                    listsByMarket['General'] = [];
+                }
+                listsByMarket['General'].push(list);
+            }
+        });
+        
+        return {
+            ...result,
+            listsByMarket,
+            specialLists: {
+                todaysLists,
+                mealLists,
+            },
+        };
     }
 
     static async viewAgentAssignedLists(
@@ -720,7 +761,7 @@ export default class ShoppingListService {
                 for (const originalItem of suggestedList.items) {
                     // Determine the price to use
                     let estimatedPrice = originalItem.estimatedPrice;
-                    let userProvidedPrice = null;
+                    const userProvidedPrice = null;
 
                     // If the item has a product and the product has no price, leave estimatedPrice null
                     if (originalItem.product && originalItem.product.price === null) {
@@ -890,5 +931,72 @@ export default class ShoppingListService {
         await this.updateShoppingListTotal(listId);
 
         return newItem;
+    }
+
+    /**
+     * Infer category based on shopping list name
+     */
+    private static inferCategory(listName: string): string {
+        const lowerName = listName.toLowerCase();
+        
+        if (lowerName.includes('today\'s collection') || lowerName.includes('today\'s shopping')) {
+            return 'todays_collection';
+        }
+        
+        if (lowerName.includes('servings') || lowerName.includes('ingredients') || lowerName.includes('recipe')) {
+            return 'meal_ingredients';
+        }
+        
+        if (lowerName.includes('weekly') || lowerName.includes('monthly')) {
+            return 'recurring';
+        }
+        
+        if (lowerName.includes('grocery') || lowerName.includes('groceries')) {
+            return 'grocery';
+        }
+        
+        return 'general';
+    }
+
+    /**
+     * Create a special Today's Shopping List
+     */
+    static async createTodaysShoppingList(
+        customerId: string,
+        marketId?: string
+    ): Promise<ShoppingList> {
+        const todayDate = new Date().toLocaleDateString();
+        const listName = `Today's Collection - ${todayDate}`;
+        
+        return await this.createShoppingList({
+            name: listName,
+            customerId,
+            marketId,
+            category: 'todays_collection',
+            notes: 'Items from Today\'s Collection',
+            status: 'draft',
+        }, []);
+    }
+
+    /**
+     * Create a shopping list from meal ingredients
+     */
+    static async createMealShoppingList(
+        customerId: string,
+        mealName: string,
+        servings: number,
+        marketId?: string,
+        ingredients: Omit<IShoppingListItem, 'shoppingListId'>[] = []
+    ): Promise<ShoppingList> {
+        const listName = `${mealName} - ${servings} servings`;
+        
+        return await this.createShoppingList({
+            name: listName,
+            customerId,
+            marketId,
+            category: 'meal_ingredients',
+            notes: `Ingredients for ${mealName} (${servings} servings)`,
+            status: 'draft',
+        }, ingredients);
     }
 }

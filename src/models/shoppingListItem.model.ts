@@ -27,7 +27,7 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
     name: string;
 
     @Column({
-        type: DataType.INTEGER,
+        type: DataType.DECIMAL(10, 2),
         defaultValue: 1,
     })
     quantity: number;

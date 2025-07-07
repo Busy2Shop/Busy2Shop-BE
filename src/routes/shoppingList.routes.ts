@@ -14,7 +14,13 @@ router.post('/suggested/:id/copy', AuthenticatedController(ShoppingListControlle
 // Standard shopping list routes
 router.post('/', AuthenticatedController(ShoppingListController.createShoppingList));
 router.get('/', AuthenticatedController(ShoppingListController.getUserShoppingLists));
+router.get('/organized', AuthenticatedController(ShoppingListController.getOrganizedShoppingLists));
 router.get('/agent', AuthenticatedController(ShoppingListController.getAgentAssignedLists));
+
+// Special shopping list creation routes
+router.post('/todays-list', AuthenticatedController(ShoppingListController.createTodaysShoppingList));
+router.post('/meal-list', AuthenticatedController(ShoppingListController.createMealShoppingList));
+router.post('/validate-and-sync', AuthenticatedController(ShoppingListController.validateAndSyncList));
 router.get('/:id', AuthenticatedController(ShoppingListController.getShoppingList));
 router.put('/:id', AuthenticatedController(ShoppingListController.updateShoppingList));
 router.delete('/:id', AuthenticatedController(ShoppingListController.deleteShoppingList));
@@ -26,7 +32,7 @@ router.put(
     '/:listId/items/:itemId',
     AuthenticatedController(ShoppingListController.updateListItem),
 );
-router.patch(
+router.put(
     '/:id/items/:itemId/price',
     AuthenticatedController(ShoppingListController.updateItemPrice),
 );
@@ -37,7 +43,7 @@ router.delete(
 
 // Status management
 router.post('/:id/submit', AuthenticatedController(ShoppingListController.submitShoppingList));
-router.patch('/:id/status', AuthenticatedController(ShoppingListController.updateListStatus));
+router.put('/:id/status', AuthenticatedController(ShoppingListController.updateListStatus));
 router.post('/:id/accept', AuthenticatedController(ShoppingListController.acceptShoppingList));
 router.post('/:id/assign', AuthenticatedController(ShoppingListController.assignAgentToList));
 router.post('/:id/prices', AuthenticatedController(ShoppingListController.updateActualPrices));

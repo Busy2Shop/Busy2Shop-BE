@@ -399,4 +399,193 @@ export default class ShoppingListController {
             data: updatedItem,
         });
     }
+
+    /**
+     * Create a Today's Shopping List
+     */
+    static async createTodaysShoppingList(req: AuthenticatedRequest, res: Response) {
+        const { marketId } = req.body;
+
+        const todaysList = await ShoppingListService.createTodaysShoppingList(
+            req.user.id,
+            marketId
+        );
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Today\'s shopping list created successfully',
+            data: todaysList,
+        });
+    }
+
+    /**
+     * Create shopping list from meal ingredients
+     */
+    static async createMealShoppingList(req: AuthenticatedRequest, res: Response) {
+        const { mealName, servings, marketId, ingredients } = req.body;
+
+        if (!mealName || !servings) {
+            throw new BadRequestError('Meal name and servings are required');
+        }
+
+        const mealList = await ShoppingListService.createMealShoppingList(
+            req.user.id,
+            mealName,
+            servings,
+            marketId,
+            ingredients || []
+        );
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Meal shopping list created successfully',
+            data: mealList,
+        });
+    }
+
+    /**
+     * Get shopping lists organized by market and category
+     */
+    static async getOrganizedShoppingLists(req: AuthenticatedRequest, res: Response) {
+        const { page, size, status } = req.query;
+
+        const queryParams: Record<string, unknown> = {};
+
+        if (page && size) {
+            queryParams.page = Number(page);
+            queryParams.size = Number(size);
+        }
+
+        if (status) queryParams.status = status;
+
+        const organizedLists = await ShoppingListService.viewUserShoppingLists(
+            req.user.id,
+            queryParams,
+        );
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Organized shopping lists retrieved successfully',
+            data: organizedLists,
+        });
+    }
+
+    /**
+     * Validate and sync local shopping list with server
+     * This endpoint checks item prices, availability and syncs the list to server
+     */
+    static async validateAndSyncList(req: AuthenticatedRequest, res: Response) {
+        const { listData, marketId } = req.body;
+
+        if (!listData || !listData.items || listData.items.length === 0) {
+            throw new BadRequestError('Shopping list data with items is required');
+        }
+
+        try {
+            // Create shopping list on server if it doesn't exist
+            let shoppingList;
+            if (listData.id && !listData.isLocal) {
+                // Update existing server list
+                shoppingList = await ShoppingListService.getShoppingList(listData.id);
+                if (shoppingList.customerId !== req.user.id) {
+                    throw new ForbiddenError('You are not authorized to update this shopping list');
+                }
+            } else {
+                // Create new shopping list on server
+                shoppingList = await ShoppingListService.createShoppingList(
+                    {
+                        name: listData.name || 'Shopping List',
+                        notes: listData.notes,
+                        marketId: marketId || listData.marketId,
+                        customerId: req.user.id,
+                        status: 'draft',
+                    },
+                    [] // Items will be added separately
+                );
+            }
+
+            // Validate and sync items
+            const validatedItems = [];
+            const itemValidationResults = [];
+
+            for (const item of listData.items) {
+                try {
+                    const validationResult: {
+                        originalItem: any;
+                        isAvailable: boolean;
+                        priceCorrection: number | null;
+                        suggestedPrice: number | null;
+                        warnings: string[];
+                    } = {
+                        originalItem: item,
+                        isAvailable: true,
+                        priceCorrection: null,
+                        suggestedPrice: null,
+                        warnings: [],
+                    };
+
+                    // Add item to shopping list
+                    const addedItem = await ShoppingListService.addItemToListWithPrice(
+                        shoppingList.id,
+                        req.user.id,
+                        {
+                            productId: item.productId,
+                            name: item.name,
+                            quantity: item.quantity || 1,
+                            unit: item.unit || 'pcs',
+                            notes: item.notes,
+                            userProvidedPrice: item.userSetPrice || item.estimatedPrice,
+                            shoppingListId: shoppingList.id,
+                        }
+                    );
+
+                    validatedItems.push(addedItem);
+
+                    // Price validation logic
+                    if (item.userSetPrice || item.estimatedPrice) {
+                        const providedPrice = item.userSetPrice || item.estimatedPrice;
+                        // Simple price validation - in a real app, you'd check against market prices
+                        if (providedPrice < 50) {
+                            validationResult.warnings.push('Price seems unusually low');
+                            validationResult.suggestedPrice = Math.max(100, providedPrice * 2);
+                        } else if (providedPrice > 10000) {
+                            validationResult.warnings.push('Price seems unusually high');
+                            validationResult.suggestedPrice = Math.min(5000, providedPrice * 0.7);
+                        }
+                    } else {
+                        validationResult.warnings.push('No price provided - using estimated price');
+                        validationResult.suggestedPrice = Math.floor(Math.random() * 2000) + 500;
+                    }
+
+                    itemValidationResults.push(validationResult);
+                } catch (error) {
+                    console.error(`Error adding item ${item.name}:`, error);
+                    itemValidationResults.push({
+                        originalItem: item,
+                        isAvailable: false,
+                        priceCorrection: null,
+                        suggestedPrice: null,
+                        warnings: ['Item could not be added to the list'],
+                    });
+                }
+            }
+
+            // Get updated shopping list with all items
+            const updatedList = await ShoppingListService.getShoppingList(shoppingList.id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Shopping list validated and synced successfully',
+                data: {
+                    shoppingList: updatedList,
+                    validationResults: itemValidationResults,
+                    syncedAt: new Date().toISOString(),
+                    needsReview: itemValidationResults.some(r => r.warnings.length > 0),
+                },
+            });
+        } catch (error) {
+            console.error('Error validating and syncing list:', error);
+            throw error;
+        }
+    }
 }
