@@ -53,6 +53,13 @@ export default class OrderController {
                 'You are not authorized to create an order from this shopping list',
             );
         }
+        
+        // Check if shopping list is in accepted status (payment completed or admin approved)
+        if (shoppingList.status !== 'accepted') {
+            throw new BadRequestError(
+                'Shopping list must be paid for or approved before creating an order. Current status: ' + shoppingList.status
+            );
+        }
 
         // Calculate totals for the order
         const { totalAmount, serviceFee, deliveryFee } =
@@ -155,6 +162,65 @@ export default class OrderController {
         res.status(200).json({
             status: 'success',
             message: 'Notes added successfully',
+            data: order,
+        });
+    }
+
+    /**
+     * Create order with payment method consideration
+     * This method allows COD orders to be created without prior payment
+     */
+    static async createOrderWithPaymentMethod(req: AuthenticatedRequest, res: Response) {
+        const { shoppingListId, deliveryAddress, customerNotes, paymentMethod } = req.body;
+
+        if (!shoppingListId || !deliveryAddress || !paymentMethod) {
+            throw new BadRequestError('Shopping list ID, delivery address, and payment method are required');
+        }
+
+        // Get the shopping list to verify ownership
+        const shoppingList = await ShoppingListService.getShoppingList(shoppingListId);
+
+        if (shoppingList.customerId !== req.user.id) {
+            throw new ForbiddenError(
+                'You are not authorized to create an order from this shopping list',
+            );
+        }
+
+        // For COD and Wallet payments, we can accept pending status (which means submitted)
+        const acceptableStatuses = paymentMethod === 'cod' || paymentMethod === 'wallet' 
+            ? ['pending', 'accepted']
+            : ['accepted'];
+
+        if (!acceptableStatuses.includes(shoppingList.status)) {
+            throw new BadRequestError(
+                `Shopping list must be in one of these statuses: ${acceptableStatuses.join(', ')}. Current status: ${shoppingList.status}`
+            );
+        }
+
+        // If status is 'pending' and payment method allows it, update to 'accepted'
+        if (shoppingList.status === 'pending' && (paymentMethod === 'cod' || paymentMethod === 'wallet')) {
+            await ShoppingListService.updateListStatus(shoppingListId, req.user.id, 'accepted');
+        }
+
+        // Calculate totals for the order
+        const { totalAmount, serviceFee, deliveryFee } =
+            await OrderService.calculateTotals(shoppingListId);
+
+        // Create the order
+        const order = await OrderService.createOrder({
+            shoppingListId,
+            customerId: req.user.id,
+            agentId: shoppingList.agentId,
+            totalAmount,
+            serviceFee,
+            deliveryFee,
+            deliveryAddress,
+            customerNotes,
+        });
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Order created successfully',
             data: order,
         });
     }

@@ -19,6 +19,7 @@ interface GenerateVirtualAccountParams {
     user: User;
     currency: string;
     idempotencyKey?: string;
+    referenceType?: 'order' | 'shopping_list';
 }
 
 interface CheckExpiredTransactionsResult {
@@ -42,14 +43,15 @@ export default class AlatPayService {
                 throw new BadRequestError('Amount must be greater than zero');
             }
 
-            // Check if there's already a pending transaction for this order
+            // Check if there's already a pending transaction for this order/shopping list
+            const referenceType = params.referenceType || 'order';
             const existingTransaction = await TransactionService.getTransactionByReference(
                 orderId,
-                'order',
+                referenceType,
             );
 
             if (existingTransaction && !idempotencyKey) {
-                throw new BadRequestError('A pending payment already exists for this order');
+                throw new BadRequestError(`A pending payment already exists for this ${referenceType.replace('_', ' ')}`);
             }
 
             // Generate a client reference to avoid duplicates (if idempotencyKey was provided)
@@ -72,15 +74,14 @@ export default class AlatPayService {
                 },
             });
 
-            // Determine if it's for an order or shopping list
-            const isOrder = await OrderService.getOrder(orderId);
-            const referenceType = isOrder ? 'order' : 'shopping_list';
+            // referenceType is already set above from params
+            const isOrder = referenceType === 'order';
 
             // Create transaction record
             await TransactionService.createTransaction({
                 amount,
                 currency,
-                type: TransactionType.ORDER,
+                type: isOrder ? TransactionType.ORDER : TransactionType.SHOPPING_LIST,
                 paymentMethod: PaymentMethod.ALATPAY,
                 referenceId: orderId,
                 referenceType,

@@ -9,6 +9,7 @@ router.use(basicAuth('access'));
 
 // Static paths first
 router.post('/', AuthenticatedController(OrderController.createOrder));
+router.post('/create-with-payment', AuthenticatedController(OrderController.createOrderWithPaymentMethod));
 router.get('/', AuthenticatedController(OrderController.getUserOrders));
 router.get('/agent', AuthenticatedController(OrderController.getAgentOrders));
 

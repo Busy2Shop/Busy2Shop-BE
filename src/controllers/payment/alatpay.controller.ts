@@ -15,7 +15,7 @@ export default class AlatPayController {
      * Generate a virtual account for payment
      */
     static async generateVirtualAccount(req: AuthenticatedRequest, res: Response) {
-        const { amount, orderId, description, currency } = req.body;
+        const { amount, orderId, description, currency, referenceType } = req.body;
 
         if (!amount || !orderId) {
             throw new BadRequestError('Amount and orderId are required');
@@ -27,10 +27,11 @@ export default class AlatPayController {
         const response = await AlatPayService.generateVirtualAccount({
             amount,
             orderId,
-            description: description || `Payment for order ${orderId}`,
+            description: description || `Payment for ${referenceType === 'shopping_list' ? 'shopping list' : 'order'} ${orderId}`,
             user,
             currency: currency || 'NGN',
             idempotencyKey: req.body.idempotencyKey,
+            referenceType: referenceType || 'order',
         });
 
         res.status(200).json({
@@ -192,6 +193,7 @@ export default class AlatPayController {
                 user: req.user,
                 currency: currency || 'NGN',
                 idempotencyKey: req.body.idempotencyKey,
+                referenceType: 'shopping_list',
             });
 
             res.status(200).json({
@@ -237,6 +239,7 @@ export default class AlatPayController {
                 user: req.user,
                 currency: currency || 'NGN',
                 idempotencyKey: req.body.idempotencyKey,
+                referenceType: 'order',
             });
 
             res.status(200).json({
