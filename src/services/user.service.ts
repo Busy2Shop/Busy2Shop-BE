@@ -61,9 +61,23 @@ export default class UserService {
         if (!validEmail) throw new BadRequestError('Invalid email');
 
         // Find a user with the constructed where condition
-        const existingUser: User | null = await User.scope('withSettings').findOne({
+        const existingUser: User | null = await User.findOne({
             where: { email },
             // attributes: ['email', 'id'],
+            include: [
+                {
+                    model: UserSettings,
+                    as: 'settings',
+                    attributes: [
+                        'joinDate',
+                        'isBlocked',
+                        'isDeactivated',
+                        'lastLogin',
+                        'meta',
+                        'agentMetaData',
+                    ],
+                },
+            ],
         });
 
         return existingUser;
@@ -156,7 +170,22 @@ export default class UserService {
     }
 
     static async viewSingleUser(id: string): Promise<User> {
-        const user: User | null = await User.scope('withSettings').findByPk(id);
+        const user: User | null = await User.findByPk(id, {
+            include: [
+                {
+                    model: UserSettings,
+                    as: 'settings',
+                    attributes: [
+                        'joinDate',
+                        'isBlocked',
+                        'isDeactivated',
+                        'lastLogin',
+                        'meta',
+                        'agentMetaData',
+                    ],
+                },
+            ],
+        });
 
         if (!user) {
             throw new NotFoundError('Oops User not found');
@@ -182,9 +211,23 @@ export default class UserService {
     static async viewSingleUserDynamic(queryOptions: IDynamicQueryOptions): Promise<User> {
         const { query, attributes } = queryOptions;
 
-        const user: User | null = await User.scope('withSettings').findOne({
+        const user: User | null = await User.findOne({
             where: query,
             ...(attributes ? { attributes } : {}),
+            include: [
+                {
+                    model: UserSettings,
+                    as: 'settings',
+                    attributes: [
+                        'joinDate',
+                        'isBlocked',
+                        'isDeactivated',
+                        'lastLogin',
+                        'meta',
+                        'agentMetaData',
+                    ],
+                },
+            ],
         });
 
         if (!user) {

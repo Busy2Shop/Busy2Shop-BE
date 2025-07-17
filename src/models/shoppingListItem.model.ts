@@ -65,7 +65,7 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
     @IsUUID(4)
     @ForeignKey(() => ShoppingList)
     @Column({
-        type: DataType.UUID,
+        // type: DataType.UUID,
         allowNull: false,
     })
     shoppingListId: string;
@@ -76,10 +76,10 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
     @IsUUID(4)
     @ForeignKey(() => Product)
     @Column({
-        type: DataType.UUID,
+        // type: DataType.UUID,
         allowNull: true, // Can be null if the item isn't linked to a specific product
     })
-    productId: string | null;
+    productId: string;
 
     @BelongsTo(() => Product)
     product: Product;

@@ -23,6 +23,7 @@ import Market from './market.model';
 import Review from './review.model';
 import ShoppingList from './shoppingList.model';
 import AgentLocation from './agentLocation.model';
+import UserAddress from './userAddress.model';
 
 export type userTypeValues = 'agent' | 'customer';
 
@@ -241,6 +242,10 @@ export default class User extends Model<User | IUser> {
     @HasMany(() => Review, 'reviewerId')
     reviews: Review[];
 
+    // User delivery addresses
+    @HasMany(() => UserAddress)
+    addresses: UserAddress[];
+
     static capitalizeFirstLetter(str: string): string {
         return str.charAt(0).toUpperCase() + str.slice(1);
     }
@@ -275,4 +280,5 @@ export interface IUser {
     assignedOrders?: ShoppingList[];
     reviews?: Review[];
     locations?: AgentLocation[];
+    addresses?: UserAddress[];
 }

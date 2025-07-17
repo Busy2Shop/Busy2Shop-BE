@@ -6,6 +6,7 @@ import {
     ALATPAY_BUSINESS_ID,
     ALATPAY_MERCHANT_ID,
 } from '../utils/constants';
+import { BadRequestError } from '../utils/customErrors';
 
 export interface AlatPayVirtualAccountRequest {
     businessId: string;
@@ -224,6 +225,7 @@ export default class AlatPayClient {
                 params,
                 headers: this.getHeaders(),
             });
+            console.log({ ALATPAYRESPONSE: response.data });
             return response.data;
         } catch (error) {
             const axiosError = error as AxiosError;
@@ -254,7 +256,13 @@ export default class AlatPayClient {
                 return this.makeRequest(method, url, data, params, retryCount + 1);
             }
 
-            throw error;
+            throw new BadRequestError(
+                `ALATPay API request failed: ${
+                    typeof axiosError.response?.data === 'object' && axiosError.response?.data && 'message' in axiosError.response.data
+                        ? (axiosError.response.data as { message?: string }).message
+                        : ''
+                } (Status: ${axiosError.response?.status})`,
+            );  
         }
     }
 

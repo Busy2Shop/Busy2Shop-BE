@@ -2,6 +2,7 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import ShoppingListService from '../services/shoppingList.service';
+import DiscountCampaignService from '../services/discountCampaign.service';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 
 export default class ShoppingListController {
@@ -472,7 +473,7 @@ export default class ShoppingListController {
 
     /**
      * Validate and sync local shopping list with server
-     * This endpoint checks item prices, availability and syncs the list to server
+     * This endpoint checks item prices, availability and provides update information
      */
     static async validateAndSyncList(req: AuthenticatedRequest, res: Response) {
         const { listData, marketId } = req.body;
@@ -482,16 +483,16 @@ export default class ShoppingListController {
         }
 
         try {
-            // Create shopping list on server if it doesn't exist
+            // Get or create shopping list on server if needed
             let shoppingList;
             if (listData.id && !listData.isLocal) {
-                // Update existing server list
+                // Get existing server list
                 shoppingList = await ShoppingListService.getShoppingList(listData.id);
                 if (shoppingList.customerId !== req.user.id) {
-                    throw new ForbiddenError('You are not authorized to update this shopping list');
+                    throw new ForbiddenError('You are not authorized to access this shopping list');
                 }
             } else {
-                // Create new shopping list on server
+                // For local lists, create a minimal list record for validation context
                 shoppingList = await ShoppingListService.createShoppingList(
                     {
                         name: listData.name || 'Shopping List',
@@ -500,91 +501,335 @@ export default class ShoppingListController {
                         customerId: req.user.id,
                         status: 'draft',
                     },
-                    [] // Items will be added separately
+                    listData.items || [] // Save items if this is a local list being synced
                 );
             }
 
-            // Validate and sync items
-            const validatedItems = [];
+            // First pass: Get raw discounts to identify product-specific discounts
+            const rawDiscounts = await DiscountCampaignService.getAvailableDiscountsForUser({
+                userId: req.user.id,
+                orderAmount: 0, // We'll calculate this properly after price corrections
+                marketId: shoppingList.marketId,
+                productIds: listData.items.map((item: any) => item.productId).filter(Boolean),
+            });
+
+            // Get product-specific discounts that should be auto-applied
+            const productDiscounts = rawDiscounts.filter(discount => 
+                discount.targetType === 'product' && 
+                discount.isAutomaticApply &&
+                discount.targetProductIds?.some((productId: string) => 
+                    listData.items.some((item: any) => item.productId === productId)
+                )
+            );
+
+            // Validate items without saving them
             const itemValidationResults = [];
+            const priceCorrections = [];
+            let subtotal = 0;
 
             for (const item of listData.items) {
-                try {
-                    const validationResult: {
-                        originalItem: any;
-                        isAvailable: boolean;
-                        priceCorrection: number | null;
-                        suggestedPrice: number | null;
-                        warnings: string[];
-                    } = {
-                        originalItem: item,
-                        isAvailable: true,
-                        priceCorrection: null,
-                        suggestedPrice: null,
-                        warnings: [],
-                    };
-
-                    // Add item to shopping list
-                    const addedItem = await ShoppingListService.addItemToListWithPrice(
-                        shoppingList.id,
-                        req.user.id,
-                        {
-                            productId: item.productId,
-                            name: item.name,
-                            quantity: item.quantity || 1,
-                            unit: item.unit || 'pcs',
-                            notes: item.notes,
-                            userProvidedPrice: item.userSetPrice || item.estimatedPrice,
-                            shoppingListId: shoppingList.id,
-                        }
-                    );
-
-                    validatedItems.push(addedItem);
-
-                    // Price validation logic
-                    if (item.userSetPrice || item.estimatedPrice) {
-                        const providedPrice = item.userSetPrice || item.estimatedPrice;
-                        // Simple price validation - in a real app, you'd check against market prices
-                        if (providedPrice < 50) {
-                            validationResult.warnings.push('Price seems unusually low');
-                            validationResult.suggestedPrice = Math.max(100, providedPrice * 2);
-                        } else if (providedPrice > 10000) {
-                            validationResult.warnings.push('Price seems unusually high');
-                            validationResult.suggestedPrice = Math.min(5000, providedPrice * 0.7);
-                        }
-                    } else {
-                        validationResult.warnings.push('No price provided - using estimated price');
-                        validationResult.suggestedPrice = Math.floor(Math.random() * 2000) + 500;
+                const currentPrice = item.userSetPrice || item.estimatedPrice || 0;
+                
+                // Apply product-specific discounts to the item price
+                const itemProductDiscounts = productDiscounts.filter(discount => 
+                    discount.targetProductIds?.includes(item.productId)
+                );
+                
+                let discountedPrice = currentPrice;
+                for (const discount of itemProductDiscounts) {
+                    if (discount.type === 'percentage') {
+                        const discountAmount = (currentPrice * discount.value) / 100;
+                        const maxDiscount = discount.maximumDiscountAmount ? 
+                            Math.min(discountAmount, discount.maximumDiscountAmount) : discountAmount;
+                        discountedPrice = Math.max(0, discountedPrice - maxDiscount);
+                    } else if (discount.type === 'fixed_amount') {
+                        discountedPrice = Math.max(0, discountedPrice - discount.value);
                     }
+                }
+                
+                subtotal += discountedPrice * item.quantity;
 
-                    itemValidationResults.push(validationResult);
-                } catch (error) {
-                    console.error(`Error adding item ${item.name}:`, error);
-                    itemValidationResults.push({
-                        originalItem: item,
-                        isAvailable: false,
-                        priceCorrection: null,
-                        suggestedPrice: null,
-                        warnings: ['Item could not be added to the list'],
+                const validationResult: {
+                    originalItem: any;
+                    isAvailable: boolean;
+                    priceCorrection: number | null;
+                    suggestedPrice: number | null;
+                    warnings: string[];
+                    appliedDiscounts: any[];
+                    finalPrice: number;
+                } = {
+                    originalItem: item,
+                    isAvailable: true,
+                    priceCorrection: null,
+                    suggestedPrice: null,
+                    warnings: [],
+                    appliedDiscounts: itemProductDiscounts,
+                    finalPrice: discountedPrice,
+                };
+
+                // Price validation logic - check against market prices or business rules
+                if (currentPrice > 0) {
+                    // Simple price validation - in a real app, you'd check against market prices
+                    if (currentPrice < 50) {
+                        validationResult.warnings.push('Price seems unusually low');
+                        validationResult.suggestedPrice = Math.max(100, currentPrice * 2);
+                    } else if (currentPrice > 10000) {
+                        validationResult.warnings.push('Price seems unusually high');
+                        validationResult.suggestedPrice = Math.min(5000, currentPrice * 0.7);
+                    }
+                } else {
+                    validationResult.warnings.push('No price provided - using estimated price');
+                    validationResult.suggestedPrice = Math.floor(Math.random() * 2000) + 500;
+                }
+
+                itemValidationResults.push(validationResult);
+
+                // Create price correction if there's a suggested price or product discount applied
+                if (validationResult.suggestedPrice !== null) {
+                    priceCorrections.push({
+                        itemId: item.id || item.name,
+                        itemName: item.name,
+                        originalPrice: currentPrice,
+                        correctedPrice: validationResult.suggestedPrice,
+                        reason: validationResult.warnings.join(', ') || 'Price adjustment',
+                        type: 'suggestion',
+                    });
+                } else if (discountedPrice !== currentPrice) {
+                    priceCorrections.push({
+                        itemId: item.id || item.name,
+                        itemName: item.name,
+                        originalPrice: currentPrice,
+                        correctedPrice: discountedPrice,
+                        reason: `Product discount applied: ${itemProductDiscounts.map(d => d.name).join(', ')}`,
+                        type: 'product_discount',
                     });
                 }
             }
 
-            // Get updated shopping list with all items
-            const updatedList = await ShoppingListService.getShoppingList(shoppingList.id);
+            // Update the discount query with the calculated subtotal
+            const updatedRawDiscounts = await DiscountCampaignService.getAvailableDiscountsForUser({
+                userId: req.user.id,
+                orderAmount: subtotal,
+                marketId: shoppingList.marketId,
+                productIds: listData.items.map((item: any) => item.productId).filter(Boolean),
+            });
+
+            // Security and business logic filters
+            const MAX_DISCOUNT_PERCENTAGE = 30; // Maximum 30% discount for enhanced security
+            const MAX_DISCOUNT_AMOUNT = subtotal * 0.3; // Maximum 30% of order value
+            const MAX_GENERAL_DISCOUNTS = 3; // Maximum 3 general discounts to show
+            const MIN_ORDER_FOR_DISCOUNT = 100; // Minimum order amount to apply any discount
+            const MAX_SINGLE_DISCOUNT_AMOUNT = 2000; // Maximum ₦2000 for any single discount
+
+            let secureDiscounts: any[] = [];
+            
+            // Don't allow any discounts if order is too small
+            if (subtotal < MIN_ORDER_FOR_DISCOUNT) {
+                console.log('Order too small for discounts:', subtotal);
+                secureDiscounts = [];
+            } else {
+                // Filter and validate discounts
+                secureDiscounts = updatedRawDiscounts.filter(discount => {
+                    // Calculate potential discount amount
+                    let potentialDiscountAmount = 0;
+                    
+                    if (discount.type === 'percentage') {
+                        potentialDiscountAmount = (subtotal * discount.value) / 100;
+                        // Cap percentage discounts
+                        if (discount.maximumDiscountAmount) {
+                            potentialDiscountAmount = Math.min(potentialDiscountAmount, discount.maximumDiscountAmount);
+                        }
+                    } else if (discount.type === 'fixed_amount') {
+                        potentialDiscountAmount = discount.value;
+                    }
+
+                    // Enhanced security checks
+                    const discountPercentage = (potentialDiscountAmount / subtotal) * 100;
+                    
+                    // Filter out discounts that are too large
+                    if (discountPercentage > MAX_DISCOUNT_PERCENTAGE) return false;
+                    if (potentialDiscountAmount > MAX_DISCOUNT_AMOUNT) return false;
+                    if (potentialDiscountAmount > MAX_SINGLE_DISCOUNT_AMOUNT) return false;
+                    
+                    // Filter out discounts where the discount amount is greater than 70% of the order
+                    if (potentialDiscountAmount >= subtotal * 0.7) return false;
+                    
+                    // Check minimum order amount eligibility with additional buffer
+                    if (discount.minimumOrderAmount && subtotal < discount.minimumOrderAmount * 1.1) return false;
+                    
+                    // Additional security: Cap fixed amount discounts to reasonable values
+                    if (discount.type === 'fixed_amount') {
+                        // More restrictive limits for fixed amount discounts
+                        if (discount.value > 1000 && subtotal < discount.value * 3) return false;
+                        if (discount.value > 2000) return false; // Hard cap at ₦2000
+                    }
+                    
+                    // Security: Ensure percentage discounts don't exceed reasonable bounds
+                    if (discount.type === 'percentage' && discount.value > 25) return false;
+                    
+                    // Security: Validate discount is not expired or inactive
+                    if (discount.endDate && new Date(discount.endDate) < new Date()) return false;
+                    if (discount.isActive === false) return false;
+                    
+                    return true;
+                });
+            }
+
+            // Categorize secure discounts by their application type
+            const updatedProductDiscounts = secureDiscounts.filter(discount => 
+                discount.targetType === 'product' && 
+                discount.targetProductIds?.some((productId: string) => 
+                    listData.items.some((item: any) => item.productId === productId)
+                )
+            );
+
+            const generalDiscounts = secureDiscounts.filter(discount => 
+                ['market', 'global', 'first_order', 'referral', 'category', 'user'].includes(discount.targetType)
+            );
+
+            // Limit general discounts to maximum 3, prioritizing by potential savings and priority
+            const limitedGeneralDiscounts = generalDiscounts
+                .sort((a, b) => {
+                    // Calculate potential savings for sorting
+                    const getSavings = (disc: any) => {
+                        if (disc.type === 'percentage') {
+                            const amount = (subtotal * disc.value) / 100;
+                            return disc.maximumDiscountAmount ? Math.min(amount, disc.maximumDiscountAmount) : amount;
+                        }
+                        return disc.value;
+                    };
+                    
+                    // Sort by priority (higher first) then by savings (higher first)
+                    if (a.priority !== b.priority) return b.priority - a.priority;
+                    return getSavings(b) - getSavings(a);
+                })
+                .slice(0, MAX_GENERAL_DISCOUNTS);
+
+            // Auto-apply product discounts (already applied in pricing)
+            const autoAppliedProductDiscounts = updatedProductDiscounts.filter(discount => 
+                discount.isAutomaticApply
+            );
+
+            // Final filtered discounts (only non-auto-applied general discounts)
+            const availableDiscounts = [...limitedGeneralDiscounts];
+            
+            // Include product discounts that are not auto-applied
+            const selectableProductDiscounts = updatedProductDiscounts.filter(discount => 
+                !discount.isAutomaticApply
+            );
+
+            const categorizedDiscounts = {
+                itemSpecific: selectableProductDiscounts,
+                autoAppliedProducts: autoAppliedProductDiscounts,
+                marketSpecific: limitedGeneralDiscounts.filter(discount => 
+                    discount.targetType === 'market' && 
+                    discount.targetMarketIds?.includes(shoppingList.marketId)
+                ),
+                globalDiscounts: limitedGeneralDiscounts.filter(discount => 
+                    ['global', 'first_order', 'referral'].includes(discount.targetType)
+                ),
+                categorySpecific: limitedGeneralDiscounts.filter(discount => 
+                    discount.targetType === 'category'
+                ),
+                userSpecific: limitedGeneralDiscounts.filter(discount => 
+                    discount.targetType === 'user' && 
+                    discount.targetUserIds?.includes(req.user.id)
+                ),
+            };
+
+            // Get the updated shopping list with items if they were saved
+            const finalShoppingList = await ShoppingListService.getShoppingList(shoppingList.id);
+            
+            // Calculate service fee and delivery fee
+            const serviceFee = Math.round(subtotal * 0.05 * 100) / 100; // 5% service fee
+            const deliveryFee = 5.0; // Fixed delivery fee
+            
+            // Calculate auto-applied discount amounts (already applied to item prices)
+            let autoAppliedDiscountAmount = 0;
+            const autoAppliedDiscountDetails = [];
+
+            // Calculate the total amount saved from product discounts
+            for (const item of listData.items) {
+                const originalPrice = item.userSetPrice || item.estimatedPrice || 0;
+                const itemValidation = itemValidationResults.find(v => v.originalItem.id === item.id);
+                
+                if (itemValidation && itemValidation.finalPrice < originalPrice) {
+                    const itemSavings = (originalPrice - itemValidation.finalPrice) * item.quantity;
+                    autoAppliedDiscountAmount += itemSavings;
+                }
+            }
+
+            // Create details for auto-applied discounts
+            for (const discount of autoAppliedProductDiscounts) {
+                // Find items that this discount applies to
+                const applicableItems = listData.items.filter((item: any) => 
+                    discount.targetProductIds?.includes(item.productId)
+                );
+                
+                let discountAmount = 0;
+                for (const item of applicableItems) {
+                    const originalPrice = item.userSetPrice || item.estimatedPrice || 0;
+                    const itemValidation = itemValidationResults.find(v => v.originalItem.id === item.id);
+                    
+                    if (itemValidation && itemValidation.finalPrice < originalPrice) {
+                        discountAmount += (originalPrice - itemValidation.finalPrice) * item.quantity;
+                    }
+                }
+                
+                if (discountAmount > 0) {
+                    autoAppliedDiscountDetails.push({
+                        id: discount.id,
+                        name: discount.name,
+                        amount: discountAmount,
+                        type: discount.type,
+                        value: discount.value,
+                    });
+                }
+            }
 
             res.status(200).json({
                 status: 'success',
-                message: 'Shopping list validated and synced successfully',
+                message: 'Shopping list validated successfully',
                 data: {
-                    shoppingList: updatedList,
+                    shoppingList: finalShoppingList,
                     validationResults: itemValidationResults,
+                    priceCorrections,
+                    availableDiscounts, // Only selectable discounts (max 3 general)
+                    categorizedDiscounts,
+                    autoAppliedDiscounts: autoAppliedDiscountDetails,
+                    autoAppliedDiscountAmount,
+                    subtotal,
+                    serviceFee,
+                    deliveryFee,
+                    total: subtotal + serviceFee + deliveryFee - autoAppliedDiscountAmount,
                     syncedAt: new Date().toISOString(),
                     needsReview: itemValidationResults.some(r => r.warnings.length > 0),
+                    discountSummary: {
+                        totalSelectableDiscounts: availableDiscounts.length,
+                        autoAppliedCount: autoAppliedDiscountDetails.length,
+                        itemSpecificCount: categorizedDiscounts.itemSpecific.length,
+                        marketSpecificCount: categorizedDiscounts.marketSpecific.length,
+                        globalDiscountCount: categorizedDiscounts.globalDiscounts.length,
+                        categorySpecificCount: categorizedDiscounts.categorySpecific.length,
+                        userSpecificCount: categorizedDiscounts.userSpecific.length,
+                        hasAutoApplyDiscounts: autoAppliedDiscountDetails.length > 0,
+                        hasCodeBasedDiscounts: availableDiscounts.some(d => d.code && !d.isAutomaticApply),
+                        maxDiscountPercentage: MAX_DISCOUNT_PERCENTAGE,
+                        maxSelectableDiscounts: 1, // Only 1 general discount can be selected
+                        minOrderForDiscount: MIN_ORDER_FOR_DISCOUNT,
+                    },
+                    securityLimits: {
+                        maxDiscountPercentage: MAX_DISCOUNT_PERCENTAGE,
+                        maxDiscountAmount: MAX_DISCOUNT_AMOUNT,
+                        maxSingleDiscountAmount: MAX_SINGLE_DISCOUNT_AMOUNT,
+                        maxGeneralDiscounts: MAX_GENERAL_DISCOUNTS,
+                        minOrderAmount: MIN_ORDER_FOR_DISCOUNT,
+                        enforced: true,
+                    },
                 },
             });
         } catch (error) {
-            console.error('Error validating and syncing list:', error);
+            console.error('Error validating shopping list:', error);
             throw error;
         }
     }

@@ -397,8 +397,9 @@ export default class ShoppingListService {
             throw new ForbiddenError('You are not authorized to modify this shopping list');
         }
 
-        // Can only update items if the list is in draft status
-        if (list.status !== 'draft') {
+        // Can only update items if the list is in draft or pending status
+        const allowedListStatuses = ['draft', 'pending'];
+        if (!allowedListStatuses.includes(list.status)) {
             throw new BadRequestError('Cannot update items in a submitted shopping list');
         }
 
@@ -434,7 +435,8 @@ export default class ShoppingListService {
         }
 
         // Can only remove items if the list is in draft status
-        if (list.status !== 'draft') {
+        const allowedListStatuses = ['draft', 'pending'];
+        if (!allowedListStatuses.includes(list.status)) {
             throw new BadRequestError('Cannot remove items from a submitted shopping list');
         }
 
@@ -483,7 +485,8 @@ export default class ShoppingListService {
         }
 
         // Can only submit lists in draft status
-        if (list.status !== 'draft') {
+        const allowedListStatuses = ['draft', 'pending'];
+        if (!allowedListStatuses.includes(list.status)) {
             throw new BadRequestError('This shopping list has already been submitted');
         }
 
@@ -881,7 +884,8 @@ export default class ShoppingListService {
         }
 
         // Can only add items if the list is in draft status
-        if (list.status !== 'draft') {
+        const allowedListStatuses = ['draft', 'pending'];
+        if (!allowedListStatuses.includes(list.status)) {
             throw new BadRequestError('Cannot add items to a submitted shopping list');
         }
 

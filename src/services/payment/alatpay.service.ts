@@ -6,7 +6,7 @@ import AlatPayClient, {
 import User from '../../models/user.model';
 import { logger } from '../../utils/logger';
 import { BadRequestError } from '../../utils/customErrors';
-import OrderService from '../../services/order.service';
+// import OrderService from '../../services/order.service';
 import { paymentWebhookQueue, paymentExpiryCheckQueue } from '../../queues/payment.queue';
 import HelperUtils from '../../utils/helpers';
 import TransactionService from '../transaction.service';
@@ -35,7 +35,7 @@ export default class AlatPayService {
     static async generateVirtualAccount(
         params: GenerateVirtualAccountParams,
     ): Promise<{ data: AlatPayVirtualAccountResponse }> {
-        try {
+        // try {
             const { amount, orderId, description, user, currency, idempotencyKey } = params;
 
             // Validate amount
@@ -51,7 +51,50 @@ export default class AlatPayService {
             );
 
             if (existingTransaction && !idempotencyKey) {
-                throw new BadRequestError(`A pending payment already exists for this ${referenceType.replace('_', ' ')}`);
+                // Check if the existing transaction is still valid (not expired or failed)
+                if (existingTransaction.status === TransactionStatus.PENDING) {
+                    // Check if the transaction has expired (30 minutes from creation)
+                    const transactionAge = Date.now() - new Date(existingTransaction.createdAt).getTime();
+                    const thirtyMinutes = 30 * 60 * 1000; // 30 minutes in milliseconds
+                    
+                    if (transactionAge < thirtyMinutes) {
+                        // Transaction is still valid, return the existing payment details
+                        logger.info(`Returning existing payment details for ${referenceType}: ${orderId}`);
+                        
+                        // Get the existing payment details from the metadata
+                        const existingPaymentData = existingTransaction.metadata.providerResponse;
+                        
+                        if (existingPaymentData) {
+                            // Ensure the data has the correct structure
+                            const formattedData = {
+                                ...existingPaymentData,
+                                // Make sure required fields are present
+                                transactionId: existingPaymentData.transactionId || existingTransaction.metadata.providerTransactionId,
+                                amount: existingPaymentData.amount || amount,
+                                currency: existingPaymentData.currency || currency,
+                                orderId: existingPaymentData.orderId || orderId,
+                                status: existingPaymentData.status || 'pending',
+                            };
+                            return { data: formattedData };
+                        }
+                    } else {
+                        // Transaction has expired, update its status and create a new one
+                        logger.info(`Existing transaction expired for ${referenceType}: ${orderId}, creating new payment`);
+                        await TransactionService.updateTransactionStatus(
+                            existingTransaction.id,
+                            TransactionStatus.FAILED,
+                            {
+                                ...existingTransaction.metadata,
+                                expiredAt: new Date(),
+                                reason: 'Transaction expired (30 minutes timeout)',
+                            }
+                        );
+                    }
+                } else if (existingTransaction.status === TransactionStatus.COMPLETED) {
+                    // Payment already completed
+                    throw new BadRequestError(`Payment for this ${referenceType.replace('_', ' ')} has already been completed`);
+                }
+                // If transaction is failed, we can create a new one (continue with normal flow)
             }
 
             // Generate a client reference to avoid duplicates (if idempotencyKey was provided)
@@ -61,7 +104,7 @@ export default class AlatPayService {
             // Call AlatPay API to generate a virtual account
             const client = AlatPayClient.getInstance();
             const response = await client.generateVirtualAccount({
-                amount,
+                amount: 100, 
                 orderId: clientReference,
                 description,
                 currency,
@@ -70,9 +113,11 @@ export default class AlatPayService {
                     phone: user.phone?.number || '',
                     firstName: user.firstName || 'User',
                     lastName: user.lastName || '',
-                    metadata: JSON.stringify({ userId: user.id }),
+                    metadata: JSON.stringify({ userId: user.id, referenceId: orderId }),
                 },
             });
+
+            console.log({ALATPAYRESPONSE: response});
 
             // referenceType is already set above from params
             const isOrder = referenceType === 'order';
@@ -90,7 +135,15 @@ export default class AlatPayService {
                 metadata: {
                     paymentProvider: 'alatpay',
                     providerTransactionId: response.data.transactionId,
-                    providerResponse: response.data,
+                    providerResponse: {
+                        ...response.data,
+                        // Ensure all required fields are stored
+                        transactionId: response.data.transactionId,
+                        amount: amount,
+                        currency: currency,
+                        orderId: orderId,
+                        status: response.data.status || 'pending',
+                    },
                     attempts: 0,
                     lastAttemptAt: new Date(),
                 },
@@ -98,10 +151,10 @@ export default class AlatPayService {
             });
 
             return { data: response };
-        } catch (error) {
-            logger.error('Error generating virtual account:', error);
-            throw error;
-        }
+        // } catch (error) {
+        //     logger.error('Error generating virtual account:', error);
+        //     throw error;
+        // }
     }
 
     /**
@@ -110,7 +163,7 @@ export default class AlatPayService {
     static async checkTransactionStatus(
         transactionId: string,
     ): Promise<{ data: AlatPayTransactionStatusResponse['data'] }> {
-        try {
+        // try {
             const client = AlatPayClient.getInstance();
             const response = await client.getTransactionStatus(transactionId);
 
@@ -142,17 +195,17 @@ export default class AlatPayService {
             }
 
             return { data: response.data };
-        } catch (error) {
-            logger.error('Error checking transaction status:', error);
-            throw error;
-        }
+        // } catch (error) {
+        //     logger.error('Error checking transaction status:', error);
+        //     throw error;
+        // }
     }
 
     /**
      * Process webhook notification from AlatPay
      */
     static async processWebhook({ payload }: { payload: AlatPayWebhookPayload }): Promise<void> {
-        try {
+        // try {
             // Validate webhook payload
             const client = AlatPayClient.getInstance();
             const isValid = await client.validateWebhookPayload(payload);
@@ -180,17 +233,17 @@ export default class AlatPayService {
             });
 
             logger.info(`Webhook queued for processing: ${Data.Id}`);
-        } catch (error) {
-            logger.error('Error processing webhook:', error);
-            throw error;
-        }
+        // } catch (error) {
+        //     logger.error('Error processing webhook:', error);
+        //     throw error;
+        // }
     }
 
     /**
      * Check for and update expired transactions
      */
     static async checkExpiredTransactions(): Promise<CheckExpiredTransactionsResult> {
-        try {
+        // try {
             const pendingTransactions = await TransactionService.getUserTransactions('', 1, 1000, {
                 status: TransactionStatus.PENDING,
             });
@@ -263,10 +316,10 @@ export default class AlatPayService {
             }
 
             return result;
-        } catch (error) {
-            logger.error('Error checking expired transactions:', error);
-            throw error;
-        }
+        // } catch (error) {
+        //     logger.error('Error checking expired transactions:', error);
+        //     throw new Error(error.response?.data?.message || 'Failed to check expired transactions');
+        // }
     }
 
     /**
@@ -297,7 +350,7 @@ export default class AlatPayService {
         limit: number = 10,
         filters: Record<string, any> = {}
     ): Promise<{ data: any[]; pagination: { total: number; page: number; limit: number } }> {
-        try {
+        // try {
             const client = AlatPayClient.getInstance();
             const response = await client.getTransactionHistory(page, limit, filters);
 
@@ -309,26 +362,26 @@ export default class AlatPayService {
                     limit,
                 },
             };
-        } catch (error) {
-            logger.error('Error getting transaction history:', error);
-            throw error;
-        }
+        // } catch (error) {
+        //     logger.error('Error getting transaction history:', error);
+        //     throw error;
+        // }
     }
 
     /**
      * Get user payments
      */
     static async getUserPayments(userId: string): Promise<any[]> {
-        try {
+        // try {
             const transactions = await TransactionService.getUserTransactions(userId, 1, 1000, {
                 paymentMethod: PaymentMethod.ALATPAY,
             });
 
             return transactions.transactions;
-        } catch (error) {
-            logger.error('Error getting user payments:', error);
-            throw error;
-        }
+        // } catch (error) {
+        //     logger.error('Error getting user payments:', error);
+        //     throw error;
+        // }
     }
 
     /**
@@ -339,7 +392,7 @@ export default class AlatPayService {
         failed: number;
         errors: string[];
     }> {
-        try {
+        // try {
             const result = {
                 reconciled: 0,
                 failed: 0,
@@ -391,9 +444,9 @@ export default class AlatPayService {
             }
 
             return result;
-        } catch (error) {
-            logger.error('Error reconciling transactions:', error);
-            throw error;
-        }
+        // } catch (error) {
+        //     logger.error('Error reconciling transactions:', error);
+        //     throw error;
+        // }
     }
 }
