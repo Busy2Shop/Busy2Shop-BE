@@ -552,6 +552,13 @@ export default class AuthController {
             );
         }
 
+        // Check if user is linked to Google account
+        if (user.googleId) {
+            throw new BadRequestError(
+                'Invalid credentials. Please try a different sign-in method.',
+            );
+        }
+
         // Get and validate password
         const userPassword = await user.$get('password');
         if (!userPassword) {

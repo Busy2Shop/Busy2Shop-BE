@@ -57,7 +57,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
             // Update transaction status
             const transaction = await TransactionService.updateTransactionStatus(transactionId, mappedStatus);
 
-            // If payment is successful and it's for a shopping list, update the shopping list status
+            // If payment is successful and it's for a shopping list, update the shopping list status and create order
             if (mappedStatus === TransactionStatus.COMPLETED && transaction.type === 'shopping_list') {
                 try {
                     // Update shopping list status to 'accepted'
@@ -68,8 +68,33 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                     );
                     
                     logger.info(`Shopping list ${transaction.referenceId} status updated to accepted`);
+                    
+                    // Get payment details from session or database to get delivery address
+                    // For now, create order with basic details - delivery address should be updated via API
+                    const order = await OrderService.createOrder({
+                        customerId: transaction.userId,
+                        shoppingListId: transaction.referenceId,
+                        totalAmount: transaction.amount,
+                        status: 'pending',
+                        paymentStatus: 'completed',
+                        paymentId: transaction.id,
+                        paymentProcessedAt: new Date(),
+                        serviceFee: Math.round(transaction.amount * 0.05), // 5% service fee
+                        deliveryFee: 500, // Default delivery fee in Naira
+                        deliveryAddress: {
+                            latitude: 6.5244, // Default Lagos coordinates
+                            longitude: 3.3792,
+                            address: 'Customer delivery address',
+                            city: 'Lagos',
+                            state: 'Lagos',
+                            country: 'Nigeria',
+                            additionalDirections: 'Address to be confirmed by customer'
+                        }
+                    });
+                    
+                    logger.info(`Order ${order.id} created for shopping list ${transaction.referenceId}`);
                 } catch (error) {
-                    logger.error('Error updating shopping list status:', error);
+                    logger.error('Error updating shopping list status or creating order:', error);
                     // Don't throw here to avoid retrying the entire webhook
                 }
             }
