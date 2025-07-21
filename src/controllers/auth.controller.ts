@@ -650,7 +650,7 @@ export default class AuthController {
             ...(gender && { gender }),
             ...(url && { displayImage: url }),
             ...(location && {
-                location: {
+                location: { 
                     country: location.country || 'NGN',
                     city: location.city,
                     address: location.address,

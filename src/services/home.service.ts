@@ -704,7 +704,7 @@ export class HomeService {
                         where: {
                             marketId: market.id,
                             isAvailable: true,
-                            id: { [Op.notIn]: products.map((p: any) => p.id) }
+                            id: { [Op.notIn]: products.map((p: any) => p.id) },
                         },
                         include: [
                             {
@@ -739,7 +739,7 @@ export class HomeService {
                             ...product,
                             id: `${product.id}_dup_${Date.now()}_${index}`,
                             name: product.name,
-                            isDuplicate: true
+                            isDuplicate: true,
                         }));
 
                         products = [...products, ...duplicatedProducts];
@@ -755,13 +755,13 @@ export class HomeService {
                         marketId: market.id,
                         originalCount: (marketData as any).products?.length || 0,
                         paddedCount: products.length,
-                        targetCount: productsPerMarket
+                        targetCount: productsPerMarket,
                     });
                 } else {
                     logger.info(`Market "${market.name}" already has sufficient products`, {
                         marketId: market.id,
                         productCount: products.length,
-                        targetCount: productsPerMarket
+                        targetCount: productsPerMarket,
                     });
                 }
 
@@ -828,8 +828,8 @@ export class HomeService {
                 marketBreakdown: finalMarkets.map(market => ({
                     marketId: market.id,
                     marketName: market.name,
-                    productCount: (market as any).products?.length || 0
-                }))
+                    productCount: (market as any).products?.length || 0,
+                })),
             });
 
             return finalMarkets;
@@ -1557,7 +1557,7 @@ export class HomeService {
                 recentOrders,
             };
         } catch (error) {
-            logger.error('Error fetching market stats:', error);
+            logger.error('Error fetching market statsss:', error);
             return {
                 totalMarkets: 0,
                 activeMarkets: 0,
