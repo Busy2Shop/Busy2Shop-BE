@@ -20,6 +20,7 @@ interface GenerateVirtualAccountParams {
     currency: string;
     idempotencyKey?: string;
     referenceType?: 'order' | 'shopping_list';
+    metadata?: any;
 }
 
 interface CheckExpiredTransactionsResult {
@@ -36,7 +37,7 @@ export default class AlatPayService {
         params: GenerateVirtualAccountParams,
     ): Promise<{ data: AlatPayVirtualAccountResponse }> {
         // try {
-            const { amount, orderId, description, user, currency, idempotencyKey } = params;
+            const { amount, orderId, description, user, currency, idempotencyKey, metadata } = params;
 
             // Validate amount
             if (amount <= 0) {
@@ -104,7 +105,7 @@ export default class AlatPayService {
             // Call AlatPay API to generate a virtual account
             const client = AlatPayClient.getInstance();
             const response = await client.generateVirtualAccount({
-                amount: 100, 
+                amount: amount, 
                 orderId: clientReference,
                 description,
                 currency,
@@ -146,6 +147,8 @@ export default class AlatPayService {
                     },
                     attempts: 0,
                     lastAttemptAt: new Date(),
+                    // Include delivery address and customer notes for order creation
+                    ...metadata,
                 },
                 ...(isOrder ? { orderId } : { shoppingListId: orderId }),
             });

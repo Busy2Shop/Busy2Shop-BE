@@ -18,6 +18,7 @@ import seederRoute from './admin/seeder.routes';
 import homeRoute from './home.routes';
 import userAddressRoute from './userAddress.routes';
 import discountCampaignRoute from './discountCampaign.routes';
+import systemSettingsRoute from './systemSettings.routes';
 
 const router = Router();
 
@@ -40,5 +41,6 @@ router.use('/seeder', seederRoute);
 router.use('/home', homeRoute);
 router.use('/user-addresses', userAddressRoute);
 router.use('/discounts', discountCampaignRoute);
+router.use('/system/settings', systemSettingsRoute);
 
 export default router;

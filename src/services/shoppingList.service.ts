@@ -610,10 +610,10 @@ export default class ShoppingListService {
                 );
             }
         } else if (list.customerId === customerId) {
-            // List owners can cancel or modify their own lists
-            if (!['cancelled', 'draft'].includes(status)) {
+            // List owners can cancel, modify, or update payment status of their own lists
+            if (!['cancelled', 'draft', 'pending', 'accepted'].includes(status)) {
                 throw new ForbiddenError(
-                    'You can only cancel or revert to draft your shopping lists',
+                    'You can only update your shopping list to draft, pending, accepted, or cancelled status',
                 );
             }
 
@@ -624,6 +624,20 @@ export default class ShoppingListService {
             ) {
                 throw new BadRequestError(
                     'Cannot revert to draft a list that has been accepted or processed',
+                );
+            }
+
+            // pending status is set when payment is initiated
+            if (status === 'pending' && list.status !== 'draft') {
+                throw new BadRequestError(
+                    'Can only set pending status from draft status',
+                );
+            }
+
+            // accepted status is set after payment completion
+            if (status === 'accepted' && !['draft', 'pending'].includes(list.status)) {
+                throw new BadRequestError(
+                    'Can only set accepted status from draft or pending status',
                 );
             }
         } else {

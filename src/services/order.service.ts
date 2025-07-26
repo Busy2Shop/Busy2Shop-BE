@@ -183,8 +183,10 @@ export default class OrderService {
                 throw new NotFoundError('Shopping list not found');
             }
 
-            if (shoppingList.status !== 'accepted') {
-                throw new BadRequestError('Can only create orders from accepted shopping lists');
+            // Allow orders to be created from draft, pending, or accepted shopping lists
+            // This supports the payment flow where orders are created before payment completion
+            if (!['draft', 'pending', 'accepted'].includes(shoppingList.status)) {
+                throw new BadRequestError('Can only create orders from draft, pending, or accepted shopping lists');
             }
 
             // Get market location for agent assignment
@@ -192,7 +194,7 @@ export default class OrderService {
 
             // Find available agents at the market first
             const availableAgents = await AgentService.getAvailableAgentsForOrder(
-                shoppingList.marketId,
+                shoppingList.id,
             );
 
             // If no agents at market, find the nearest available agent
@@ -774,5 +776,40 @@ export default class OrderService {
             paymentStatus: 'completed',
             paymentProcessedAt: new Date(),
         });
+    }
+
+    /**
+     * Find order by shopping list ID for a specific user
+     * @param shoppingListId The ID of the shopping list
+     * @param userId The ID of the user (for security)
+     * @returns Order if found, null otherwise
+     */
+    static async findOrderByShoppingListId(shoppingListId: string, userId: string): Promise<Order | null> {
+        const order = await Order.findOne({
+            where: {
+                shoppingListId,
+                customerId: userId
+            },
+            include: [
+                {
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    include: [
+                        {
+                            model: ShoppingListItem,
+                            as: 'items',
+                        },
+                    ],
+                },
+                {
+                    model: User,
+                    as: 'agent',
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
+                    required: false,
+                },
+            ],
+        });
+        
+        return order;
     }
 }

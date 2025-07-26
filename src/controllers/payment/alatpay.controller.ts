@@ -6,6 +6,7 @@ import { BadRequestError, NotFoundError } from '../../utils/customErrors';
 import { logger } from '../../utils/logger';
 import OrderService from '../../services/order.service';
 import ShoppingListService from '../../services/shoppingList.service';
+import SystemSettingsService from '../../services/systemSettings.service';
 import { paymentWebhookQueue } from '../../queues/payment.queue';
 import ShoppingListItem from '../../models/shoppingListItem.model';
 import TransactionService from '../../services/transaction.service';
@@ -42,7 +43,7 @@ export default class AlatPayController {
     }
 
     /**
-     * Check payment status
+     * Check payment status and ensure order creation if payment is completed
      */
     static async checkPaymentStatus(req: AuthenticatedRequest, res: Response) {
         const { transactionId } = req.params;
@@ -51,12 +52,61 @@ export default class AlatPayController {
             throw new BadRequestError('Transaction ID is required');
         }
 
+        // Get the transaction status from AlatPay (this will also trigger webhook processing if status changed)
         const response = await AlatPayService.checkTransactionStatus(transactionId);
+
+        // Get our local transaction record
+        const transaction = await TransactionService.getTransactionByProviderId(transactionId);
+        
+        if (!transaction) {
+            throw new NotFoundError('Transaction not found');
+        }
+
+        // Check if user has access to this transaction  
+        if (transaction.userId !== req.user.id) {
+            throw new BadRequestError('You do not have access to this transaction');
+        }
+
+        let orderInfo = null;
+
+        // If payment is completed and it's for a shopping list, check if order exists
+        if (response.data.status === 'COMPLETED' && transaction.type === 'shopping_list') {
+            try {
+                // Check if an order already exists for this shopping list using the efficient method
+                const relatedOrder = await OrderService.findOrderByShoppingListId(
+                    transaction.referenceId, 
+                    req.user.id
+                );
+
+                if (relatedOrder) {
+                    orderInfo = {
+                        orderId: relatedOrder.id,
+                        orderNumber: relatedOrder.id, // Using ID as order number since there's no separate orderNumber field
+                        status: relatedOrder.status,
+                        paymentStatus: relatedOrder.paymentStatus
+                    };
+                }
+
+                // If no order exists, the webhook processing should create it soon
+                // We'll let the async processing handle it rather than creating it synchronously here
+                // to avoid race conditions
+            } catch (error) {
+                logger.error('Error checking for existing order:', error);
+                // Don't throw here, just log and continue
+            }
+        }
 
         res.status(200).json({
             status: 'success',
             message: 'Transaction status retrieved',
-            data: response.data,
+            data: {
+                ...response.data,
+                // Include our local transaction info
+                localStatus: transaction.status,
+                transactionType: transaction.type,
+                referenceId: transaction.referenceId,
+                order: orderInfo
+            },
         });
     }
 
@@ -153,14 +203,18 @@ export default class AlatPayController {
     }
 
     /**
-     * Generate payment link for a shopping list
+     * Generate payment link for a shopping list and create order
      */
     static async generatePaymentLink(req: AuthenticatedRequest, res: Response) {
         const { shoppingListId } = req.params;
-        const { currency } = req.body;
+        const { currency, deliveryAddress, customerNotes, frontendTotal, discountAmount } = req.body;
 
         if (!shoppingListId) {
             throw new BadRequestError('Shopping list ID is required');
+        }
+
+        if (!deliveryAddress) {
+            throw new BadRequestError('Delivery address is required');
         }
 
         try {
@@ -176,6 +230,22 @@ export default class AlatPayController {
                 throw new BadRequestError('You do not have access to this shopping list');
             }
 
+            // Allow payment generation for draft or pending status (for retries)
+            if (!['draft', 'pending'].includes(shoppingList.status)) {
+                throw new BadRequestError(`Cannot create payment for shopping list in ${shoppingList.status} status`);
+            }
+
+            // Check if an order already exists for this shopping list
+            const existingOrder = await OrderService.findOrderByShoppingListId(shoppingListId, req.user.id);
+            
+            // If order exists and payment is completed, don't allow new payment
+            if (existingOrder && existingOrder.paymentStatus === 'completed') {
+                throw new BadRequestError('Payment has already been completed for this order');
+            }
+            
+            // If order exists but payment failed/expired, we can continue with new payment
+            // This allows retry scenarios
+
             // Calculate total amount with explicit typing to fix TypeScript error
             const totalAmount =
                 shoppingList.estimatedTotal ||
@@ -185,21 +255,86 @@ export default class AlatPayController {
                     0,
                 );
 
+            // Calculate fees using system settings
+            const serviceFee = await SystemSettingsService.calculateServiceFee(totalAmount);
+            const deliveryFee = await SystemSettingsService.getDeliveryFee();
+            const grandTotal = totalAmount + serviceFee + deliveryFee;
+
+            // Update shopping list status to pending only if it's currently draft
+            if (shoppingList.status === 'draft') {
+                await ShoppingListService.updateListStatus(shoppingListId, req.user.id, 'pending');
+            }
+
             // Generate virtual account
             const response = await AlatPayService.generateVirtualAccount({
-                amount: totalAmount,
+                amount: grandTotal, // Use grand total including fees
                 orderId: shoppingListId,
                 description: `Payment for shopping list: ${shoppingList.name}`,
                 user: req.user,
                 currency: currency || 'NGN',
                 idempotencyKey: req.body.idempotencyKey,
                 referenceType: 'shopping_list',
+                metadata: {
+                    deliveryAddress,
+                    customerNotes,
+                    shoppingListId,
+                    customerId: req.user.id,
+                    serviceFee,
+                    deliveryFee,
+                    subtotal: totalAmount
+                }
             });
+
+            let order: any;
+            
+            if (existingOrder && existingOrder.paymentStatus !== 'completed') {
+                // Update existing order with new payment details (retry scenario)
+                order = await existingOrder.update({
+                    totalAmount: grandTotal,
+                    paymentStatus: 'pending',
+                    paymentId: response.data.data.transactionId,
+                    serviceFee: serviceFee,
+                    deliveryFee: deliveryFee,
+                    deliveryAddress: deliveryAddress,
+                    customerNotes: customerNotes,
+                    updatedAt: new Date()
+                });
+                
+                logger.info(`Order ${order.id} updated for retry payment on shopping list ${shoppingListId}`);
+            } else {
+                // Create new order with pending payment status
+                order = await OrderService.createOrder({
+                    customerId: req.user.id,
+                    shoppingListId: shoppingListId,
+                    totalAmount: grandTotal,
+                    status: 'pending', // Order pending payment
+                    paymentStatus: 'pending', // Payment not yet completed
+                    paymentId: response.data.data.transactionId,
+                    serviceFee: serviceFee,
+                    deliveryFee: deliveryFee,
+                    deliveryAddress: deliveryAddress,
+                    customerNotes: customerNotes
+                });
+                
+                logger.info(`Order ${order.id} created with pending payment for shopping list ${shoppingListId}`);
+            }
 
             res.status(200).json({
                 status: 'success',
-                message: 'Payment link generated successfully',
-                data: response.data,
+                message: 'Payment link generated and order created successfully',
+                data: {
+                    ...response.data.data, // Use the nested data structure
+                    transactionId: response.data.data.transactionId, // Ensure transactionId is included
+                    orderId: order.id,
+                    orderStatus: order.status,
+                    paymentStatus: order.paymentStatus,
+                    amount: grandTotal, // Include the total amount
+                    createdAt: response.data.data.createdAt, // Include creation time
+                    // Add bank details for frontend display
+                    bankName: 'Wema Bank',
+                    accountName: 'Busy2Shop Limited',
+                    bankCode: response.data.data.virtualBankCode || '035'
+                },
             });
         } catch (error) {
             logger.error('Error generating payment link:', error);

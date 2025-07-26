@@ -9,6 +9,7 @@ import { TransactionStatus } from '../models/transaction.model';
 import { connection } from './connection';
 import ShoppingListService from '../services/shoppingList.service';
 import OrderService from '../services/order.service';
+import AgentService from '../services/agent.service';
 
 // Define job data interface
 interface PaymentWebhookJobData {
@@ -57,7 +58,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
             // Update transaction status
             const transaction = await TransactionService.updateTransactionStatus(transactionId, mappedStatus);
 
-            // If payment is successful and it's for a shopping list, update the shopping list status and create order
+            // If payment is successful and it's for a shopping list, update the shopping list and order
             if (mappedStatus === TransactionStatus.COMPLETED && transaction.type === 'shopping_list') {
                 try {
                     // Update shopping list status to 'accepted'
@@ -69,32 +70,115 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                     
                     logger.info(`Shopping list ${transaction.referenceId} status updated to accepted`);
                     
-                    // Get payment details from session or database to get delivery address
-                    // For now, create order with basic details - delivery address should be updated via API
-                    const order = await OrderService.createOrder({
-                        customerId: transaction.userId,
-                        shoppingListId: transaction.referenceId,
-                        totalAmount: transaction.amount,
-                        status: 'pending',
-                        paymentStatus: 'completed',
-                        paymentId: transaction.id,
-                        paymentProcessedAt: new Date(),
-                        serviceFee: Math.round(transaction.amount * 0.05), // 5% service fee
-                        deliveryFee: 500, // Default delivery fee in Naira
-                        deliveryAddress: {
-                            latitude: 6.5244, // Default Lagos coordinates
-                            longitude: 3.3792,
-                            address: 'Customer delivery address',
+                    // Find the existing order for this shopping list
+                    const existingOrder = await OrderService.findOrderByShoppingListId(
+                        transaction.referenceId,
+                        transaction.userId
+                    );
+
+                    if (existingOrder) {
+                        // Update existing order payment status
+                        await existingOrder.update({
+                            paymentStatus: 'completed',
+                            paymentProcessedAt: new Date(),
+                        });
+
+                        logger.info(`Order ${existingOrder.id} payment status updated to completed`);
+
+                        // Now assign an agent to the order
+                        try {
+                            // Get the shopping list with market information
+                            const shoppingList = await ShoppingListService.getShoppingList(transaction.referenceId);
+                            
+                            // Find available agents for the order
+                            const availableAgents = await AgentService.getAvailableAgentsForOrder(
+                                shoppingList.id
+                            );
+
+                            let assignedAgent = availableAgents[0];
+                            
+                            // If no agents at market, find the nearest available agent
+                            if (!assignedAgent && shoppingList.market?.location) {
+                                const nearestAgent = await AgentService.findNearestAgent(
+                                    shoppingList.market.location.latitude,
+                                    shoppingList.market.location.longitude
+                                );
+                                if (nearestAgent) {
+                                    assignedAgent = nearestAgent;
+                                }
+                            }
+
+                            if (assignedAgent) {
+                                // Update order with agent and change status to accepted
+                                await existingOrder.update({
+                                    agentId: assignedAgent.id,
+                                    status: 'accepted',
+                                    acceptedAt: new Date()
+                                });
+
+                                // Update agent status to busy
+                                await AgentService.setAgentBusy(assignedAgent.id, existingOrder.id);
+
+                                // Update shopping list with agent
+                                await shoppingList.update({
+                                    agentId: assignedAgent.id,
+                                    status: 'processing'
+                                });
+
+                                logger.info(`Agent ${assignedAgent.id} assigned to order ${existingOrder.id}`);
+                            } else {
+                                logger.warn(`No available agents found for order ${existingOrder.id}`);
+                            }
+                        } catch (agentError) {
+                            logger.error('Error assigning agent to order:', agentError);
+                            // Don't fail the payment processing due to agent assignment issues
+                        }
+                    } else {
+                        // This is a fallback - order should already exist from payment generation
+                        logger.warn(`No existing order found for shopping list ${transaction.referenceId}, creating new order`);
+                        
+                        // Get delivery address from transaction metadata
+                        const deliveryAddress = transaction.metadata?.deliveryAddress || {
+                            latitude: 0,
+                            longitude: 0,
+                            address: 'Address pending customer confirmation',
                             city: 'Lagos',
                             state: 'Lagos',
                             country: 'Nigeria',
-                            additionalDirections: 'Address to be confirmed by customer'
-                        }
-                    });
-                    
-                    logger.info(`Order ${order.id} created for shopping list ${transaction.referenceId}`);
+                            additionalDirections: 'Customer must provide delivery address'
+                        };
+
+                        // Ensure required fields are populated
+                        const finalDeliveryAddress = {
+                            latitude: deliveryAddress.latitude,
+                            longitude: deliveryAddress.longitude,
+                            address: deliveryAddress.address,
+                            city: deliveryAddress.city || 'Lagos',
+                            state: deliveryAddress.state || 'Lagos',
+                            country: deliveryAddress.country || 'Nigeria',
+                            additionalDirections: deliveryAddress.additionalDirections
+                        };
+
+                        const customerNotes = transaction.metadata?.customerNotes || '';
+
+                        const order = await OrderService.createOrder({
+                            customerId: transaction.userId,
+                            shoppingListId: transaction.referenceId,
+                            totalAmount: transaction.amount,
+                            status: 'pending',
+                            paymentStatus: 'completed',
+                            paymentId: transaction.id,
+                            paymentProcessedAt: new Date(),
+                            serviceFee: transaction.metadata?.serviceFee || Math.round(transaction.amount * 0.05),
+                            deliveryFee: transaction.metadata?.deliveryFee || 500,
+                            deliveryAddress: finalDeliveryAddress,
+                            customerNotes: customerNotes
+                        });
+                        
+                        logger.info(`Fallback: Order ${order.id} created for shopping list ${transaction.referenceId}`);
+                    }
                 } catch (error) {
-                    logger.error('Error updating shopping list status or creating order:', error);
+                    logger.error('Error processing payment completion:', error);
                     // Don't throw here to avoid retrying the entire webhook
                 }
             }

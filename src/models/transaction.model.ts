@@ -100,6 +100,21 @@ export default class Transaction extends Model<Transaction | ITransaction> {
         refundedAt?: Date;
         refundAmount?: number;
         refundReason?: string;
+        deliveryAddress?: {
+            address: string;
+            latitude: number;
+            longitude: number;
+            city?: string;
+            state?: string;
+            country?: string;
+            additionalDirections?: string;
+        };
+        customerNotes?: string;
+        shoppingListId?: string;
+        customerId?: string;
+        serviceFee?: number;
+        deliveryFee?: number;
+        subtotal?: number;
     };
 
     @IsUUID(4)
@@ -174,6 +189,21 @@ export interface ITransaction {
         refundedAt?: Date;
         refundAmount?: number;
         refundReason?: string;
+        deliveryAddress?: {
+            address: string;
+            latitude: number;
+            longitude: number;
+            city?: string;
+            state?: string;
+            country?: string;
+            additionalDirections?: string;
+        };
+        customerNotes?: string;
+        shoppingListId?: string;
+        customerId?: string;
+        serviceFee?: number;
+        deliveryFee?: number;
+        subtotal?: number;
     };
     userId: string;
     orderId?: string;

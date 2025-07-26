@@ -3,6 +3,8 @@ import { Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import ShoppingListService from '../services/shoppingList.service';
 import DiscountCampaignService from '../services/discountCampaign.service';
+import SystemSettingsService from '../services/systemSettings.service';
+import { SYSTEM_SETTING_KEYS } from '../models/systemSettings.model';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 
 export default class ShoppingListController {
@@ -614,12 +616,14 @@ export default class ShoppingListController {
                 productIds: listData.items.map((item: any) => item.productId).filter(Boolean),
             });
 
-            // Security and business logic filters
-            const MAX_DISCOUNT_PERCENTAGE = 30; // Maximum 30% discount for enhanced security
-            const MAX_DISCOUNT_AMOUNT = subtotal * 0.3; // Maximum 30% of order value
+            // Get system settings for validation and security filters
+            const [MAX_DISCOUNT_PERCENTAGE, MIN_ORDER_FOR_DISCOUNT, MAX_SINGLE_DISCOUNT_AMOUNT] = await Promise.all([
+                SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MAXIMUM_DISCOUNT_PERCENTAGE),
+                SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MINIMUM_ORDER_FOR_DISCOUNT),
+                SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MAXIMUM_SINGLE_DISCOUNT_AMOUNT)
+            ]);
+            const MAX_DISCOUNT_AMOUNT = subtotal * (MAX_DISCOUNT_PERCENTAGE / 100);
             const MAX_GENERAL_DISCOUNTS = 3; // Maximum 3 general discounts to show
-            const MIN_ORDER_FOR_DISCOUNT = 100; // Minimum order amount to apply any discount
-            const MAX_SINGLE_DISCOUNT_AMOUNT = 2000; // Maximum ₦2000 for any single discount
 
             let secureDiscounts: any[] = [];
             
@@ -740,9 +744,9 @@ export default class ShoppingListController {
             // Get the updated shopping list with items if they were saved
             const finalShoppingList = await ShoppingListService.getShoppingList(shoppingList.id);
             
-            // Calculate service fee and delivery fee
-            const serviceFee = Math.round(subtotal * 0.05 * 100) / 100; // 5% service fee
-            const deliveryFee = 5.0; // Fixed delivery fee
+            // Calculate service fee and delivery fee using system settings
+            const serviceFee = await SystemSettingsService.calculateServiceFee(subtotal);
+            const deliveryFee = await SystemSettingsService.getDeliveryFee();
             
             // Calculate auto-applied discount amounts (already applied to item prices)
             let autoAppliedDiscountAmount = 0;
