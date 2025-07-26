@@ -11,34 +11,85 @@ import { paymentWebhookQueue } from '../../queues/payment.queue';
 import ShoppingListItem from '../../models/shoppingListItem.model';
 import TransactionService from '../../services/transaction.service';
 
+// Interface for calculated fees
+interface CalculatedFees {
+    subtotal: number;
+    serviceFee: number;
+    deliveryFee: number;
+    discountAmount: number;
+    total: number;
+}
+
+// Helper function to calculate fees with proper type handling
+async function calculateOrderFees(
+    subtotal: number | string, 
+    discountAmount: number = 0
+): Promise<CalculatedFees> {
+    // Ensure subtotal is a number
+    const numericSubtotal = typeof subtotal === 'string' ? parseFloat(subtotal) : subtotal;
+    
+    if (isNaN(numericSubtotal) || numericSubtotal < 0) {
+        throw new BadRequestError('Invalid subtotal amount');
+    }
+    
+    // Ensure discount is a number
+    const numericDiscount = typeof discountAmount === 'string' ? parseFloat(discountAmount) : (discountAmount || 0);
+    const finalDiscount = isNaN(numericDiscount) ? 0 : Math.max(0, numericDiscount);
+    
+    // Get fees from system settings
+    const serviceFee = await SystemSettingsService.calculateServiceFee(numericSubtotal);
+    const deliveryFee = await SystemSettingsService.getDeliveryFee();
+    
+    // Calculate total ensuring all values are numbers
+    const total = Math.max(0, numericSubtotal + serviceFee + deliveryFee - finalDiscount);
+    
+    return {
+        subtotal: numericSubtotal,
+        serviceFee: Math.round(serviceFee * 100) / 100, // Round to 2 decimal places
+        deliveryFee: Math.round(deliveryFee * 100) / 100,
+        discountAmount: Math.round(finalDiscount * 100) / 100,
+        total: Math.round(total * 100) / 100
+    };
+}
+
 export default class AlatPayController {
     /**
-     * Generate a virtual account for payment
+     * Generate a virtual account for payment with automatic fee calculation
      */
     static async generateVirtualAccount(req: AuthenticatedRequest, res: Response) {
-        const { amount, orderId, description, currency, referenceType } = req.body;
+        const { subtotal, orderId, description, currency, referenceType, discountAmount } = req.body;
 
-        if (!amount || !orderId) {
-            throw new BadRequestError('Amount and orderId are required');
+        if (!subtotal || !orderId) {
+            throw new BadRequestError('Subtotal and orderId are required');
         }
 
+        // Calculate fees using system settings
+        const calculatedFees = await calculateOrderFees(subtotal, discountAmount);
+        
         // You might want to validate if the order exists and belongs to the user
         const user = req.user;
 
         const response = await AlatPayService.generateVirtualAccount({
-            amount,
+            amount: calculatedFees.total,
             orderId,
             description: description || `Payment for ${referenceType === 'shopping_list' ? 'shopping list' : 'order'} ${orderId}`,
             user,
             currency: currency || 'NGN',
             idempotencyKey: req.body.idempotencyKey,
             referenceType: referenceType || 'order',
+            metadata: {
+                ...calculatedFees,
+                originalSubtotal: subtotal
+            }
         });
 
         res.status(200).json({
             status: 'success',
             message: 'Virtual account generated successfully',
-            data: response.data,
+            data: {
+                ...response.data,
+                fees: calculatedFees
+            },
         });
     }
 
@@ -246,8 +297,8 @@ export default class AlatPayController {
             // If order exists but payment failed/expired, we can continue with new payment
             // This allows retry scenarios
 
-            // Calculate total amount with explicit typing to fix TypeScript error
-            const totalAmount =
+            // Calculate subtotal with explicit typing to fix TypeScript error
+            const subtotal =
                 shoppingList.estimatedTotal ||
                 shoppingList.items.reduce(
                     (acc: number, item: ShoppingListItem) =>
@@ -255,10 +306,8 @@ export default class AlatPayController {
                     0,
                 );
 
-            // Calculate fees using system settings
-            const serviceFee = await SystemSettingsService.calculateServiceFee(totalAmount);
-            const deliveryFee = await SystemSettingsService.getDeliveryFee();
-            const grandTotal = totalAmount + serviceFee + deliveryFee;
+            // Calculate fees using the reusable function
+            const calculatedFees = await calculateOrderFees(subtotal, discountAmount || 0);
 
             // Update shopping list status to pending only if it's currently draft
             if (shoppingList.status === 'draft') {
@@ -267,7 +316,7 @@ export default class AlatPayController {
 
             // Generate virtual account
             const response = await AlatPayService.generateVirtualAccount({
-                amount: grandTotal, // Use grand total including fees
+                amount: calculatedFees.total, // Use calculated total including fees
                 orderId: shoppingListId,
                 description: `Payment for shopping list: ${shoppingList.name}`,
                 user: req.user,
@@ -279,9 +328,7 @@ export default class AlatPayController {
                     customerNotes,
                     shoppingListId,
                     customerId: req.user.id,
-                    serviceFee,
-                    deliveryFee,
-                    subtotal: totalAmount
+                    ...calculatedFees
                 }
             });
 
@@ -290,11 +337,11 @@ export default class AlatPayController {
             if (existingOrder && existingOrder.paymentStatus !== 'completed') {
                 // Update existing order with new payment details (retry scenario)
                 order = await existingOrder.update({
-                    totalAmount: grandTotal,
+                    totalAmount: calculatedFees.total,
                     paymentStatus: 'pending',
                     paymentId: response.data.data.transactionId,
-                    serviceFee: serviceFee,
-                    deliveryFee: deliveryFee,
+                    serviceFee: calculatedFees.serviceFee,
+                    deliveryFee: calculatedFees.deliveryFee,
                     deliveryAddress: deliveryAddress,
                     customerNotes: customerNotes,
                     updatedAt: new Date()
@@ -306,12 +353,12 @@ export default class AlatPayController {
                 order = await OrderService.createOrder({
                     customerId: req.user.id,
                     shoppingListId: shoppingListId,
-                    totalAmount: grandTotal,
+                    totalAmount: calculatedFees.total,
                     status: 'pending', // Order pending payment
                     paymentStatus: 'pending', // Payment not yet completed
                     paymentId: response.data.data.transactionId,
-                    serviceFee: serviceFee,
-                    deliveryFee: deliveryFee,
+                    serviceFee: calculatedFees.serviceFee,
+                    deliveryFee: calculatedFees.deliveryFee,
                     deliveryAddress: deliveryAddress,
                     customerNotes: customerNotes
                 });
@@ -323,17 +370,19 @@ export default class AlatPayController {
                 status: 'success',
                 message: 'Payment link generated and order created successfully',
                 data: {
-                    ...response.data.data, // Use the nested data structure
+                    ...response.data.data, // AlatPay response has structure: { data: { ... } }
                     transactionId: response.data.data.transactionId, // Ensure transactionId is included
                     orderId: order.id,
                     orderStatus: order.status,
                     paymentStatus: order.paymentStatus,
-                    amount: grandTotal, // Include the total amount
+                    amount: calculatedFees.total, // Include the total amount as number
                     createdAt: response.data.data.createdAt, // Include creation time
                     // Add bank details for frontend display
                     bankName: 'Wema Bank',
                     accountName: 'Busy2Shop Limited',
-                    bankCode: response.data.data.virtualBankCode || '035'
+                    bankCode: response.data.data.virtualBankCode || '035',
+                    // Include fee breakdown
+                    fees: calculatedFees
                 },
             });
         } catch (error) {

@@ -51,7 +51,7 @@ export interface ISystemSettings {
     isActive?: boolean;
 }
 
-@Table({ tableName: 'system_settings' })
+@Table
 export default class SystemSettings extends Model<SystemSettings | ISystemSettings> {
     @PrimaryKey
     @Default(DataType.UUIDV4)

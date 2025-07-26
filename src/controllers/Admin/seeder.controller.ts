@@ -15,6 +15,7 @@ import User from '../../models/user.model';
 import MealSeeder from '../../seeders/mealSeeder';
 import DiscountCampaignService from '../../services/discountCampaign.service';
 import { IDiscountCampaign, DiscountType, DiscountTargetType, CampaignStatus } from '../../models/discountCampaign.model';
+import SystemSettingsService from '../../services/systemSettings.service';
 import { Op } from 'sequelize';
 
 interface SeedData {
@@ -1242,6 +1243,129 @@ class SeederController {
 
         } catch (error) {
             console.error('Error seeding discount campaigns:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Seed system settings with default values
+     */
+    async seedSystemSettings(req: Request, res: Response) {
+        try {
+            logger.info('Starting system settings seeding process...');
+
+            // Initialize default system settings
+            await SystemSettingsService.initializeDefaultSettings();
+
+            // Get all settings to verify they were created
+            const allSettings = await SystemSettingsService.getAllSettings();
+            
+            // Get public settings to show what's available to frontend
+            const publicSettings = await SystemSettingsService.getPublicSettings();
+
+            res.status(200).json({
+                status: 'success',
+                message: 'System settings seeded successfully',
+                data: {
+                    totalSettings: allSettings.length,
+                    publicSettingsCount: Object.keys(publicSettings).length,
+                    settings: allSettings.map(setting => ({
+                        key: setting.key,
+                        type: setting.value.type,
+                        category: setting.value.category,
+                        description: setting.value.description,
+                        isPublic: setting.value.isPublic,
+                        value: setting.value.isPublic ? setting.value.value : '[HIDDEN]',
+                        isActive: setting.isActive
+                    })),
+                    publicSettings
+                }
+            });
+
+        } catch (error) {
+            logger.error('Error seeding system settings:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Clear all system settings
+     */
+    async clearSystemSettings(req: Request, res: Response) {
+        try {
+            logger.info('Starting system settings clearing process...');
+
+            // Get all settings before clearing
+            const allSettings = await SystemSettingsService.getAllSettings();
+            const settingsCount = allSettings.length;
+
+            // Clear all settings by deactivating them
+            await Database.transaction(async (transaction: Transaction) => {
+                // Deactivate all settings instead of deleting them
+                await Database.models.SystemSettings.update(
+                    { isActive: false },
+                    { where: {}, transaction }
+                );
+            });
+
+            // Clear the cache
+            SystemSettingsService.clearCache();
+
+            res.status(200).json({
+                status: 'success',
+                message: 'System settings cleared successfully',
+                data: {
+                    clearedCount: settingsCount,
+                    action: 'deactivated'
+                }
+            });
+
+        } catch (error) {
+            logger.error('Error clearing system settings:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get system settings status
+     */
+    async getSystemSettingsStatus(req: Request, res: Response) {
+        try {
+            const allSettings = await SystemSettingsService.getAllSettings();
+            const publicSettings = await SystemSettingsService.getPublicSettings();
+            const activeSettings = allSettings.filter(setting => setting.isActive);
+            
+            // Group settings by category
+            const settingsByCategory = activeSettings.reduce((acc, setting) => {
+                const category = setting.value.category || 'general';
+                if (!acc[category]) {
+                    acc[category] = [];
+                }
+                acc[category].push(setting);
+                return acc;
+            }, {} as Record<string, any[]>);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'System settings status retrieved successfully',
+                data: {
+                    summary: {
+                        totalSettings: allSettings.length,
+                        activeSettings: activeSettings.length,
+                        inactiveSettings: allSettings.length - activeSettings.length,
+                        publicSettings: Object.keys(publicSettings).length,
+                        categories: Object.keys(settingsByCategory).length
+                    },
+                    settingsByCategory,
+                    publicSettings,
+                    lastUpdated: activeSettings.length > 0 ? 
+                        Math.max(...activeSettings.map(s => new Date(s.updatedAt).getTime())) : 
+                        null
+                }
+            });
+
+        } catch (error) {
+            logger.error('Error getting system settings status:', error);
             throw error;
         }
     }

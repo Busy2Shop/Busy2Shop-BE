@@ -66,15 +66,23 @@ export default class AlatPayService {
                         const existingPaymentData = existingTransaction.metadata.providerResponse;
                         
                         if (existingPaymentData) {
-                            // Ensure the data has the correct structure
+                            // Ensure the data has the correct structure with proper number handling
                             const formattedData = {
                                 ...existingPaymentData,
-                                // Make sure required fields are present
+                                // Make sure required fields are present and amount is a number
                                 transactionId: existingPaymentData.transactionId || existingTransaction.metadata.providerTransactionId,
-                                amount: existingPaymentData.amount || amount,
+                                amount: parseFloat(existingTransaction.amount.toString()), // Use transaction amount as number
                                 currency: existingPaymentData.currency || currency,
                                 orderId: existingPaymentData.orderId || orderId,
                                 status: existingPaymentData.status || 'pending',
+                                // Include fee breakdown if available
+                                fees: (existingTransaction.metadata as any).fees || {
+                                    subtotal: (existingTransaction.metadata as any).subtotal || 0,
+                                    serviceFee: (existingTransaction.metadata as any).serviceFee || 0,
+                                    deliveryFee: (existingTransaction.metadata as any).deliveryFee || 0,
+                                    discountAmount: (existingTransaction.metadata as any).discountAmount || 0,
+                                    total: parseFloat(existingTransaction.amount.toString())
+                                }
                             };
                             return { data: formattedData };
                         }
@@ -102,10 +110,16 @@ export default class AlatPayService {
             const clientReference =
                 idempotencyKey || `${orderId}-${HelperUtils.generateRandomString(8)}`;
 
+            // Ensure amount is a number
+            const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+            if (isNaN(numericAmount) || numericAmount <= 0) {
+                throw new BadRequestError('Invalid payment amount');
+            }
+        
             // Call AlatPay API to generate a virtual account
             const client = AlatPayClient.getInstance();
             const response = await client.generateVirtualAccount({
-                amount: amount, 
+                amount: 100, // numericAmount,
                 orderId: clientReference,
                 description,
                 currency,
@@ -118,14 +132,12 @@ export default class AlatPayService {
                 },
             });
 
-            console.log({ALATPAYRESPONSE: response});
-
             // referenceType is already set above from params
             const isOrder = referenceType === 'order';
 
             // Create transaction record
             await TransactionService.createTransaction({
-                amount,
+                amount: numericAmount,
                 currency,
                 type: isOrder ? TransactionType.ORDER : TransactionType.SHOPPING_LIST,
                 paymentMethod: PaymentMethod.ALATPAY,
@@ -138,9 +150,9 @@ export default class AlatPayService {
                     providerTransactionId: response.data.transactionId,
                     providerResponse: {
                         ...response.data,
-                        // Ensure all required fields are stored
+                        // Ensure all required fields are stored as proper types
                         transactionId: response.data.transactionId,
-                        amount: amount,
+                        amount: numericAmount,
                         currency: currency,
                         orderId: orderId,
                         status: response.data.status || 'pending',
@@ -148,12 +160,15 @@ export default class AlatPayService {
                     attempts: 0,
                     lastAttemptAt: new Date(),
                     // Include delivery address and customer notes for order creation
-                    ...metadata,
+                    ...(metadata || {}),
                 },
                 ...(isOrder ? { orderId } : { shoppingListId: orderId }),
             });
 
-            return { data: response };
+            // Return response with proper structure matching AlatPayVirtualAccountResponse
+            return { 
+                data: response
+            };
         // } catch (error) {
         //     logger.error('Error generating virtual account:', error);
         //     throw error;

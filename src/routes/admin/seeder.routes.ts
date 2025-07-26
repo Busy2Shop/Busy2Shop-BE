@@ -22,6 +22,10 @@ router.get('/meals', SeederController.seedMeals);
 
 router.delete('/meals', SeederController.clearMeals);
 
+// System Settings seeding routes
+router.get('/system-settings', SeederController.seedSystemSettings);
+router.delete('/system-settings', SeederController.clearSystemSettings);
+router.get('/system-settings/status', SeederController.getSystemSettingsStatus);
 
 // Seeding route for development/testing
 router.get('/seed-campaigns', SeederController.seedDiscountCampaigns);
