@@ -83,6 +83,12 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
 
     @BelongsTo(() => Product)
     product: Product;
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: true, // Can be null if no product image is available
+    })
+    productImage: string | null;
 }
 
 export interface IShoppingListItem {
@@ -96,4 +102,5 @@ export interface IShoppingListItem {
     actualPrice?: number | null;
     shoppingListId: string;
     productId?: string | null;
+    productImage?: string | null;
 }

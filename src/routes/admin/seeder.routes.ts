@@ -30,5 +30,4 @@ router.get('/system-settings/status', SeederController.getSystemSettingsStatus);
 // Seeding route for development/testing
 router.get('/seed-campaigns', SeederController.seedDiscountCampaigns);
 
-
 export default router;

@@ -23,6 +23,13 @@ export default class Order extends Model<Order | IOrder> {
     @Column({
         type: DataType.STRING,
         allowNull: false,
+        unique: true,
+    })
+    orderNumber: string;
+
+    @Column({
+        type: DataType.STRING,
+        allowNull: false,
         defaultValue: 'pending',
         validate: {
             isIn: [
@@ -183,10 +190,12 @@ export default class Order extends Model<Order | IOrder> {
         allowNull: true,
     })
     paymentProcessedAt: Date;
+
 }
 
 export interface IOrder {
     id?: string;
+    orderNumber?: string; // Optional for creation, will be generated if not provided
     status?:
         | 'pending'
         | 'accepted'

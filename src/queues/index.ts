@@ -6,12 +6,18 @@ import {
     paymentWebhookQueue,
     paymentExpiryCheckQueue,
 } from './payment.queue';
+import {
+    agentAssignmentQueue,
+} from './agent.queue';
 
 // Export all queues for use throughout the application
 export const queues = {
     payment: {
         paymentWebhookQueue,
         paymentExpiryCheckQueue,
+    },
+    agent: {
+        agentAssignmentQueue,
     },
 };
 
@@ -23,6 +29,9 @@ export const initializeRecurringJobs = async (app: Express) => {
             // Payment queues
             paymentWebhookQueue,
             paymentExpiryCheckQueue,
+
+            // Agent queues
+            agentAssignmentQueue,
 
             // Add other queues here as needed
         });
@@ -48,6 +57,9 @@ export const gracefulShutdown = async () => {
             paymentWebhookQueue.close(),
             paymentExpiryCheckQueue.close(),
 
+            // Agent queues
+            agentAssignmentQueue.close(),
+
             // Add other queues here
         ];
 
@@ -59,7 +71,7 @@ export const gracefulShutdown = async () => {
     }
 };
 
-export { paymentWebhookQueue, paymentExpiryCheckQueue };
+export { paymentWebhookQueue, paymentExpiryCheckQueue, agentAssignmentQueue };
 
 export default {
     queues,

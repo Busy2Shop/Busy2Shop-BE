@@ -1369,6 +1369,7 @@ class SeederController {
             throw error;
         }
     }
+
 }
 
 export default new SeederController();

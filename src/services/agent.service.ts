@@ -9,6 +9,7 @@ import { BadRequestError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import { Database } from '../models';
 import AgentLocation, { IAgentLocation } from '../models/agentLocation.model';
+import { GoogleMapsService } from '../utils/googleMaps';
 
 export interface IViewAgentsQuery {
     page?: number;

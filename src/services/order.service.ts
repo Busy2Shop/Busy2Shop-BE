@@ -1,14 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { FindAndCountOptions, Includeable, Op, Transaction } from 'sequelize';
+import { FindAndCountOptions, Includeable, Op, Transaction, WhereOptions } from 'sequelize';
 import Order, { IOrder } from '../models/order.model';
 import ShoppingList from '../models/shoppingList.model';
 import ShoppingListItem from '../models/shoppingListItem.model';
 import User from '../models/user.model';
+import UserSettings from '../models/userSettings.model';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import { Database } from '../models';
 import AgentService from './agent.service';
 import Market from '../models/market.model';
+import { logger } from '../utils/logger';
+import OrderNumberGenerator from '../utils/orderNumberGenerator';
+import OrderTrailService from './orderTrail.service';
 
 export interface IViewOrdersQuery {
     page?: number;
@@ -22,6 +26,50 @@ export default class OrderService {
     /**
      * Helper Functions for the Order Service
      */
+
+    /**
+     * Determines if an ID is an orderNumber or UUID
+     * @param id - The ID to check
+     * @returns true if it's an orderNumber, false if it's a UUID
+     */
+    private static isOrderNumber(id: string): boolean {
+        // Order numbers start with B2S- and are shorter than UUIDs
+        // UUIDs are 36 characters long with specific format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const orderNumberPattern = /^B2S-[A-Z0-9]{5,}$/;
+        
+        // If it matches the order number pattern, it's an order number
+        if (orderNumberPattern.test(id)) {
+            return true;
+        }
+        
+        // If it matches UUID pattern, it's a UUID
+        if (uuidPattern.test(id)) {
+            return false;
+        }
+        
+        // Fallback: if it starts with B2S-, treat as order number
+        return id.startsWith('B2S-');
+    }
+
+    /**
+     * Get order by ID (handles both UUID and orderNumber)
+     * @param id - Either UUID or orderNumber
+     * @param includeAgent - Whether to include agent information
+     * @param includeCustomer - Whether to include customer information
+     * @returns Order with requested includes
+     */
+    private static async getOrderById(
+        id: string,
+        includeAgent: boolean = true,
+        includeCustomer: boolean = true,
+    ): Promise<Order> {
+        if (this.isOrderNumber(id)) {
+            return await this.getOrderByNumber(id, includeAgent, includeCustomer);
+        } else {
+            return await this.getOrder(id, includeAgent, includeCustomer);
+        }
+    }
 
     /**
      * Applies common order filtering criteria to a where clause
@@ -164,7 +212,7 @@ export default class OrderService {
     }
 
     /**
-     * Create a new order with the automatic agent assignment
+     * Create a new order without automatic agent assignment (agents are assigned after payment completion)
      */
     static async createOrder(orderData: IOrder): Promise<Order> {
         return await Database.transaction(async (transaction: Transaction) => {
@@ -189,6 +237,73 @@ export default class OrderService {
                 throw new BadRequestError('Can only create orders from draft, pending, or accepted shopping lists');
             }
 
+            // Generate a human-readable order number if not provided
+            const orderNumber = orderData.orderNumber || await OrderNumberGenerator.generateOrderNumber();
+            
+            // Create the order without agent assignment (will be assigned after payment completion)
+            const newOrder = await Order.create(
+                {
+                    ...orderData,
+                    orderNumber,
+                    status: 'pending',
+                    agentId: undefined, // No agent assigned until payment is completed
+                },
+                { transaction },
+            );
+
+            // Update the shopping list status to pending (not processing until payment and agent assignment)
+            await shoppingList.update(
+                {
+                    status: 'pending',
+                    agentId: undefined, // No agent assigned until payment is completed
+                },
+                { transaction },
+            );
+
+            // Log order creation in trail
+            await OrderTrailService.logOrderCreation(
+                newOrder.id,
+                newOrder.customerId,
+                newOrder,
+            );
+
+            logger.info('Order created successfully', {
+                orderId: newOrder.id,
+                orderNumber: newOrder.orderNumber,
+                customerId: newOrder.customerId,
+                totalAmount: newOrder.totalAmount,
+            });
+
+            return newOrder;
+        });
+    }
+
+    /**
+     * Assign an agent to an order after payment completion using location-based logic
+     */
+    static async assignAgentToOrder(orderId: string, shoppingListId: string): Promise<Order> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            // Get the order
+            const order = await Order.findByPk(orderId, { transaction });
+            if (!order) {
+                throw new NotFoundError('Order not found');
+            }
+
+            // Get the shopping list with market information
+            const shoppingList = await ShoppingList.findByPk(shoppingListId, {
+                include: [
+                    {
+                        model: Market,
+                        as: 'market',
+                    },
+                ],
+                transaction,
+            });
+
+            if (!shoppingList) {
+                throw new NotFoundError('Shopping list not found');
+            }
+
             // Get market location for agent assignment
             const marketLocation = shoppingList.market?.location || { latitude: 0, longitude: 0 };
 
@@ -199,7 +314,7 @@ export default class OrderService {
 
             // If no agents at market, find the nearest available agent
             let assignedAgent: User | undefined = availableAgents[0];
-            if (!assignedAgent) {
+            if (!assignedAgent && marketLocation.latitude && marketLocation.longitude) {
                 const nearestAgent = await AgentService.findNearestAgent(
                     marketLocation.latitude,
                     marketLocation.longitude,
@@ -209,31 +324,58 @@ export default class OrderService {
                 }
             }
 
-            // Create the order
-            const newOrder = await Order.create(
-                {
-                    ...orderData,
-                    status: 'pending',
-                    agentId: assignedAgent?.id,
-                },
-                { transaction },
-            );
-
-            // Update the shopping list status
-            await shoppingList.update(
-                {
-                    status: 'processing',
-                    agentId: assignedAgent?.id,
-                },
-                { transaction },
-            );
-
-            // If an agent was found, update their status to busy
             if (assignedAgent) {
-                await AgentService.setAgentBusy(assignedAgent.id, newOrder.id, transaction);
+                // Update the order with agent assignment
+                await order.update(
+                    {
+                        agentId: assignedAgent.id,
+                        status: 'accepted',
+                        acceptedAt: new Date(),
+                    },
+                    { transaction },
+                );
+
+                // Update the shopping list status and agent
+                await shoppingList.update(
+                    {
+                        status: 'processing',
+                        agentId: assignedAgent.id,
+                    },
+                    { transaction },
+                );
+
+                // Set agent as busy
+                await AgentService.setAgentBusy(assignedAgent.id, order.id, transaction);
+
+                // Log agent assignment
+                await OrderTrailService.logAgentAssignment(
+                    orderId,
+                    assignedAgent.id,
+                );
+
+                // Log status change
+                await OrderTrailService.logStatusChange(
+                    orderId,
+                    assignedAgent.id,
+                    'pending',
+                    'accepted',
+                );
+
+                logger.info(`Agent ${assignedAgent.id} assigned to order ${orderId} for shopping list ${shoppingListId}`);
+            } else {
+                logger.warn(`No available agents found for order ${orderId} at market ${shoppingList.marketId}`);
+                // Keep order in pending status until an agent becomes available
+                
+                // Log system event
+                await OrderTrailService.logSystemAction(
+                    orderId,
+                    'AGENT_ASSIGNMENT_FAILED',
+                    'No available agents found for order assignment',
+                    { marketId: shoppingList.marketId }
+                );
             }
 
-            return newOrder;
+            return order;
         });
     }
 
@@ -396,6 +538,63 @@ export default class OrderService {
     }
 
     /**
+     * Get a single order by order number with appropriate includes
+     * @param orderNumber Order number (e.g., B2S-ABC123)
+     * @param includeAgent Whether to include agent information
+     * @param includeCustomer Whether to include customer information
+     * @returns Order with requested includes
+     */
+    static async getOrderByNumber(
+        orderNumber: string,
+        includeAgent: boolean = true,
+        includeCustomer: boolean = true,
+    ): Promise<Order> {
+        // Initialize includes array
+        const includes: Includeable[] = [
+            {
+                model: ShoppingList,
+                as: 'shoppingList',
+                include: [
+                    {
+                        model: ShoppingListItem,
+                        as: 'items',
+                    },
+                ],
+            },
+        ];
+
+        // Add the agent include if requested
+        if (includeAgent) {
+            includes.push({
+                model: User,
+                as: 'agent',
+                attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
+                required: false,
+            });
+        }
+
+        // Add customer include if requested
+        if (includeCustomer) {
+            includes.push({
+                model: User,
+                as: 'customer',
+                attributes: ['id', 'firstName', 'lastName', 'email', 'phone'],
+            });
+        }
+
+        const order = await Order.findOne({
+            where: { orderNumber },
+            include: includes,
+        });
+
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
+
+        return order;
+    }
+
+    /**
      * Update order status with proper validation and side effects
      */
     static async updateOrderStatus(
@@ -412,7 +611,7 @@ export default class OrderService {
             | 'cancelled',
     ): Promise<Order> {
         return await Database.transaction(async (transaction: Transaction) => {
-            const order = await this.getOrder(id);
+            const order = await this.getOrderById(id);
             const user = await User.findByPk(userId, { transaction });
 
             if (!user) {
@@ -480,8 +679,29 @@ export default class OrderService {
                     break;
             }
 
+            // Store previous status for logging
+            const previousStatus = order.status;
+            
             await order.update(updateData, { transaction });
-            return await this.getOrder(order.id);
+            
+            // Log status change
+            await OrderTrailService.logStatusChange(
+                order.id,
+                userId,
+                previousStatus,
+                status,
+            );
+
+            // Log completion if order is completed
+            if (status === 'completed') {
+                await OrderTrailService.logOrderCompletion(
+                    order.id,
+                    userId,
+                    { completedAt: updateData.completedAt || new Date() },
+                );
+            }
+
+            return await this.getOrderById(order.id);
         });
     }
 
@@ -494,7 +714,7 @@ export default class OrderService {
         notes: string,
         userType: 'agent' | 'customer',
     ): Promise<Order> {
-        const order = await this.getOrder(id);
+        const order = await this.getOrderById(id);
 
         // Validate user permissions
         if (userType === 'agent' && order.agentId !== userId) {
@@ -507,7 +727,16 @@ export default class OrderService {
         const updateData = userType === 'agent' ? { agentNotes: notes } : { customerNotes: notes };
 
         await order.update(updateData);
-        return await this.getOrder(id);
+        
+        // Log notes addition
+        await OrderTrailService.logNotesAdded(
+            order.id,
+            userId,
+            notes,
+            userType,
+        );
+        
+        return await this.getOrderById(id);
     }
 
     static async calculateTotals(shoppingListId: string): Promise<{
@@ -572,7 +801,7 @@ export default class OrderService {
 
         // Use a separate variable to hold the result
         await Database.transaction(async (transaction: Transaction) => {
-            const order = await this.getOrder(orderId);
+            const order = await this.getOrderById(orderId);
 
             // Verify the agent is assigned to this order
             if (order.agentId !== agentId) {
@@ -643,6 +872,13 @@ export default class OrderService {
                     },
                     { transaction },
                 );
+                
+                // Log order cancellation due to rejections
+                await OrderTrailService.logOrderCancellation(
+                    orderId,
+                    agentId, // Last rejecting agent
+                    'Maximum agent rejections reached',
+                );
 
                 throw new BadRequestError(
                     'Maximum number of agent rejections reached. Order has been cancelled.',
@@ -690,6 +926,13 @@ export default class OrderService {
                     },
                     { transaction },
                 );
+                
+                // Log order cancellation due to no available agents
+                await OrderTrailService.logOrderCancellation(
+                    orderId,
+                    agentId, // Last rejecting agent
+                    'No available agents found after rejection',
+                );
 
                 // Log details about the rejection
                 console.warn(
@@ -727,6 +970,20 @@ export default class OrderService {
             // Update the previous agent's status back to available
             await AgentService.updateAgentStatus(agentId, 'available');
 
+            // Log agent rejection
+            await OrderTrailService.logAgentRejection(
+                orderId,
+                agentId,
+                reason,
+            );
+            
+            // Log new agent assignment
+            await OrderTrailService.logAgentAssignment(
+                orderId,
+                newAgent.id,
+                agentId, // Previous agent
+            );
+
             // Log using console.info instead
             console.info(
                 `Order ${orderId} rejected by agent ${agentId}. Reason: ${reason}. Reassigned to agent ${newAgent.id}`,
@@ -763,7 +1020,7 @@ export default class OrderService {
      * @param paymentId The ID of the payment record
      */
     static async processOrderPayment(orderId: string, paymentId: string): Promise<void> {
-        const order = await this.getOrder(orderId);
+        const order = await this.getOrderById(orderId);
 
         if (!order) {
             throw new NotFoundError('Order not found');
@@ -776,6 +1033,17 @@ export default class OrderService {
             paymentStatus: 'completed',
             paymentProcessedAt: new Date(),
         });
+        
+        // Log payment processing
+        await OrderTrailService.logPaymentProcessed(
+            orderId,
+            {
+                paymentId,
+                paymentStatus: 'completed',
+                amount: order.totalAmount,
+                provider: 'alatpay', // or get from payment data
+            },
+        );
     }
 
     /**
@@ -811,5 +1079,125 @@ export default class OrderService {
         });
         
         return order;
+    }
+
+    /**
+     * Manually assign a specific agent to an order (admin function)
+     */
+    static async manuallyAssignOrderToAgent(orderId: string, agentId: string): Promise<Order> {
+        return Database.transaction(async (transaction: Transaction) => {
+            // Get the order
+            const order = await Order.findByPk(orderId, { transaction });
+
+            if (!order) {
+                throw new NotFoundError('Order not found');
+            }
+
+            if (order.status !== 'pending') {
+                throw new BadRequestError('Can only assign pending orders to agents');
+            }
+
+            // Verify the agent exists and is active
+            const agent = await User.findOne({
+                where: {
+                    id: agentId,
+                    'status.userType': 'agent',
+                    'status.activated': true,
+                    'status.emailVerified': true,
+                },
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                        where: {
+                            isBlocked: false,
+                            isDeactivated: false,
+                        },
+                    },
+                ],
+                transaction,
+            });
+
+            if (!agent) {
+                throw new NotFoundError('Agent not found or is inactive');
+            }
+
+            // Update the order
+            await order.update(
+                {
+                    agentId,
+                    status: 'accepted',
+                    acceptedAt: new Date(),
+                },
+                { transaction },
+            );
+
+            // Also update the shopping list
+            await ShoppingList.update(
+                {
+                    agentId,
+                    status: 'processing',
+                },
+                {
+                    where: { id: order.shoppingListId },
+                    transaction,
+                },
+            );
+
+            // Update agent status to busy
+            await AgentService.setAgentBusy(agentId, orderId, transaction);
+            
+            // Log manual agent assignment
+            await OrderTrailService.logAgentAssignment(
+                orderId,
+                agentId,
+                undefined, // No previous agent
+            );
+            
+            // Log status change
+            await OrderTrailService.logStatusChange(
+                orderId,
+                agentId,
+                'pending',
+                'accepted',
+            );
+
+            return order;
+        });
+    }
+
+    /**
+     * Get orders that are pending agent assignment
+     */
+    static async getPendingAgentAssignmentOrders(): Promise<Order[]> {
+        return await Order.findAll({
+            where: {
+                agentId: { [Op.is]: null },
+                paymentStatus: 'completed',
+                status: 'pending'
+            } as WhereOptions<Order>,
+            include: [
+                {
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    include: [
+                        {
+                            model: Market,
+                            as: 'market',
+                        },
+                        {
+                            model: ShoppingListItem,
+                            as: 'items',
+                        },
+                    ],
+                },
+                {
+                    model: User,
+                    as: 'customer',
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
+                },
+            ],
+            order: [['createdAt', 'ASC']], // Oldest orders first
+        });
     }
 }

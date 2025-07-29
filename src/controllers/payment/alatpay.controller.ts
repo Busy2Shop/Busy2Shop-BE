@@ -132,7 +132,7 @@ export default class AlatPayController {
                 if (relatedOrder) {
                     orderInfo = {
                         orderId: relatedOrder.id,
-                        orderNumber: relatedOrder.id, // Using ID as order number since there's no separate orderNumber field
+                        orderNumber: relatedOrder.orderNumber, // Using the actual human-readable order number
                         status: relatedOrder.status,
                         paymentStatus: relatedOrder.paymentStatus
                     };

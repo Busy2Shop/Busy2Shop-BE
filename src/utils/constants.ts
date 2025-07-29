@@ -105,6 +105,8 @@ export const ALATPAY_BUSINESS_ID = process.env.ALATPAY_BUSINESS_ID;
 
 export const ALATPAY_MERCHANT_ID = process.env.ALATPAY_MERCHANT_ID;
 
+export const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
 
 // SMPP (SMS)
 // export const SMPP_HOST = process.env.SMPP_HOST || 'localhost',

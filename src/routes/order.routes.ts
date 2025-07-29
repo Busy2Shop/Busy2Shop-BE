@@ -19,6 +19,8 @@ router.patch('/:id/status', AuthenticatedController(OrderController.updateOrderS
 router.patch('/:id/notes', AuthenticatedController(OrderController.addNotes));
 // Reject an order (agent only)
 router.post('/:id/reject', AuthenticatedController(OrderController.rejectOrder));
+// Get order trail/audit log
+router.get('/:id/trail', AuthenticatedController(OrderController.getOrderTrail));
 
 // Generic parameter route LAST
 router.get('/:id', AuthenticatedController(OrderController.getOrder));

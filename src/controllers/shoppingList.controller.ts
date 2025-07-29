@@ -43,7 +43,17 @@ export default class ShoppingListController {
             queryParams.size = Number(size);
         }
 
-        if (status) queryParams.status = status;
+        // Only show draft and pending lists for regular shopping list view
+        // Completed/cancelled lists are viewed through order sections
+        // Processing lists are active orders, also viewed through order sections
+        if (status) {
+            // Allow specific status filtering if requested
+            queryParams.status = status;
+        } else {
+            // Default to only show draft and pending lists
+            queryParams.status = ['draft', 'pending'];
+        }
+        
         if (marketId) queryParams.marketId = marketId;
 
         const shoppingLists = await ShoppingListService.viewUserShoppingLists(

@@ -2,9 +2,35 @@ import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import OrderService from '../services/order.service';
 import ShoppingListService from '../services/shoppingList.service';
+import OrderTrailService from '../services/orderTrail.service';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 
 export default class OrderController {
+    /**
+     * Determines if an ID is an orderNumber or UUID
+     * @param id - The ID to check
+     * @returns true if it's an orderNumber, false if it's a UUID
+     */
+    private static isOrderNumber(id: string): boolean {
+        // Order numbers start with B2S- and are shorter than UUIDs
+        // UUIDs are 36 characters long with specific format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const orderNumberPattern = /^B2S-[A-Z0-9]{5,}$/;
+        
+        // If it matches the order number pattern, it's an order number
+        if (orderNumberPattern.test(id)) {
+            return true;
+        }
+        
+        // If it matches UUID pattern, it's a UUID
+        if (uuidPattern.test(id)) {
+            return false;
+        }
+        
+        // Fallback: if it starts with B2S-, treat as order number
+        return id.startsWith('B2S-');
+    }
+
     /**
      * Extracts and processes standard query parameters from request query object
      *
@@ -116,19 +142,34 @@ export default class OrderController {
     static async getOrder(req: AuthenticatedRequest, res: Response) {
         const { id } = req.params;
 
-        const order = await OrderService.getOrder(id);
+        try {
+            // Check if the id is a UUID (old format) or orderNumber (new format)
+            let order;
+            if (OrderController.isOrderNumber(id)) {
+                // New format: orderNumber (e.g., B2S-ABC123)
+                console.log('Fetching order by number:', id);
+                order = await OrderService.getOrderByNumber(id);
+            } else {
+                // Old format: UUID
+                console.log('Fetching order by UUID:', id);
+                order = await OrderService.getOrder(id);
+            }
 
-        // Check if the user is authorized to view this order
-        // if
-        // (order.customerId !== req.user.id && order.agentId !== req.user.id && req.user.status.userType !== 'admin') {
-        //     throw new ForbiddenError('Not authorized to view this order');
-        // }
+            // Check if the user is authorized to view this order
+            // if
+            // (order.customerId !== req.user.id && order.agentId !== req.user.id && req.user.status.userType !== 'admin') {
+            //     throw new ForbiddenError('Not authorized to view this order');
+            // }
 
-        res.status(200).json({
-            status: 'success',
-            message: 'Order retrieved successfully',
-            data: order,
-        });
+            res.status(200).json({
+                status: 'success',
+                message: 'Order retrieved successfully',
+                data: order,
+            });
+        } catch (error) {
+            console.error('Error retrieving order:', { id, error: error instanceof Error ? error.message : String(error) });
+            throw error;
+        }
     }
 
     static async updateOrderStatus(req: AuthenticatedRequest, res: Response) {
@@ -248,5 +289,48 @@ export default class OrderController {
             message: 'Order rejection processed successfully',
             data: order,
         });
+    }
+
+    /**
+     * Get order trail/audit log
+     */
+    static async getOrderTrail(req: AuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+
+        try {
+            // Check if the id is a UUID (old format) or orderNumber (new format)
+            let orderId;
+            if (OrderController.isOrderNumber(id)) {
+                // New format: orderNumber (e.g., B2S-ABC123)
+                const order = await OrderService.getOrderByNumber(id);
+                orderId = order.id;
+            } else {
+                // Old format: UUID
+                orderId = id;
+            }
+
+            // Verify the order exists and user has permission
+            const order = await OrderService.getOrder(orderId);
+            
+            // Check if the user is authorized to view this order trail
+            // Only customers and agents involved in the order can view the trail
+            if (order.customerId !== req.user.id && order.agentId !== req.user.id) {
+                throw new ForbiddenError('Not authorized to view this order trail');
+            }
+
+            const trail = await OrderTrailService.getOrderTrail(orderId);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Order trail retrieved successfully',
+                data: trail,
+            });
+        } catch (error) {
+            console.error('Error retrieving order trail:', { 
+                id, 
+                error: error instanceof Error ? error.message : String(error) 
+            });
+            throw error;
+        }
     }
 }

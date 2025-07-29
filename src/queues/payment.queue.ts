@@ -10,6 +10,7 @@ import { connection } from './connection';
 import ShoppingListService from '../services/shoppingList.service';
 import OrderService from '../services/order.service';
 import AgentService from '../services/agent.service';
+import { queueImmediateAgentAssignment } from './agent.queue';
 
 // Define job data interface
 interface PaymentWebhookJobData {
@@ -61,77 +62,62 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
             // If payment is successful and it's for a shopping list, update the shopping list and order
             if (mappedStatus === TransactionStatus.COMPLETED && transaction.type === 'shopping_list') {
                 try {
-                    // Update shopping list status to 'accepted'
+                    // Step 1: Update shopping list status to 'pending' (ready for agent assignment)
                     await ShoppingListService.updateListStatus(
                         transaction.referenceId,
                         transaction.userId,
-                        'accepted'
+                        'pending'
                     );
                     
-                    logger.info(`Shopping list ${transaction.referenceId} status updated to accepted`);
+                    logger.info(`Shopping list ${transaction.referenceId} status updated to pending`);
                     
-                    // Find the existing order for this shopping list
+                    // Step 2: Find the existing order for this shopping list
                     const existingOrder = await OrderService.findOrderByShoppingListId(
                         transaction.referenceId,
                         transaction.userId
                     );
 
                     if (existingOrder) {
-                        // Update existing order payment status
+                        // Step 3: Update existing order payment status and set status to pending
                         await existingOrder.update({
                             paymentStatus: 'completed',
+                            status: 'pending', // Order ready for agent assignment
                             paymentProcessedAt: new Date(),
                         });
 
-                        logger.info(`Order ${existingOrder.id} payment status updated to completed`);
+                        logger.info(`Order ${existingOrder.id} payment completed, status set to pending`);
 
-                        // Now assign an agent to the order
+                        // Step 4: Assign agent and update statuses
                         try {
-                            // Get the shopping list with market information
-                            const shoppingList = await ShoppingListService.getShoppingList(transaction.referenceId);
+                            const updatedOrder = await OrderService.assignAgentToOrder(existingOrder.id, transaction.referenceId);
                             
-                            // Find available agents for the order
-                            const availableAgents = await AgentService.getAvailableAgentsForOrder(
-                                shoppingList.id
-                            );
-
-                            let assignedAgent = availableAgents[0];
-                            
-                            // If no agents at market, find the nearest available agent
-                            if (!assignedAgent && shoppingList.market?.location) {
-                                const nearestAgent = await AgentService.findNearestAgent(
-                                    shoppingList.market.location.latitude,
-                                    shoppingList.market.location.longitude
+                            if (updatedOrder.agentId) {
+                                // Successfully assigned agent (OrderService already updated order status to 'accepted')
+                                // Now update shopping list status to 'accepted' as well
+                                await ShoppingListService.updateListStatus(
+                                    transaction.referenceId,
+                                    transaction.userId,
+                                    'accepted'
                                 );
-                                if (nearestAgent) {
-                                    assignedAgent = nearestAgent;
-                                }
-                            }
-
-                            if (assignedAgent) {
-                                // Update order with agent and change status to accepted
-                                await existingOrder.update({
-                                    agentId: assignedAgent.id,
-                                    status: 'accepted',
-                                    acceptedAt: new Date()
-                                });
-
-                                // Update agent status to busy
-                                await AgentService.setAgentBusy(assignedAgent.id, existingOrder.id);
-
-                                // Update shopping list with agent
-                                await shoppingList.update({
-                                    agentId: assignedAgent.id,
-                                    status: 'processing'
-                                });
-
-                                logger.info(`Agent ${assignedAgent.id} assigned to order ${existingOrder.id}`);
+                                
+                                logger.info(`Order ${existingOrder.id} assigned to agent ${updatedOrder.agentId} and status updated to accepted`);
                             } else {
-                                logger.warn(`No available agents found for order ${existingOrder.id}`);
+                                // No agent assigned - queue for retry but keep pending status
+                                logger.info(`No agent immediately available for order ${existingOrder.id}, queuing for retry`);
+                                await queueImmediateAgentAssignment(
+                                    existingOrder.id,
+                                    transaction.referenceId,
+                                    transaction.userId
+                                );
                             }
                         } catch (agentError) {
                             logger.error('Error assigning agent to order:', agentError);
-                            // Don't fail the payment processing due to agent assignment issues
+                            // Queue for retry but keep pending status
+                            await queueImmediateAgentAssignment(
+                                existingOrder.id,
+                                transaction.referenceId,
+                                transaction.userId
+                            );
                         }
                     } else {
                         // This is a fallback - order should already exist from payment generation
@@ -165,7 +151,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                             customerId: transaction.userId,
                             shoppingListId: transaction.referenceId,
                             totalAmount: transaction.amount,
-                            status: 'pending',
+                            status: 'pending', // Start with pending for consistency
                             paymentStatus: 'completed',
                             paymentId: transaction.id,
                             paymentProcessedAt: new Date(),
@@ -176,6 +162,39 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                         });
                         
                         logger.info(`Fallback: Order ${order.id} created for shopping list ${transaction.referenceId}`);
+
+                        // Now assign an agent to the newly created order
+                        try {
+                            const updatedOrder = await OrderService.assignAgentToOrder(order.id, transaction.referenceId);
+                            
+                            if (updatedOrder.agentId) {
+                                // Successfully assigned agent (OrderService already updated order status to 'accepted')
+                                // Now update shopping list status to 'accepted' as well
+                                await ShoppingListService.updateListStatus(
+                                    transaction.referenceId,
+                                    transaction.userId,
+                                    'accepted'
+                                );
+                                
+                                logger.info(`Fallback order ${order.id} assigned to agent ${updatedOrder.agentId} and status updated to accepted`);
+                            } else {
+                                // No agent assigned - queue for retry but keep pending status
+                                logger.info(`No agent immediately available for fallback order ${order.id}, queuing for retry`);
+                                await queueImmediateAgentAssignment(
+                                    order.id,
+                                    transaction.referenceId,
+                                    transaction.userId
+                                );
+                            }
+                        } catch (agentError) {
+                            logger.error('Error assigning agent to fallback order:', agentError);
+                            // Queue for retry but keep pending status
+                            await queueImmediateAgentAssignment(
+                                order.id,
+                                transaction.referenceId,
+                                transaction.userId
+                            );
+                        }
                     }
                 } catch (error) {
                     logger.error('Error processing payment completion:', error);

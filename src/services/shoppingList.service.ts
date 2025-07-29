@@ -13,7 +13,7 @@ import AgentService from './agent.service';
 export interface IViewShoppingListsQuery {
     page?: number;
     size?: number;
-    status?: string;
+    status?: string | string[];
     marketId?: string;
 }
 
@@ -143,7 +143,13 @@ export default class ShoppingListService {
 
         // Filter by status if provided
         if (status) {
-            where.status = status;
+            if (Array.isArray(status)) {
+                // Handle array of statuses
+                where.status = { [Op.in]: status };
+            } else {
+                // Handle single status
+                where.status = status;
+            }
         }
 
         // Filter by market if provided
@@ -158,6 +164,14 @@ export default class ShoppingListService {
                 {
                     model: ShoppingListItem,
                     as: 'items',
+                    include: [
+                        {
+                            model: Product,
+                            as: 'product',
+                            attributes: ['id', 'name', 'images', 'price'],
+                            required: false,
+                        },
+                    ],
                 },
                 {
                     model: Market,
@@ -270,6 +284,14 @@ export default class ShoppingListService {
                 {
                     model: ShoppingListItem,
                     as: 'items',
+                    include: [
+                        {
+                            model: Product,
+                            as: 'product',
+                            attributes: ['id', 'name', 'images', 'price'],
+                            required: false,
+                        },
+                    ],
                 },
                 {
                     model: Market,
@@ -371,6 +393,8 @@ export default class ShoppingListService {
             // Use product information for the item
             itemData.name = product.name;
             itemData.estimatedPrice = product.price;
+            // Store the first product image if available
+            itemData.productImage = product.images && product.images.length > 0 ? product.images[0] : null;
         }
 
         const newItem = await ShoppingListItem.create({
@@ -920,6 +944,8 @@ export default class ShoppingListService {
 
             // Use product information for the item
             itemData.name = product.name;
+            // Store the first product image if available
+            itemData.productImage = product.images && product.images.length > 0 ? product.images[0] : null;
 
             // Handle pricing logic
             if (product.price !== null) {
