@@ -540,7 +540,8 @@ export default class ShoppingListController {
             let subtotal = 0;
 
             for (const item of listData.items) {
-                const currentPrice = item.userSetPrice || item.estimatedPrice || 0;
+                // Handle user provided pricing properly
+                const currentPrice = item.userSetPrice || item.userProvidedPrice || item.estimatedPrice || 0;
                 
                 // Apply product-specific discounts to the item price
                 const itemProductDiscounts = productDiscounts.filter(discount => 
@@ -764,7 +765,7 @@ export default class ShoppingListController {
 
             // Calculate the total amount saved from product discounts
             for (const item of listData.items) {
-                const originalPrice = item.userSetPrice || item.estimatedPrice || 0;
+                const originalPrice = item.userSetPrice || item.userProvidedPrice || item.estimatedPrice || 0;
                 const itemValidation = itemValidationResults.find(v => v.originalItem.id === item.id);
                 
                 if (itemValidation && itemValidation.finalPrice < originalPrice) {
@@ -782,7 +783,7 @@ export default class ShoppingListController {
                 
                 let discountAmount = 0;
                 for (const item of applicableItems) {
-                    const originalPrice = item.userSetPrice || item.estimatedPrice || 0;
+                    const originalPrice = item.userSetPrice || item.userProvidedPrice || item.estimatedPrice || 0;
                     const itemValidation = itemValidationResults.find(v => v.originalItem.id === item.id);
                     
                     if (itemValidation && itemValidation.finalPrice < originalPrice) {

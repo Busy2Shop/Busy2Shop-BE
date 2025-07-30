@@ -28,6 +28,7 @@ export interface ISettingValue {
 // Predefined setting keys for type safety
 export enum SYSTEM_SETTING_KEYS {
     SERVICE_FEE_PERCENTAGE = 'service_fee_percentage',
+    SERVICE_FEE_AMOUNT = 'service_fee_amount',
     DELIVERY_FEE = 'delivery_fee',
     MINIMUM_ORDER_AMOUNT = 'minimum_order_amount',
     MAXIMUM_DISCOUNT_PERCENTAGE = 'maximum_discount_percentage',
@@ -91,6 +92,7 @@ export default class SystemSettings extends Model<SystemSettings | ISystemSettin
 // Helper type for getting typed setting values
 export type SystemSettingValueMap = {
     [SYSTEM_SETTING_KEYS.SERVICE_FEE_PERCENTAGE]: number;
+    [SYSTEM_SETTING_KEYS.SERVICE_FEE_AMOUNT]: number;
     [SYSTEM_SETTING_KEYS.DELIVERY_FEE]: number;
     [SYSTEM_SETTING_KEYS.MINIMUM_ORDER_AMOUNT]: number;
     [SYSTEM_SETTING_KEYS.MAXIMUM_DISCOUNT_PERCENTAGE]: number;

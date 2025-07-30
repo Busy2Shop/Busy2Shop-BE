@@ -64,6 +64,8 @@ export default class AlatPayService {
                         
                         // Get the existing payment details from the metadata
                         const existingPaymentData = existingTransaction.metadata.providerResponse;
+
+                        console.log('Existing Payment Data:', existingPaymentData);
                         
                         if (existingPaymentData) {
                             // Ensure the data has the correct structure with proper number handling
@@ -81,8 +83,8 @@ export default class AlatPayService {
                                     serviceFee: (existingTransaction.metadata as any).serviceFee || 0,
                                     deliveryFee: (existingTransaction.metadata as any).deliveryFee || 0,
                                     discountAmount: (existingTransaction.metadata as any).discountAmount || 0,
-                                    total: parseFloat(existingTransaction.amount.toString())
-                                }
+                                    total: parseFloat(existingTransaction.amount.toString()),
+                                },
                             };
                             return { data: formattedData };
                         }
@@ -167,7 +169,7 @@ export default class AlatPayService {
 
             // Return response with proper structure matching AlatPayVirtualAccountResponse
             return { 
-                data: response
+                data: response,
             };
         // } catch (error) {
         //     logger.error('Error generating virtual account:', error);

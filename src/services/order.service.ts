@@ -260,13 +260,6 @@ export default class OrderService {
                 { transaction },
             );
 
-            // Log order creation in trail
-            await OrderTrailService.logOrderCreation(
-                newOrder.id,
-                newOrder.customerId,
-                newOrder,
-            );
-
             logger.info('Order created successfully', {
                 orderId: newOrder.id,
                 orderNumber: newOrder.orderNumber,
@@ -275,6 +268,23 @@ export default class OrderService {
             });
 
             return newOrder;
+        }).then(async (order) => {
+            // Log order creation in trail after transaction is committed
+            try {
+                await OrderTrailService.logOrderCreation(
+                    order.id,
+                    order.customerId,
+                    order,
+                );
+            } catch (error) {
+                logger.error('Failed to create order trail entry', {
+                    orderId: order.id,
+                    error: error instanceof Error ? error.message : String(error),
+                });
+                // Don't throw here as the order was successfully created
+            }
+            
+            return order;
         });
     }
 

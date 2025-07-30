@@ -132,10 +132,21 @@ export default class SystemSettingsService {
                 value: {
                     value: 5.0,
                     type: 'number' as const,
-                    description: 'Service fee percentage applied to orders',
+                    description: 'Service fee percentage applied to orders (deprecated - use SERVICE_FEE_AMOUNT)',
                     category: 'pricing',
                     isPublic: true,
                     validation: { min: 0, max: 50 }
+                }
+            },
+            {
+                key: SYSTEM_SETTING_KEYS.SERVICE_FEE_AMOUNT,
+                value: {
+                    value: 200.0,
+                    type: 'number' as const,
+                    description: 'Fixed service fee amount in naira',
+                    category: 'pricing',
+                    isPublic: true,
+                    validation: { min: 0, max: 2000 }
                 }
             },
             {
@@ -253,6 +264,17 @@ export default class SystemSettingsService {
      * Business logic helper methods
      */
     static async calculateServiceFee(subtotal: number): Promise<number> {
+        // Try to get fixed service fee amount first
+        try {
+            const serviceAmount = await this.getSetting(SYSTEM_SETTING_KEYS.SERVICE_FEE_AMOUNT);
+            if (serviceAmount && serviceAmount > 0) {
+                return Math.round(serviceAmount * 100) / 100;
+            }
+        } catch (error) {
+            // Fall back to percentage if SERVICE_FEE_AMOUNT is not available
+        }
+        
+        // Fallback to percentage calculation for backward compatibility
         const percentage = await this.getSetting(SYSTEM_SETTING_KEYS.SERVICE_FEE_PERCENTAGE);
         return Math.round(subtotal * (percentage / 100) * 100) / 100;
     }

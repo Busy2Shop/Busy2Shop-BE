@@ -48,7 +48,7 @@ async function calculateOrderFees(
         serviceFee: Math.round(serviceFee * 100) / 100, // Round to 2 decimal places
         deliveryFee: Math.round(deliveryFee * 100) / 100,
         discountAmount: Math.round(finalDiscount * 100) / 100,
-        total: Math.round(total * 100) / 100
+        total: Math.round(total * 100) / 100,
     };
 }
 
@@ -79,8 +79,8 @@ export default class AlatPayController {
             referenceType: referenceType || 'order',
             metadata: {
                 ...calculatedFees,
-                originalSubtotal: subtotal
-            }
+                originalSubtotal: subtotal,
+            },
         });
 
         res.status(200).json({
@@ -88,7 +88,7 @@ export default class AlatPayController {
             message: 'Virtual account generated successfully',
             data: {
                 ...response.data,
-                fees: calculatedFees
+                fees: calculatedFees,
             },
         });
     }
@@ -134,7 +134,7 @@ export default class AlatPayController {
                         orderId: relatedOrder.id,
                         orderNumber: relatedOrder.orderNumber, // Using the actual human-readable order number
                         status: relatedOrder.status,
-                        paymentStatus: relatedOrder.paymentStatus
+                        paymentStatus: relatedOrder.paymentStatus,
                     };
                 }
 
@@ -156,7 +156,7 @@ export default class AlatPayController {
                 localStatus: transaction.status,
                 transactionType: transaction.type,
                 referenceId: transaction.referenceId,
-                order: orderInfo
+                order: orderInfo,
             },
         });
     }
@@ -258,7 +258,7 @@ export default class AlatPayController {
      */
     static async generatePaymentLink(req: AuthenticatedRequest, res: Response) {
         const { shoppingListId } = req.params;
-        const { currency, deliveryAddress, customerNotes, frontendTotal, discountAmount } = req.body;
+        const { currency, deliveryAddress, customerNotes, discountAmount } = req.body;
 
         if (!shoppingListId) {
             throw new BadRequestError('Shopping list ID is required');
@@ -302,7 +302,7 @@ export default class AlatPayController {
                 shoppingList.estimatedTotal ||
                 shoppingList.items.reduce(
                     (acc: number, item: ShoppingListItem) =>
-                        acc + (item.estimatedPrice || 0) * item.quantity,
+                        acc + ((item as any).userSetPrice || (item as any).userProvidedPrice || item.estimatedPrice || 0) * item.quantity,
                     0,
                 );
 
@@ -328,23 +328,32 @@ export default class AlatPayController {
                     customerNotes,
                     shoppingListId,
                     customerId: req.user.id,
-                    ...calculatedFees
-                }
+                    ...calculatedFees,
+                },
             });
 
             let order: any;
+            
+            // Extract transactionId safely from response
+            // Handle both new payment (response.data.data.transactionId) and existing payment (response.data.transactionId)
+            const transactionId = (response.data as any).transactionId || response.data.data?.transactionId;
+            
+            if (!transactionId) {
+                logger.error('No transaction ID found in payment response', { response: response.data });
+                throw new BadRequestError('Failed to generate payment: No transaction ID returned');
+            }
             
             if (existingOrder && existingOrder.paymentStatus !== 'completed') {
                 // Update existing order with new payment details (retry scenario)
                 order = await existingOrder.update({
                     totalAmount: calculatedFees.total,
                     paymentStatus: 'pending',
-                    paymentId: response.data.data.transactionId,
+                    paymentId: transactionId,
                     serviceFee: calculatedFees.serviceFee,
                     deliveryFee: calculatedFees.deliveryFee,
                     deliveryAddress: deliveryAddress,
                     customerNotes: customerNotes,
-                    updatedAt: new Date()
+                    updatedAt: new Date(),
                 });
                 
                 logger.info(`Order ${order.id} updated for retry payment on shopping list ${shoppingListId}`);
@@ -356,33 +365,36 @@ export default class AlatPayController {
                     totalAmount: calculatedFees.total,
                     status: 'pending', // Order pending payment
                     paymentStatus: 'pending', // Payment not yet completed
-                    paymentId: response.data.data.transactionId,
+                    paymentId: transactionId,
                     serviceFee: calculatedFees.serviceFee,
                     deliveryFee: calculatedFees.deliveryFee,
                     deliveryAddress: deliveryAddress,
-                    customerNotes: customerNotes
+                    customerNotes: customerNotes,
                 });
                 
                 logger.info(`Order ${order.id} created with pending payment for shopping list ${shoppingListId}`);
             }
 
+            // Handle response data for both new and existing payments
+            const responseData = response.data.data ? response.data.data : (response.data as any);
+            
             res.status(200).json({
                 status: 'success',
                 message: 'Payment link generated and order created successfully',
                 data: {
-                    ...response.data.data, // AlatPay response has structure: { data: { ... } }
-                    transactionId: response.data.data.transactionId, // Ensure transactionId is included
+                    ...responseData, // AlatPay response data (either new or existing)
+                    transactionId: transactionId, // Ensure transactionId is included
                     orderId: order.id,
                     orderStatus: order.status,
                     paymentStatus: order.paymentStatus,
                     amount: calculatedFees.total, // Include the total amount as number
-                    createdAt: response.data.data.createdAt, // Include creation time
+                    createdAt: responseData.createdAt || new Date().toISOString(), // Include creation time
                     // Add bank details for frontend display
                     bankName: 'Wema Bank',
                     accountName: 'Busy2Shop Limited',
-                    bankCode: response.data.data.virtualBankCode || '035',
+                    bankCode: responseData.virtualBankCode || '035',
                     // Include fee breakdown
-                    fees: calculatedFees
+                    fees: calculatedFees,
                 },
             });
         } catch (error) {
