@@ -208,6 +208,23 @@ export default class UserService {
         return user;
     }
 
+    static async viewSingleAgentUserByEmail(email: string, userType: string, transaction?: Transaction): Promise<User> {
+        const user: User | null = await User.findOne({
+            where: {
+                email,
+                'status.userType': userType,
+            },
+            attributes: ['id', 'firstName', 'status', 'email'],
+            transaction,
+        });
+
+        if (!user) {
+            throw new NotFoundError('Oops User not found');
+        }
+
+        return user;
+    }
+
     static async viewSingleUserDynamic(queryOptions: IDynamicQueryOptions): Promise<User> {
         const { query, attributes } = queryOptions;
 

@@ -159,15 +159,24 @@ export default class AuthController {
     }
 
     static async verifyEmail(req: Request, res: Response) {
-        const { otpCode, email }: { otpCode: string; email: string } = req.body;
+        const { otpCode, email, userType }: { otpCode: string; email: string; userType: string } = req.body;
 
         if (!email || !otpCode) {
             throw new BadRequestError('Email and OTP code are required');
         }
 
-        await Database.transaction(async (transaction: Transaction) => {
-            const user = await UserService.viewSingleUserByEmail(email, transaction);
+        console.log({ userType });
 
+        await Database.transaction(async (transaction: Transaction) => {
+            let user;
+
+            if (userType === 'agent') {
+                console.log('using this for agent email verification');
+                user = await UserService.viewSingleAgentUserByEmail(email, 'agent', transaction);
+            } else {
+                user = await UserService.viewSingleUserByEmail(email, transaction);
+            }
+                
             if (!user) {
                 throw new BadRequestError('User not found');
             }

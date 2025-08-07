@@ -104,6 +104,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     );
     const fullUrl = req.protocol + '://' + req.get('host') + req.originalUrl;
     console.log('Full Requested URL:', fullUrl);
+    logger.info('Request details: ', {body: req.body, query: req.query, params: req.params});
     next();
 });
 
