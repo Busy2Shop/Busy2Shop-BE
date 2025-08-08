@@ -19,7 +19,30 @@ router.post(
     AuthenticatedController(KycController.uploadVerificationImages),
 );
 
+// Submit liveness verification
+router.post(
+    '/liveness',
+    uploadMiddleware(UploadType.Single, 'faceImage'), // Single file upload for face image
+    AuthenticatedController(KycController.submitLivenessVerification),
+);
+
+// Validate NIN
+router.post('/validate-nin', AuthenticatedController(KycController.validateNIN));
+
+// Upload document photo
+router.post(
+    '/upload-document-photo',
+    uploadMiddleware(UploadType.Single, 'document'), // Single file upload for document photo
+    AuthenticatedController(KycController.uploadDocumentPhoto),
+);
+
+// Complete KYC process
+router.post('/complete', AuthenticatedController(KycController.completeKYC));
+
 // Get verification status
 router.get('/status', AuthenticatedController(KycController.getVerificationStatus));
+
+// Approve KYC verification (self-approval)
+router.post('/approve', AuthenticatedController(KycController.approveKycVerification));
 
 export default router;

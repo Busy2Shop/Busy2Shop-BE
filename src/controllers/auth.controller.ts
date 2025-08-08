@@ -487,7 +487,7 @@ export default class AuthController {
             if (!validEmail) {
                 throw new BadRequestError('Invalid email format');
             }
-            data = { query: { email: req.body.email } };
+            data = { query: { email: req.body.email, 'status.userType': userType } };
         } else if (req.body.phone) {
             const { countryCode, number } = req.body.phone;
 
@@ -512,6 +512,7 @@ export default class AuthController {
                 query: {
                     'phone.countryCode': countryCode,
                     'phone.number': number,
+                    'status.userType': userType,
                 },
             };
         } else {
@@ -520,6 +521,8 @@ export default class AuthController {
 
         // Find user with email/phone and user type
         const user = await UserService.viewSingleUserDynamic(data);
+
+        console.log({ userStatus: user?.status });
 
         // Check if user exists and matches the requested user type
         if (!user || user.status.userType !== userType) {
@@ -621,7 +624,8 @@ export default class AuthController {
     }
 
     static async getLoggedUserData(req: AuthenticatedRequest, res: Response) {
-        const user = req.user;
+        // Get fresh user data from database to include latest updates
+        const user = await UserService.viewSingleUser(req.user.id);
 
         res.status(200).json({
             status: 'success',
@@ -635,6 +639,19 @@ export default class AuthController {
     static async updateUser(req: AuthenticatedRequest, res: Response) {
         const { firstName, lastName, otherName, displayImage, location, gender, isDeactivated } =
             req.body;
+
+        // Check if user is an agent with completed KYC - they cannot update display image
+        if (req.user.status.userType === 'agent') {
+            const userSettings = await UserService.viewSingleUser(req.user.id);
+            
+            // If agent has completed liveness verification, they cannot update display image
+            if (userSettings.settings?.agentMetaData?.livenessVerification?.verified) {
+                // Remove displayImage from allowed updates if it was provided
+                if (displayImage || req.file) {
+                    throw new BadRequestError('Agents cannot update their display image after completing liveness verification');
+                }
+            }
+        }
 
         // eslint-disable-next-line no-undef
         const file = req.file;

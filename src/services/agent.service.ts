@@ -474,6 +474,151 @@ export default class AgentService {
                 }
             }
 
+            if (documents.livenessVerification) {
+                // Update liveness verification data
+                await UserSettings.update(
+                    {
+                        agentMetaData: Sequelize.fn(
+                            'jsonb_set',
+                            // If agentMetaData is null, initialize with the default structure
+                            Sequelize.fn(
+                                'COALESCE',
+                                Sequelize.col('agentMetaData'),
+                                Sequelize.literal(
+                                    `'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`,
+                                ),
+                            ),
+                            // Path to the liveness verification property
+                            Sequelize.literal("'{livenessVerification}'"),
+                            // Value to set (the liveness data as JSON)
+                            Sequelize.literal(`'${JSON.stringify(documents.livenessVerification)}'::jsonb`),
+                            // Create if it doesn't exist
+                            true,
+                        ),
+                    },
+                    {
+                        where: { userId: agentId },
+                        transaction,
+                    },
+                );
+            }
+
+            if (documents.identityDocument) {
+                // Update identity document data
+                await UserSettings.update(
+                    {
+                        agentMetaData: Sequelize.fn(
+                            'jsonb_set',
+                            // If agentMetaData is null, initialize with the default structure
+                            Sequelize.fn(
+                                'COALESCE',
+                                Sequelize.col('agentMetaData'),
+                                Sequelize.literal(
+                                    `'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`,
+                                ),
+                            ),
+                            // Path to the identity document property
+                            Sequelize.literal("'{identityDocument}'"),
+                            // Value to set (the identity document data as JSON)
+                            Sequelize.literal(`'${JSON.stringify(documents.identityDocument)}'::jsonb`),
+                            // Create if it doesn't exist
+                            true,
+                        ),
+                    },
+                    {
+                        where: { userId: agentId },
+                        transaction,
+                    },
+                );
+            }
+
+            if (documents.kycComplete !== undefined) {
+                // Update KYC completion status
+                await UserSettings.update(
+                    {
+                        agentMetaData: Sequelize.fn(
+                            'jsonb_set',
+                            // If agentMetaData is null, initialize with the default structure
+                            Sequelize.fn(
+                                'COALESCE',
+                                Sequelize.col('agentMetaData'),
+                                Sequelize.literal(
+                                    `'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`,
+                                ),
+                            ),
+                            // Path to the kycComplete property
+                            Sequelize.literal("'{kycComplete}'"),
+                            // Value to set
+                            Sequelize.literal(`'${documents.kycComplete}'::jsonb`),
+                            // Create if it doesn't exist
+                            true,
+                        ),
+                    },
+                    {
+                        where: { userId: agentId },
+                        transaction,
+                    },
+                );
+            }
+
+            if (documents.kycCompletedAt) {
+                // Update KYC completion timestamp
+                await UserSettings.update(
+                    {
+                        agentMetaData: Sequelize.fn(
+                            'jsonb_set',
+                            // If agentMetaData is null, initialize with the default structure
+                            Sequelize.fn(
+                                'COALESCE',
+                                Sequelize.col('agentMetaData'),
+                                Sequelize.literal(
+                                    `'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`,
+                                ),
+                            ),
+                            // Path to the kycCompletedAt property
+                            Sequelize.literal("'{kycCompletedAt}'"),
+                            // Value to set
+                            Sequelize.literal(`'"${documents.kycCompletedAt}"'::jsonb`),
+                            // Create if it doesn't exist
+                            true,
+                        ),
+                    },
+                    {
+                        where: { userId: agentId },
+                        transaction,
+                    },
+                );
+            }
+
+            if (documents.kycStatus) {
+                // Update KYC status
+                await UserSettings.update(
+                    {
+                        agentMetaData: Sequelize.fn(
+                            'jsonb_set',
+                            // If agentMetaData is null, initialize with the default structure
+                            Sequelize.fn(
+                                'COALESCE',
+                                Sequelize.col('agentMetaData'),
+                                Sequelize.literal(
+                                    `'{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${new Date().toISOString()}","isAcceptingOrders":false}'::jsonb`,
+                                ),
+                            ),
+                            // Path to the kycStatus property
+                            Sequelize.literal("'{kycStatus}'"),
+                            // Value to set
+                            Sequelize.literal(`'"${documents.kycStatus}"'::jsonb`),
+                            // Create if it doesn't exist
+                            true,
+                        ),
+                    },
+                    {
+                        where: { userId: agentId },
+                        transaction,
+                    },
+                );
+            }
+
             // Get the updated agent
             const updatedAgent = await User.findOne({
                 where: {

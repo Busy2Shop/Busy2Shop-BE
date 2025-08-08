@@ -104,10 +104,33 @@ export interface IUserSettings {
     meta?: IBlockMeta | null;
 }
 
+export interface ILivenessVerification {
+    faceImage: string;
+    results: {
+        faceDetected: boolean;
+        blinkCompleted: boolean;
+        smileCompleted: boolean;
+        spoofingPassed: boolean;
+        timestamp: string;
+        challenges: string[];
+    };
+    timestamp: string;
+    verified: boolean;
+}
+
 export interface IAgentMeta {
     nin: string;
     images: string[];
     currentStatus: 'available' | 'busy' | 'away' | 'offline';
     lastStatusUpdate: string; // ISO date string
     isAcceptingOrders: boolean;
+    livenessVerification?: ILivenessVerification;
+    identityDocument?: {
+        type: 'nin' | 'national_id' | 'passport' | 'drivers_license';
+        url: string;
+        uploadedAt: string;
+    };
+    kycComplete?: boolean;
+    kycStatus?: 'submitted' | 'approved' | 'rejected';
+    kycCompletedAt?: string;
 }
