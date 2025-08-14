@@ -22,6 +22,28 @@ router.delete('/locations/:id', AuthenticatedController(AgentController.deleteLo
 router.get('/status', AuthenticatedController(AgentController.getStatus));
 router.put('/status', AuthenticatedController(AgentController.updateStatus));
 
+// Agent profile and dashboard routes (static paths)
+router.get('/profile/stats', AuthenticatedController(AgentController.getAgentStats));
+router.get('/profile/recent-orders', AuthenticatedController(AgentController.getRecentOrders));
+router.get('/profile/daily-earnings', AuthenticatedController(AgentController.getDailyEarnings));
+router.get('/profile/today-stats', AuthenticatedController(AgentController.getTodayStats));
+router.get('/profile/data', AuthenticatedController(AgentController.getAgentProfileData));
+router.patch('/profile/status', AuthenticatedController(AgentController.updateAgentStatus));
+
+// Agent notifications
+router.get('/notifications', AuthenticatedController(AgentController.getNotifications));
+
+// Agent order management routes (static paths)
+router.get('/orders', AuthenticatedController(AgentController.getAgentOrders)); // Generic orders endpoint with status filtering
+router.get('/orders/available', AuthenticatedController(AgentController.getAvailableOrders));
+router.get('/orders/active', AuthenticatedController(AgentController.getActiveOrders));
+router.get('/orders/completed', AuthenticatedController(AgentController.getCompletedOrders));
+router.get('/orders/completed/today', AuthenticatedController(AgentController.getTodayCompletedOrders));
+router.post('/orders/:orderId/accept', AuthenticatedController(AgentController.acceptOrder));
+router.post('/orders/:orderId/reject', AuthenticatedController(AgentController.rejectOrder));
+router.patch('/orders/:orderId/status', AuthenticatedController(AgentController.updateOrderStatusForAgent));
+router.post('/orders/:orderId/complete', AuthenticatedController(AgentController.completeOrder));
+
 // More specific static paths
 router.get(
     '/available/:shoppingListId',

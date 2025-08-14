@@ -84,21 +84,8 @@ export default class AgentService {
     }
 
     static async getAgentById(id: string): Promise<User> {
-        const agent = await User.findOne({
-            where: {
-                id,
-                // Fix the ambiguous status column by specifying the table
-                [Op.and]: [
-                    Sequelize.where(
-                        Sequelize.fn(
-                            'jsonb_extract_path_text',
-                            Sequelize.col('"User"."status"'),
-                            'userType',
-                        ),
-                        'agent',
-                    ),
-                ],
-            },
+        // First try to find the user by ID only to see if they exist
+        const user = await User.findByPk(id, {
             include: [
                 {
                     model: UserSettings,
@@ -111,11 +98,16 @@ export default class AgentService {
             ],
         });
 
-        if (!agent) {
-            throw new NotFoundError('Agent not found');
+        if (!user) {
+            throw new NotFoundError('User not found');
         }
 
-        return agent;
+        // Check if the user is an agent
+        if (user.status?.userType !== 'agent') {
+            throw new NotFoundError('Agent not found - user is not an agent');
+        }
+
+        return user;
     }
 
     static async getAgentStats(agentId: string): Promise<{
