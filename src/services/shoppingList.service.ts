@@ -324,8 +324,9 @@ export default class ShoppingListService {
         id: string,
         customerId: string,
         updateData: Partial<IShoppingList>,
+        transaction?: Transaction
     ): Promise<ShoppingList> {
-        const list = await this.getShoppingList(id);
+        const list = await this.getShoppingList(id, transaction);
 
         // Check if the user is the owner of the list
         if (list.customerId !== customerId) {
@@ -337,9 +338,9 @@ export default class ShoppingListService {
             throw new BadRequestError('Cannot modify market or name of a submitted shopping list');
         }
 
-        await list.update(updateData);
+        await list.update(updateData, { transaction });
 
-        return await this.getShoppingList(id);
+        return await this.getShoppingList(id, transaction);
     }
 
     static async deleteShoppingList(id: string, customerId: string): Promise<void> {
@@ -421,8 +422,8 @@ export default class ShoppingListService {
             throw new ForbiddenError('You are not authorized to modify this shopping list');
         }
 
-        // Can only update items if the list is in draft or pending status
-        const allowedListStatuses = ['draft', 'pending'];
+        // Can only update items if the list is in draft status
+        const allowedListStatuses = ['draft'];
         if (!allowedListStatuses.includes(list.status)) {
             throw new BadRequestError('Cannot update items in a submitted shopping list');
         }
@@ -459,7 +460,7 @@ export default class ShoppingListService {
         }
 
         // Can only remove items if the list is in draft status
-        const allowedListStatuses = ['draft', 'pending'];
+        const allowedListStatuses = ['draft'];
         if (!allowedListStatuses.includes(list.status)) {
             throw new BadRequestError('Cannot remove items from a submitted shopping list');
         }
@@ -509,7 +510,7 @@ export default class ShoppingListService {
         }
 
         // Can only submit lists in draft status
-        const allowedListStatuses = ['draft', 'pending'];
+        const allowedListStatuses = ['draft'];
         if (!allowedListStatuses.includes(list.status)) {
             throw new BadRequestError('This shopping list has already been submitted');
         }
@@ -528,8 +529,8 @@ export default class ShoppingListService {
             throw new BadRequestError('Cannot submit an empty shopping list');
         }
 
-        // Update the status to pending
-        await list.update({ status: 'pending' });
+        // Keep the status as draft (will be changed to accepted once payment is completed)
+        await list.update({ status: 'draft' });
 
         return await this.getShoppingList(id);
     }
@@ -548,12 +549,12 @@ export default class ShoppingListService {
             );
         }
 
-        // Can only create orders from pending lists
-        if (list.status !== 'pending') {
-            throw new BadRequestError('Can only create orders from pending shopping lists');
+        // Can only create orders from draft lists
+        if (list.status !== 'draft') {
+            throw new BadRequestError('Can only create orders from draft shopping lists');
         }
 
-        // Create the order
+        // Create the order with pending status (orders start as pending, not draft)
         const order = await Order.create({
             ...orderData,
             customerId: customerId,
@@ -571,9 +572,9 @@ export default class ShoppingListService {
         return await Database.transaction(async (transaction: Transaction) => {
             const list = await this.getShoppingList(listId, transaction);
 
-            // Can only assign agents to pending lists
-            if (list.status !== 'pending') {
-                throw new BadRequestError('Can only assign agents to pending shopping lists');
+            // Can only assign agents to accepted lists (after payment is completed)
+            if (list.status !== 'accepted') {
+                throw new BadRequestError('Can only assign agents to accepted shopping lists');
             }
 
             // Make sure the agent exists
@@ -606,9 +607,10 @@ export default class ShoppingListService {
     static async updateListStatus(
         listId: string,
         customerId: string,
-        status: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled',
+        status: 'draft' | 'accepted' | 'processing' | 'completed' | 'cancelled',
+        transaction?: Transaction
     ): Promise<ShoppingList> {
-        const list = await this.getShoppingList(listId);
+        const list = await this.getShoppingList(listId, transaction);
 
         // Validate the status transition
         if (!this.isValidStatusTransition(list.status, status)) {
@@ -616,7 +618,7 @@ export default class ShoppingListService {
         }
 
         // Check permissions based on the user role
-        const user = await User.findByPk(customerId);
+        const user = await User.findByPk(customerId, { transaction });
         if (!user) {
             throw new NotFoundError('User not found');
         }
@@ -635,9 +637,9 @@ export default class ShoppingListService {
             }
         } else if (list.customerId === customerId) {
             // List owners can cancel, modify, or update payment status of their own lists
-            if (!['cancelled', 'draft', 'pending', 'accepted'].includes(status)) {
+            if (!['cancelled', 'draft', 'accepted'].includes(status)) {
                 throw new ForbiddenError(
-                    'You can only update your shopping list to draft, pending, accepted, or cancelled status',
+                    'You can only update your shopping list to draft, accepted, or cancelled status',
                 );
             }
 
@@ -651,17 +653,10 @@ export default class ShoppingListService {
                 );
             }
 
-            // pending status is set when payment is initiated
-            if (status === 'pending' && list.status !== 'draft') {
+            // accepted status is set after payment completion  
+            if (status === 'accepted' && list.status !== 'draft') {
                 throw new BadRequestError(
-                    'Can only set pending status from draft status',
-                );
-            }
-
-            // accepted status is set after payment completion
-            if (status === 'accepted' && !['draft', 'pending'].includes(list.status)) {
-                throw new BadRequestError(
-                    'Can only set accepted status from draft or pending status',
+                    'Can only set accepted status from draft status',
                 );
             }
         } else {
@@ -669,9 +664,9 @@ export default class ShoppingListService {
         }
 
         // Update the status
-        await list.update({ status });
+        await list.update({ status }, { transaction });
 
-        return await this.getShoppingList(listId);
+        return await this.getShoppingList(listId, transaction);
     }
 
     /**
@@ -700,8 +695,7 @@ export default class ShoppingListService {
 
     private static isValidStatusTransition(currentStatus: string, newStatus: string): boolean {
         const validTransitions: Record<string, string[]> = {
-            draft: ['pending', 'cancelled'],
-            pending: ['accepted', 'draft', 'cancelled'],
+            draft: ['accepted', 'cancelled'],
             accepted: ['processing', 'cancelled'],
             processing: ['completed', 'cancelled'],
             completed: [],
@@ -922,7 +916,7 @@ export default class ShoppingListService {
         }
 
         // Can only add items if the list is in draft status
-        const allowedListStatuses = ['draft', 'pending'];
+        const allowedListStatuses = ['draft'];
         if (!allowedListStatuses.includes(list.status)) {
             throw new BadRequestError('Cannot add items to a submitted shopping list');
         }

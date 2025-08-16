@@ -43,15 +43,18 @@ export default class ShoppingListController {
             queryParams.size = Number(size);
         }
 
-        // Only show draft and pending lists for regular shopping list view
-        // Completed/cancelled lists are viewed through order sections
-        // Processing lists are active orders, also viewed through order sections
+        // Show appropriate lists based on context:
+        // - draft: User can edit and create orders
+        // - accepted: Payment confirmed, moved to order processing (not shown in shopping lists)
+        // - processing: Currently being shopped (shown in orders, not shopping lists)
+        // - completed/cancelled: Historical (viewed through order history)
         if (status) {
             // Allow specific status filtering if requested
             queryParams.status = status;
         } else {
-            // Default to only show draft and pending lists
-            queryParams.status = ['draft', 'pending'];
+            // Default to show only draft lists (user can edit and create orders from these)
+            // Accepted/processing lists are shown in orders section, not shopping lists
+            queryParams.status = ['draft'];
         }
         
         if (marketId) queryParams.marketId = marketId;
@@ -275,9 +278,9 @@ export default class ShoppingListController {
         // Get the shopping list
         const list = await ShoppingListService.getShoppingList(id);
 
-        // Check if the list is pending
-        if (list.status !== 'pending') {
-            throw new BadRequestError('Can only accept pending shopping lists');
+        // Check if the list is draft (ready for acceptance)
+        if (list.status !== 'draft') {
+            throw new BadRequestError('Can only accept draft shopping lists');
         }
 
         // Assign the agent to the list
@@ -469,7 +472,13 @@ export default class ShoppingListController {
             queryParams.size = Number(size);
         }
 
-        if (status) queryParams.status = status;
+        if (status) {
+            queryParams.status = status;
+        } else {
+            // Default to show only draft lists (user can edit and create orders from these)
+            // Accepted/processing lists are shown in orders section, not shopping lists
+            queryParams.status = ['draft'];
+        }
 
         const organizedLists = await ShoppingListService.viewUserShoppingLists(
             req.user.id,
@@ -631,7 +640,7 @@ export default class ShoppingListController {
             const [MAX_DISCOUNT_PERCENTAGE, MIN_ORDER_FOR_DISCOUNT, MAX_SINGLE_DISCOUNT_AMOUNT] = await Promise.all([
                 SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MAXIMUM_DISCOUNT_PERCENTAGE),
                 SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MINIMUM_ORDER_FOR_DISCOUNT),
-                SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MAXIMUM_SINGLE_DISCOUNT_AMOUNT)
+                SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MAXIMUM_SINGLE_DISCOUNT_AMOUNT),
             ]);
             const MAX_DISCOUNT_AMOUNT = subtotal * (MAX_DISCOUNT_PERCENTAGE / 100);
             const MAX_GENERAL_DISCOUNTS = 3; // Maximum 3 general discounts to show

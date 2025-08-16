@@ -6,11 +6,7 @@ import OrderTrailService from '../services/orderTrail.service';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 
 export default class OrderController {
-    /**
-     * Determines if an ID is an orderNumber or UUID
-     * @param id - The ID to check
-     * @returns true if it's an orderNumber, false if it's a UUID
-     */
+
     private static isOrderNumber(id: string): boolean {
         // Order numbers start with B2S- and are shorter than UUIDs
         // UUIDs are 36 characters long with specific format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -31,22 +27,6 @@ export default class OrderController {
         return id.startsWith('B2S-');
     }
 
-    /**
-     * Extracts and processes standard query parameters from request query object
-     *
-     * @param query - The Express request query object
-     * @returns A record containing processed query parameters
-     *
-     * @remarks
-     * - Converts pagination parameters (page, size) to numbers
-     * - Passes through status parameter as is
-     * - Processes date range parameters (startDate, endDate) as strings
-     *
-     * @example
-     * // From a request with the query ?page=2&size=10&status=pending
-     * const queryParams = this.extractOrderQueryParams(req.query);
-     * // Returns: { page: 2, size: 10, status: 'pending' }
-     */
     private static extractOrderQueryParams(query: Request['query']): Record<string, unknown> {
         const { page, size, status, startDate, endDate } = query;
 
@@ -207,68 +187,6 @@ export default class OrderController {
         });
     }
 
-    /**
-     * Create order with payment method consideration
-     * This method allows COD orders to be created without prior payment
-     */
-    static async createOrderWithPaymentMethod(req: AuthenticatedRequest, res: Response) {
-        const { shoppingListId, deliveryAddress, customerNotes, paymentMethod } = req.body;
-
-        if (!shoppingListId || !deliveryAddress || !paymentMethod) {
-            throw new BadRequestError('Shopping list ID, delivery address, and payment method are required');
-        }
-
-        // Get the shopping list to verify ownership
-        const shoppingList = await ShoppingListService.getShoppingList(shoppingListId);
-
-        if (shoppingList.customerId !== req.user.id) {
-            throw new ForbiddenError(
-                'You are not authorized to create an order from this shopping list',
-            );
-        }
-
-        // For COD and Wallet payments, we can accept pending status (which means submitted)
-        const acceptableStatuses = paymentMethod === 'cod' || paymentMethod === 'wallet' 
-            ? ['pending', 'accepted']
-            : ['accepted'];
-
-        if (!acceptableStatuses.includes(shoppingList.status)) {
-            throw new BadRequestError(
-                `Shopping list must be in one of these statuses: ${acceptableStatuses.join(', ')}. Current status: ${shoppingList.status}`
-            );
-        }
-
-        // If status is 'pending' and payment method allows it, update to 'accepted'
-        if (shoppingList.status === 'pending' && (paymentMethod === 'cod' || paymentMethod === 'wallet')) {
-            await ShoppingListService.updateListStatus(shoppingListId, req.user.id, 'accepted');
-        }
-
-        // Calculate totals for the order
-        const { totalAmount, serviceFee, deliveryFee } =
-            await OrderService.calculateTotals(shoppingListId);
-
-        // Create the order
-        const order = await OrderService.createOrder({
-            shoppingListId,
-            customerId: req.user.id,
-            agentId: shoppingList.agentId,
-            totalAmount,
-            serviceFee,
-            deliveryFee,
-            deliveryAddress,
-            customerNotes,
-        });
-
-        res.status(201).json({
-            status: 'success',
-            message: 'Order created successfully',
-            data: order,
-        });
-    }
-
-    /**
-     * Handle agent rejection of an assigned order
-     */
     static async rejectOrder(req: AuthenticatedRequest, res: Response) {
         const { id } = req.params;
         const { reason } = req.body;
@@ -291,9 +209,6 @@ export default class OrderController {
         });
     }
 
-    /**
-     * Get order trail/audit log
-     */
     static async getOrderTrail(req: AuthenticatedRequest, res: Response) {
         const { id } = req.params;
 
@@ -328,7 +243,7 @@ export default class OrderController {
         } catch (error) {
             console.error('Error retrieving order trail:', { 
                 id, 
-                error: error instanceof Error ? error.message : String(error) 
+                error: error instanceof Error ? error.message : String(error), 
             });
             throw error;
         }

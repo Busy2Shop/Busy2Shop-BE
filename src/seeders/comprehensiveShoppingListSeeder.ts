@@ -29,7 +29,7 @@ interface ShoppingListTemplate {
 
 const suggestedListTemplates: ShoppingListTemplate[] = [
     {
-        name: "Today's Essential Shopping List",
+        name: 'Today\'s Essential Shopping List',
         notes: 'Everything you need for today - curated by our shopping experts',
         category: 'daily_essentials',
         tags: ['today', 'essential', 'curated'],
@@ -49,10 +49,10 @@ const suggestedListTemplates: ShoppingListTemplate[] = [
             { productName: 'Tomato', quantity: 5, unit: 'pieces' },
             { productName: 'Onion', quantity: 3, unit: 'pieces' },
             { productName: 'Chicken', quantity: 1, unit: 'kg' },
-        ]
+        ],
     },
     {
-        name: "Weekend Family Feast",
+        name: 'Weekend Family Feast',
         notes: 'Perfect ingredients for a wonderful weekend family meal',
         category: 'family_meal',
         tags: ['weekend', 'family', 'feast'],
@@ -70,10 +70,10 @@ const suggestedListTemplates: ShoppingListTemplate[] = [
             { productName: 'Spices', quantity: 1, unit: 'set' },
             { productName: 'Fruit', quantity: 1, unit: 'basket' },
             { productName: 'Drinks', quantity: 4, unit: 'bottles' },
-        ]
+        ],
     },
     {
-        name: "Local Market Fresh Finds",
+        name: 'Local Market Fresh Finds',
         notes: 'Fresh local produce where you set your own price expectations',
         category: 'local_fresh',
         tags: ['local', 'fresh', 'flexible_pricing'],
@@ -91,10 +91,10 @@ const suggestedListTemplates: ShoppingListTemplate[] = [
             { productName: 'Vegetables', quantity: 2, unit: 'bunches', userProvidedPrice: 2000 },
             { productName: 'Plantain', quantity: 6, unit: 'pieces', userProvidedPrice: 1800 },
             { productName: 'Yam', quantity: 2, unit: 'tubers', userProvidedPrice: 3000 },
-        ]
+        ],
     },
     {
-        name: "Quick Breakfast Essentials",
+        name: 'Quick Breakfast Essentials',
         notes: 'Start your day right with these breakfast must-haves',
         category: 'breakfast',
         tags: ['breakfast', 'quick', 'morning'],
@@ -113,14 +113,14 @@ const suggestedListTemplates: ShoppingListTemplate[] = [
             { productName: 'Milk', quantity: 1, unit: 'carton' },
             { productName: 'Cereal', quantity: 1, unit: 'box' },
             { productName: 'Banana', quantity: 6, unit: 'pieces' },
-        ]
-    }
+        ],
+    },
 ];
 
 // Personal shopping list templates for users
 const personalListTemplates: ShoppingListTemplate[] = [
     {
-        name: "My Weekly Groceries",
+        name: 'My Weekly Groceries',
         notes: 'My regular weekly shopping list',
         category: 'personal_weekly',
         tags: ['weekly', 'personal', 'routine'],
@@ -139,10 +139,10 @@ const personalListTemplates: ShoppingListTemplate[] = [
             { productName: 'Onion', quantity: 5, unit: 'pieces' },
             { productName: 'Meat', quantity: 2, unit: 'kg' },
             { productName: 'Fish', quantity: 1, unit: 'kg' },
-        ]
+        ],
     },
     {
-        name: "Local Market Shopping",
+        name: 'Local Market Shopping',
         notes: 'Shopping from my local market with custom prices',
         category: 'local_personal',
         tags: ['local', 'personal', 'budget'],
@@ -159,8 +159,8 @@ const personalListTemplates: ShoppingListTemplate[] = [
             { productName: 'Plantain', quantity: 8, unit: 'pieces', userProvidedPrice: 2400 },
             { productName: 'Yam', quantity: 3, unit: 'tubers', userProvidedPrice: 4500 },
             { productName: 'Vegetables', quantity: 3, unit: 'bunches', userProvidedPrice: 2500 },
-        ]
-    }
+        ],
+    },
 ];
 
 export class ComprehensiveShoppingListSeeder {
@@ -173,14 +173,14 @@ export class ComprehensiveShoppingListSeeder {
             const itemsDeleted = await ShoppingListItem.destroy({
                 where: {},
                 truncate: true,
-                cascade: true
+                cascade: true,
             });
 
             // Delete all shopping lists
             const listsDeleted = await ShoppingList.destroy({
                 where: {},
                 truncate: true,
-                cascade: true
+                cascade: true,
             });
 
             logger.info(`🗑️ Cleared ${itemsDeleted} shopping list items and ${listsDeleted} shopping lists`);
@@ -197,27 +197,27 @@ export class ComprehensiveShoppingListSeeder {
             const product = await Product.findOne({
                 where: {
                     name: {
-                        [Op.iLike]: `%${productName}%`
+                        [Op.iLike]: `%${productName}%`,
                     },
-                    isAvailable: true
+                    isAvailable: true,
                 },
                 include: [{
                     model: Market,
                     as: 'market',
                     where: {
                         marketType: marketType === 'local_market' ? 'local_market' : {
-                            [Op.ne]: 'local_market'
-                        }
+                            [Op.ne]: 'local_market',
+                        },
                     },
-                    required: false
+                    required: false,
                 }],
                 order: [
                     [
                         Product.sequelize?.literal(
                             `CASE WHEN LOWER("Product"."name") = LOWER('${productName}') THEN 0 ELSE 1 END`
-                        ) as any, 'ASC'
-                    ]
-                ]
+                        ) as any, 'ASC',
+                    ],
+                ],
             });
 
             return product;
@@ -325,9 +325,9 @@ export class ComprehensiveShoppingListSeeder {
             let systemUser = await User.findOne({
                 where: {
                     email: {
-                        [Op.iLike]: '%admin%'
-                    }
-                }
+                        [Op.iLike]: '%admin%',
+                    },
+                },
             });
 
             if (!systemUser) {
@@ -338,8 +338,8 @@ export class ComprehensiveShoppingListSeeder {
                     status: {
                         activated: true,
                         emailVerified: true,
-                        userType: 'customer'
-                    }
+                        userType: 'customer',
+                    },
                 });
             }
 
@@ -347,15 +347,15 @@ export class ComprehensiveShoppingListSeeder {
             const supermarket = await Market.findOne({
                 where: {
                     marketType: {
-                        [Op.ne]: 'local_market'
-                    }
-                }
+                        [Op.ne]: 'local_market',
+                    },
+                },
             });
 
             const localMarket = await Market.findOne({
                 where: {
-                    marketType: 'local_market'
-                }
+                    marketType: 'local_market',
+                },
             });
 
             let suggestedCount = 0;
@@ -390,10 +390,10 @@ export class ComprehensiveShoppingListSeeder {
             const users = await User.findAll({
                 where: {
                     status: {
-                        userType: 'customer'
-                    }
+                        userType: 'customer',
+                    },
                 },
-                limit: 3
+                limit: 3,
             });
 
             if (users.length === 0) {
@@ -404,15 +404,15 @@ export class ComprehensiveShoppingListSeeder {
             const supermarket = await Market.findOne({
                 where: {
                     marketType: {
-                        [Op.ne]: 'local_market'
-                    }
-                }
+                        [Op.ne]: 'local_market',
+                    },
+                },
             });
 
             const localMarket = await Market.findOne({
                 where: {
-                    marketType: 'local_market'
-                }
+                    marketType: 'local_market',
+                },
             });
 
             let personalCount = 0;
@@ -425,7 +425,7 @@ export class ComprehensiveShoppingListSeeder {
                         {
                             ...template,
                             name: `${template.name} - ${user.firstName}`,
-                            notes: `${template.notes} (Personal list for ${user.firstName})`
+                            notes: `${template.notes} (Personal list for ${user.firstName})`,
                         },
                         user.id,
                         marketToUse?.id
@@ -452,8 +452,8 @@ export class ComprehensiveShoppingListSeeder {
             // Get or create a test user
             let testUser = await User.findOne({
                 where: {
-                    email: 'test@busy2shop.com'
-                }
+                    email: 'test@busy2shop.com',
+                },
             });
 
             if (!testUser) {
@@ -464,29 +464,29 @@ export class ComprehensiveShoppingListSeeder {
                     status: {
                         activated: true,
                         emailVerified: true,
-                        userType: 'customer'
-                    }
+                        userType: 'customer',
+                    },
                 });
             }
 
             const localMarket = await Market.findOne({
                 where: {
-                    marketType: 'local_market'
-                }
+                    marketType: 'local_market',
+                },
             });
 
             // Create a test scenario: Copy suggested list to personal
             const suggestedList = await ShoppingList.findOne({
                 where: {
                     listType: 'suggested',
-                    name: "Today's Essential Shopping List"
-                }
+                    name: 'Today\'s Essential Shopping List',
+                },
             });
 
             if (suggestedList) {
                 const copiedList = await ShoppingList.create({
-                    name: "My Copy of Today's Essentials",
-                    notes: "Copied from suggested list and customized",
+                    name: 'My Copy of Today\'s Essentials',
+                    notes: 'Copied from suggested list and customized',
                     customerId: testUser.id,
                     marketId: localMarket?.id,
                     status: 'draft',

@@ -470,7 +470,7 @@ export default class HomeController {
                         'product_availability',
                         'product_quality',
                         'user_preferences',
-                        'location_proximity'
+                        'location_proximity',
                     ],
                 },
             });
@@ -693,7 +693,7 @@ export default class HomeController {
                                 estimatedPrice: 2500,
                                 actualPrice: null,
                                 shoppingListId: 'weekly-groceries-sample',
-                                productId: null
+                                productId: null,
                             } as any,
                             {
                                 id: '2',
@@ -704,7 +704,7 @@ export default class HomeController {
                                 estimatedPrice: 1500,
                                 actualPrice: null,
                                 shoppingListId: 'weekly-groceries-sample',
-                                productId: null
+                                productId: null,
                             } as any,
                             {
                                 id: '3',
@@ -715,7 +715,7 @@ export default class HomeController {
                                 estimatedPrice: 800,
                                 actualPrice: null,
                                 shoppingListId: 'weekly-groceries-sample',
-                                productId: null
+                                productId: null,
                             } as any,
                             {
                                 id: '4',
@@ -726,7 +726,7 @@ export default class HomeController {
                                 estimatedPrice: 500,
                                 actualPrice: null,
                                 shoppingListId: 'weekly-groceries-sample',
-                                productId: null
+                                productId: null,
                             } as any,
                             {
                                 id: '5',
@@ -737,7 +737,7 @@ export default class HomeController {
                                 estimatedPrice: 1800,
                                 actualPrice: null,
                                 shoppingListId: 'weekly-groceries-sample',
-                                productId: null
+                                productId: null,
                             } as any,
                             {
                                 id: '6',
@@ -748,7 +748,7 @@ export default class HomeController {
                                 estimatedPrice: 200,
                                 actualPrice: null,
                                 shoppingListId: 'weekly-groceries-sample',
-                                productId: null
+                                productId: null,
                             } as any,
                             {
                                 id: '7',
@@ -759,7 +759,7 @@ export default class HomeController {
                                 estimatedPrice: 1200,
                                 actualPrice: null,
                                 shoppingListId: 'weekly-groceries-sample',
-                                productId: null
+                                productId: null,
                             } as any,
                             {
                                 id: '8',
@@ -770,7 +770,7 @@ export default class HomeController {
                                 estimatedPrice: 500,
                                 actualPrice: null,
                                 shoppingListId: 'weekly-groceries-sample',
-                                productId: null
+                                productId: null,
                             } as any,
                         ],
                         marketType: 'Supermarket',

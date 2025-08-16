@@ -176,7 +176,7 @@ export default class OrderTrailService {
         await this.createTrailEntry({
             orderId,
             action: 'PAYMENT_PROCESSED',
-            description: `Payment processed for order`,
+            description: 'Payment processed for order',
             newValue: {
                 paymentId: paymentData.paymentId,
                 paymentStatus: paymentData.paymentStatus,
@@ -323,6 +323,34 @@ export default class OrderTrailService {
             metadata: {
                 source: 'system',
                 automated: true,
+                timestamp: new Date().toISOString(),
+            },
+        });
+    }
+
+    /**
+     * Generic method to log order events with flexible data structure
+     */
+    static async logOrderEvent(
+        orderId: string,
+        eventData: {
+            action: string;
+            description: string;
+            performedBy: string;
+            metadata?: any;
+            previousValue?: any;
+            newValue?: any;
+        },
+    ): Promise<void> {
+        await this.createTrailEntry({
+            orderId,
+            action: eventData.action,
+            description: eventData.description,
+            previousValue: eventData.previousValue,
+            newValue: eventData.newValue,
+            metadata: {
+                ...eventData.metadata,
+                performedBy: eventData.performedBy,
                 timestamp: new Date().toISOString(),
             },
         });

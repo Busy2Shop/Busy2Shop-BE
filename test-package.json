@@ -1,0 +1,12 @@
+{
+  "name": "busy2shop-flow-test",
+  "version": "1.0.0",
+  "description": "End-to-end test for Busy2Shop shopping flow",
+  "main": "test-shopping-flow.js",
+  "scripts": {
+    "test:flow": "node test-shopping-flow.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0"
+  }
+}

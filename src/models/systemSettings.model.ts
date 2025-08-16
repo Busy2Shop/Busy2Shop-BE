@@ -7,7 +7,6 @@ import {
     Default,
     CreatedAt,
     UpdatedAt,
-    Unique,
 } from 'sequelize-typescript';
 
 // Define the structure for different setting value types
@@ -52,25 +51,32 @@ export interface ISystemSettings {
     isActive?: boolean;
 }
 
-@Table
+@Table({
+    indexes: [
+        {
+            unique: true,
+            fields: ['key'],
+            name: 'SystemSettings_key_unique',
+        },
+    ],
+})
 export default class SystemSettings extends Model<SystemSettings | ISystemSettings> {
     @PrimaryKey
     @Default(DataType.UUIDV4)
     @Column(DataType.STRING)
     id: string;
 
-    @Unique
     @Column({
         type: DataType.STRING,
         allowNull: false,
-        comment: 'Unique key for the setting'
+        comment: 'Unique key for the setting',
     })
     key: string;
 
     @Column({
         type: DataType.JSONB,
         allowNull: false,
-        comment: 'Setting value with metadata including type, description, validation rules'
+        comment: 'Setting value with metadata including type, description, validation rules',
     })
     value: ISettingValue;
 
@@ -78,7 +84,7 @@ export default class SystemSettings extends Model<SystemSettings | ISystemSettin
         type: DataType.BOOLEAN,
         defaultValue: true,
         allowNull: false,
-        comment: 'Whether this setting is active'
+        comment: 'Whether this setting is active',
     })
     isActive: boolean;
 

@@ -50,7 +50,7 @@ const suggestedListsData: SuggestedListData[] = [
             { name: 'Bread', quantity: 2, unit: 'loaves', estimatedPrice: 500 },
             { name: 'Eggs', quantity: 12, unit: 'pieces', estimatedPrice: 1500 },
             { name: 'Chicken', quantity: 1, unit: 'kg', estimatedPrice: 2000 },
-        ]
+        ],
     },
     {
         name: 'Healthy Living Basket',
@@ -74,7 +74,7 @@ const suggestedListsData: SuggestedListData[] = [
             { name: 'Greek Yogurt', quantity: 2, unit: 'cups', estimatedPrice: 1000 },
             { name: 'Avocado', quantity: 3, unit: 'pieces', estimatedPrice: 900 },
             { name: 'Spinach', quantity: 1, unit: 'bunch', estimatedPrice: 300 },
-        ]
+        ],
     },
     {
         name: 'Weekend Party Essentials',
@@ -98,7 +98,7 @@ const suggestedListsData: SuggestedListData[] = [
             { name: 'Grilled Meat', quantity: 2, unit: 'kg', estimatedPrice: 8000 },
             { name: 'Seasoning & Spices', quantity: 1, unit: 'set', estimatedPrice: 1500 },
             { name: 'Plastic Plates', quantity: 20, unit: 'pieces', estimatedPrice: 700 },
-        ]
+        ],
     },
     {
         name: 'Breakfast for the Week',
@@ -122,7 +122,7 @@ const suggestedListsData: SuggestedListData[] = [
             { name: 'Fresh Milk', quantity: 2, unit: 'cartons', estimatedPrice: 1200 },
             { name: 'Bananas', quantity: 6, unit: 'pieces', estimatedPrice: 600 },
             { name: 'Tea/Coffee', quantity: 1, unit: 'pack', estimatedPrice: 800 },
-        ]
+        ],
     },
     {
         name: 'Student Budget Pack',
@@ -146,7 +146,7 @@ const suggestedListsData: SuggestedListData[] = [
             { name: 'Tomatoes', quantity: 3, unit: 'pieces', estimatedPrice: 450 },
             { name: 'Cooking Oil (small)', quantity: 1, unit: 'bottle', estimatedPrice: 800 },
             { name: 'Salt', quantity: 1, unit: 'pack', estimatedPrice: 200 },
-        ]
+        ],
     },
     {
         name: 'Baby Care Essentials',
@@ -169,8 +169,8 @@ const suggestedListsData: SuggestedListData[] = [
             { name: 'Baby Oil', quantity: 1, unit: 'bottle', estimatedPrice: 800 },
             { name: 'Baby Soap', quantity: 1, unit: 'pack', estimatedPrice: 600 },
             { name: 'Baby Powder', quantity: 1, unit: 'bottle', estimatedPrice: 700 },
-        ]
-    }
+        ],
+    },
 ];
 
 export class SuggestedListsSeeder {
@@ -183,9 +183,9 @@ export class SuggestedListsSeeder {
             const adminUser = await User.findOne({
                 where: {
                     status: {
-                        userType: 'customer' // Admin users are typically stored as customers with admin privileges
-                    }
-                }
+                        userType: 'customer', // Admin users are typically stored as customers with admin privileges
+                    },
+                },
             }) || await User.findOne(); // Fallback to any user if no specific admin found
 
             if (!adminUser) {
@@ -205,8 +205,8 @@ export class SuggestedListsSeeder {
                 const existingList = await ShoppingList.findOne({
                     where: {
                         name: listData.name,
-                        listType: 'suggested'
-                    }
+                        listType: 'suggested',
+                    },
                 });
 
                 if (existingList) {
@@ -272,8 +272,8 @@ export class SuggestedListsSeeder {
             // Delete all suggested lists and their items (cascade should handle items)
             const deletedCount = await ShoppingList.destroy({
                 where: {
-                    listType: 'suggested'
-                }
+                    listType: 'suggested',
+                },
             });
 
             logger.info(`🗑️  Deleted ${deletedCount} suggested lists`);

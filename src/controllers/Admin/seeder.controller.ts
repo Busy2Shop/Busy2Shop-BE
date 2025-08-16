@@ -945,7 +945,7 @@ class SeederController {
 
     // Seed discount campaigns with realistic data
     async seedDiscountCampaigns(req: Request, res: Response) {
-        const userId = "046ee1e3-38c1-49d9-9e8c-3c3621ed1385";
+        const userId = '046ee1e3-38c1-49d9-9e8c-3c3621ed1385';
         if (!userId) {
             throw new BadRequestError('User ID is required');
         }
@@ -987,8 +987,8 @@ class SeederController {
                     createdBy: userId,
                     conditions: {
                         userType: 'customer',
-                        orderCount: { max: 1 }
-                    }
+                        orderCount: { max: 1 },
+                    },
                 },
                 {
                     name: 'Weekend Special',
@@ -1010,8 +1010,8 @@ class SeederController {
                     createdBy: userId,
                     conditions: {
                         dayOfWeek: [6, 0], // Saturday and Sunday
-                        includeShippingInMinimum: false
-                    }
+                        includeShippingInMinimum: false,
+                    },
                 },
                 // Market-specific discounts
                 {
@@ -1034,8 +1034,8 @@ class SeederController {
                     createdBy: userId,
                     targetMarketIds: [markets[0].id],
                     conditions: {
-                        userType: 'customer'
-                    }
+                        userType: 'customer',
+                    },
                 },
                 // Product-specific discounts
                 ...(products.length > 0 ? [{
@@ -1058,8 +1058,8 @@ class SeederController {
                     createdBy: userId,
                     targetProductIds: products.slice(0, 5).map(p => p.id),
                     conditions: {
-                        excludeDiscountedItems: false
-                    }
+                        excludeDiscountedItems: false,
+                    },
                 }] : []),
                 // Fixed amount discounts
                 {
@@ -1081,8 +1081,8 @@ class SeederController {
                     createdBy: userId,
                     conditions: {
                         userType: 'customer',
-                        includeShippingInMinimum: true
-                    }
+                        includeShippingInMinimum: true,
+                    },
                 },
                 // User-specific (referral) discounts
                 {
@@ -1103,8 +1103,8 @@ class SeederController {
                     priority: 5,
                     createdBy: userId,
                     conditions: {
-                        userType: 'customer'
-                    }
+                        userType: 'customer',
+                    },
                 },
                 // Buy X Get Y discount
                 {
@@ -1127,12 +1127,12 @@ class SeederController {
                     buyXGetYConfig: {
                         buyQuantity: 2,
                         getQuantity: 1,
-                        applyToSameProduct: true
+                        applyToSameProduct: true,
                     },
                     targetProductIds: products.length > 10 ? products.slice(10, 15).map(p => p.id) : [],
                     conditions: {
-                        excludeDiscountedItems: true
-                    }
+                        excludeDiscountedItems: true,
+                    },
                 },
                 // Category-specific discount
                 {
@@ -1158,9 +1158,9 @@ class SeederController {
                         userType: 'customer',
                         timeOfDay: {
                             start: '08:00',
-                            end: '18:00'
-                        }
-                    }
+                            end: '18:00',
+                        },
+                    },
                 },
                 // Free shipping discount
                 {
@@ -1182,8 +1182,8 @@ class SeederController {
                     createdBy: userId,
                     conditions: {
                         userType: 'customer',
-                        includeShippingInMinimum: false
-                    }
+                        includeShippingInMinimum: false,
+                    },
                 },
                 // Loyalty discount for returning customers
                 {
@@ -1207,9 +1207,9 @@ class SeederController {
                     targetUserIds: users.slice(0, 5).map(u => u.id),
                     conditions: {
                         orderCount: { min: 5 },
-                        lastOrderDays: 30
-                    }
-                }
+                        lastOrderDays: 30,
+                    },
+                },
             ];
 
             // Create campaigns
@@ -1236,9 +1236,9 @@ class SeederController {
                         failed: campaignSeeds.length - createdCampaigns.length,
                         marketsUsed: markets.length,
                         productsUsed: products.length,
-                        usersUsed: users.length
-                    }
-                }
+                        usersUsed: users.length,
+                    },
+                },
             });
 
         } catch (error) {
@@ -1276,10 +1276,10 @@ class SeederController {
                         description: setting.value.description,
                         isPublic: setting.value.isPublic,
                         value: setting.value.isPublic ? setting.value.value : '[HIDDEN]',
-                        isActive: setting.isActive
+                        isActive: setting.isActive,
                     })),
-                    publicSettings
-                }
+                    publicSettings,
+                },
             });
 
         } catch (error) {
@@ -1316,8 +1316,8 @@ class SeederController {
                 message: 'System settings cleared successfully',
                 data: {
                     clearedCount: settingsCount,
-                    action: 'deactivated'
-                }
+                    action: 'deactivated',
+                },
             });
 
         } catch (error) {
@@ -1354,14 +1354,14 @@ class SeederController {
                         activeSettings: activeSettings.length,
                         inactiveSettings: allSettings.length - activeSettings.length,
                         publicSettings: Object.keys(publicSettings).length,
-                        categories: Object.keys(settingsByCategory).length
+                        categories: Object.keys(settingsByCategory).length,
                     },
                     settingsByCategory,
                     publicSettings,
                     lastUpdated: activeSettings.length > 0 ? 
                         Math.max(...activeSettings.map(s => new Date(s.updatedAt).getTime())) : 
-                        null
-                }
+                        null,
+                },
             });
 
         } catch (error) {

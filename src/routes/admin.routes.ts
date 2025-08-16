@@ -2,7 +2,7 @@ import express, { Router } from 'express';
 import AdminController from '../controllers/Admin/admin.controller';
 import { AdminAuthenticatedController, adminAuth } from '../middlewares/authMiddleware';
 import KycController from '../controllers/kyc.controller';
-import AlatPayController from '../controllers/payment/alatpay.controller';
+// import AlatPayController from '../controllers/payment/alatpay.controller';
 import { AuthenticatedController } from '../middlewares/authMiddleware';
 import suggestedListsRoutes from './admin/suggestedLists.routes';
 
@@ -59,16 +59,16 @@ router.patch(
 );
 
 // Payment Management
-router.get(
-    '/payments/reconcile',
-    adminAuth('admin'),
-    AdminAuthenticatedController(AuthenticatedController(AlatPayController.reconcileTransactions))
-);
-router.get(
-    '/payments/check-expired',
-    adminAuth('admin'),
-    AdminAuthenticatedController(AuthenticatedController(AlatPayController.checkExpiredTransactions))
-);
+// router.get(
+//     '/payments/reconcile',
+//     adminAuth('admin'),
+//     AdminAuthenticatedController(AuthenticatedController(AlatPayController.reconcileTransactions))
+// );
+// router.get(
+//     '/payments/check-expired',
+//     adminAuth('admin'),
+//     AdminAuthenticatedController(AuthenticatedController(AlatPayController.checkExpiredTransactions))
+// );
 
 // Suggested Lists Management
 router.use('/shopping-lists', adminAuth('admin'), suggestedListsRoutes);

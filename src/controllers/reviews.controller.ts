@@ -46,7 +46,7 @@ export default class ReviewController {
             const canReview = await ReviewService.canUserReviewProduct(req.user.id, productId);
             if (!canReview) {
                 throw new BadRequestError(
-                    "You are not eligible to review this product. You must have completed an order from this product's market and not reviewed it yet.",
+                    'You are not eligible to review this product. You must have completed an order from this product\'s market and not reviewed it yet.',
                 );
             }
         }

@@ -26,7 +26,7 @@ export default class MealService {
             cuisine,
             difficulty,
             popular,
-            tags
+            tags,
         } = params;
 
         const offset = (page - 1) * size;
@@ -52,15 +52,15 @@ export default class MealService {
                             as: 'product',
                             attributes: ['id', 'name', 'price', 'discountPrice', 'images'],
                             required: false,
-                        }
+                        },
                     ],
                     order: [['sortOrder', 'ASC']],
-                }
+                },
             ],
             order: [
                 ['isPopular', 'DESC'],
                 ['sortOrder', 'ASC'],
-                ['createdAt', 'DESC']
+                ['createdAt', 'DESC'],
             ],
             limit: size,
             offset,
@@ -89,10 +89,10 @@ export default class MealService {
                             as: 'product',
                             attributes: ['id', 'name', 'price', 'discountPrice', 'images', 'description'],
                             required: false,
-                        }
+                        },
                     ],
                     order: [['sortOrder', 'ASC']],
-                }
+                },
             ],
         });
 
@@ -172,7 +172,7 @@ export default class MealService {
                     { name: { [Op.iLike]: searchTerm } },
                     { description: { [Op.iLike]: searchTerm } },
                     { tags: { [Op.overlap]: [query.toLowerCase()] } },
-                ]
+                ],
             },
             include: [
                 {
@@ -184,14 +184,14 @@ export default class MealService {
                             as: 'product',
                             attributes: ['id', 'name', 'price', 'discountPrice', 'images'],
                             required: false,
-                        }
+                        },
                     ],
                     order: [['sortOrder', 'ASC']],
-                }
+                },
             ],
             order: [
                 ['isPopular', 'DESC'],
-                ['name', 'ASC']
+                ['name', 'ASC'],
             ],
             limit,
         });
@@ -207,7 +207,7 @@ export default class MealService {
             attributes: ['category'],
             where: {
                 isActive: true,
-                category: { [Op.ne]: null as any }
+                category: { [Op.ne]: null as any },
             } as any,
             group: ['category'],
         });
@@ -231,11 +231,11 @@ export default class MealService {
                     attributes: ['id', 'ingredientName', 'quantity', 'unit'],
                     separate: true,
                     order: [['sortOrder', 'ASC']],
-                }
+                },
             ],
             order: [
                 ['sortOrder', 'ASC'],
-                ['createdAt', 'DESC']
+                ['createdAt', 'DESC'],
             ],
             limit,
         });

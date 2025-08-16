@@ -33,7 +33,7 @@ export class OrderNumberGenerator {
             
             // Check if this order number already exists
             const existingOrder = await Order.findOne({
-                where: { orderNumber }
+                where: { orderNumber },
             });
             
             if (!existingOrder) {

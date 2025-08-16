@@ -3,7 +3,7 @@ import DiscountCampaign, {
     IDiscountCampaign, 
     DiscountType, 
     DiscountTargetType, 
-    CampaignStatus 
+    CampaignStatus, 
 } from '../models/discountCampaign.model';
 import DiscountUsage from '../models/discountUsage.model';
 import User from '../models/user.model';
@@ -85,10 +85,10 @@ export default class DiscountCampaignService {
                 {
                     model: User,
                     as: 'creator',
-                    attributes: ['id', 'firstName', 'lastName', 'email']
-                }
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
+                },
             ],
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
         };
 
         if (page && size) {
@@ -104,8 +104,8 @@ export default class DiscountCampaignService {
                     page,
                     size,
                     total: count,
-                    pages: Math.ceil(count / size)
-                }
+                    pages: Math.ceil(count / size),
+                },
             };
         }
 
@@ -119,7 +119,7 @@ export default class DiscountCampaignService {
                 {
                     model: User,
                     as: 'creator',
-                    attributes: ['id', 'firstName', 'lastName', 'email']
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
                 },
                 {
                     model: DiscountUsage,
@@ -129,11 +129,11 @@ export default class DiscountCampaignService {
                     include: [
                         {
                             model: User,
-                            attributes: ['id', 'firstName', 'lastName', 'email']
-                        }
-                    ]
-                }
-            ]
+                            attributes: ['id', 'firstName', 'lastName', 'email'],
+                        },
+                    ],
+                },
+            ],
         });
 
         if (!campaign) {
@@ -153,7 +153,7 @@ export default class DiscountCampaignService {
         // Validate discount code uniqueness if provided
         if (campaignData.code) {
             const existingCampaign = await DiscountCampaign.findOne({
-                where: { code: campaignData.code }
+                where: { code: campaignData.code },
             });
             if (existingCampaign) {
                 throw new BadRequestError('Discount code already exists');
@@ -175,8 +175,8 @@ export default class DiscountCampaignService {
             const existingCampaign = await DiscountCampaign.findOne({
                 where: { 
                     code: updateData.code,
-                    id: { [Op.ne]: id }
-                }
+                    id: { [Op.ne]: id },
+                },
             });
             if (existingCampaign) {
                 throw new BadRequestError('Discount code already exists');
@@ -195,7 +195,7 @@ export default class DiscountCampaignService {
 
         // Check if campaign has been used
         const usageCount = await DiscountUsage.count({
-            where: { campaignId: id }
+            where: { campaignId: id },
         });
 
         if (usageCount > 0) {
@@ -229,21 +229,21 @@ export default class DiscountCampaignService {
             endDate: { [Op.gte]: now },
             [Op.or]: [
                 { usageLimit: null },
-                { usageLimit: { [Op.gt]: Database.col('usageCount') } }
-            ]
+                { usageLimit: { [Op.gt]: Database.col('usageCount') } },
+            ],
         };
 
         // Filter by minimum order amount
         if (orderAmount) {
             whereClause[Op.or] = [
                 { minimumOrderAmount: null },
-                { minimumOrderAmount: { [Op.lte]: orderAmount } }
+                { minimumOrderAmount: { [Op.lte]: orderAmount } },
             ];
         }
 
         const campaigns = await DiscountCampaign.findAll({
             where: whereClause,
-            order: [['priority', 'DESC'], ['value', 'DESC']]
+            order: [['priority', 'DESC'], ['value', 'DESC']],
         });
 
         // Filter campaigns based on target type and user eligibility
@@ -253,7 +253,7 @@ export default class DiscountCampaignService {
             const isEligible = await this.isCampaignEligibleForUser(campaign, userId, {
                 orderAmount,
                 marketId,
-                productIds
+                productIds,
             });
 
             if (isEligible) {
@@ -273,13 +273,13 @@ export default class DiscountCampaignService {
         const { code, userId, orderAmount, marketId, productIds } = validation;
 
         const campaign = await DiscountCampaign.findOne({
-            where: { code }
+            where: { code },
         });
 
         if (!campaign) {
             return {
                 isValid: false,
-                error: 'Invalid discount code'
+                error: 'Invalid discount code',
             };
         }
 
@@ -289,7 +289,7 @@ export default class DiscountCampaignService {
         if (campaign.status !== CampaignStatus.ACTIVE) {
             return {
                 isValid: false,
-                error: 'Discount code is not active'
+                error: 'Discount code is not active',
             };
         }
 
@@ -297,7 +297,7 @@ export default class DiscountCampaignService {
         if (campaign.startDate > now || campaign.endDate < now) {
             return {
                 isValid: false,
-                error: 'Discount code has expired or is not yet active'
+                error: 'Discount code has expired or is not yet active',
             };
         }
 
@@ -305,7 +305,7 @@ export default class DiscountCampaignService {
         if (campaign.usageLimit && campaign.usageCount >= campaign.usageLimit) {
             return {
                 isValid: false,
-                error: 'Discount code has reached its usage limit'
+                error: 'Discount code has reached its usage limit',
             };
         }
 
@@ -313,26 +313,26 @@ export default class DiscountCampaignService {
         const isEligible = await this.isCampaignEligibleForUser(campaign, userId, {
             orderAmount,
             marketId,
-            productIds
+            productIds,
         });
 
         if (!isEligible) {
             return {
                 isValid: false,
-                error: 'You are not eligible for this discount'
+                error: 'You are not eligible for this discount',
             };
         }
 
         // Calculate discount amount
         const discountAmount = await this.calculateDiscountAmount(campaign, {
             orderAmount,
-            productIds: productIds || []
+            productIds: productIds || [],
         });
 
         return {
             isValid: true,
             campaign,
-            discountAmount
+            discountAmount,
         };
     }
 
@@ -355,7 +355,7 @@ export default class DiscountCampaignService {
         // Calculate discount amount with security limits
         const discountAmount = await this.calculateDiscountAmount(campaign, {
             orderAmount: orderTotal,
-            productIds: items?.map(item => item.productId) || []
+            productIds: items?.map(item => item.productId) || [],
         });
 
         const finalTotal = Math.max(0, orderTotal - discountAmount);
@@ -364,7 +364,7 @@ export default class DiscountCampaignService {
         return {
             discountAmount: Math.round(discountAmount * 100) / 100,
             finalTotal: Math.round(finalTotal * 100) / 100,
-            effectivePercentage: Math.round(effectivePercentage * 100) / 100
+            effectivePercentage: Math.round(effectivePercentage * 100) / 100,
         };
     }
 
@@ -382,7 +382,7 @@ export default class DiscountCampaignService {
 
         // Validate eligibility
         const isEligible = await this.isCampaignEligibleForUser(campaign, userId, {
-            orderAmount: orderTotal
+            orderAmount: orderTotal,
         });
 
         if (!isEligible) {
@@ -392,7 +392,7 @@ export default class DiscountCampaignService {
         // Calculate discount amount
         const discountAmount = await this.calculateDiscountAmount(campaign, {
             orderAmount: orderTotal,
-            productIds: items.map(item => item.productId)
+            productIds: items.map(item => item.productId),
         });
 
         if (discountAmount <= 0) {
@@ -410,8 +410,8 @@ export default class DiscountCampaignService {
             metadata: {
                 appliedProducts: items.map(item => item.productId),
                 originalPrice: orderTotal,
-                finalPrice: orderTotal - discountAmount
-            }
+                finalPrice: orderTotal - discountAmount,
+            },
         });
 
         // Update campaign usage count
@@ -422,7 +422,7 @@ export default class DiscountCampaignService {
         return {
             discountAmount,
             finalTotal,
-            usage
+            usage,
         };
     }
 
@@ -446,10 +446,10 @@ export default class DiscountCampaignService {
             include: [
                 {
                     model: DiscountCampaign,
-                    attributes: ['id', 'name', 'type', 'code']
-                }
+                    attributes: ['id', 'name', 'type', 'code'],
+                },
             ],
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
         };
 
         if (page && size) {
@@ -465,8 +465,8 @@ export default class DiscountCampaignService {
                     page,
                     size,
                     total: count,
-                    pages: Math.ceil(count / size)
-                }
+                    pages: Math.ceil(count / size),
+                },
             };
         }
 
@@ -494,14 +494,14 @@ export default class DiscountCampaignService {
                 discountAmount: 0,
                 finalTotal: orderTotal,
                 isEligible: false,
-                error: 'Campaign not found'
+                error: 'Campaign not found',
             };
         }
 
         const isEligible = await this.isCampaignEligibleForUser(campaign, userId, {
             orderAmount: orderTotal,
             marketId,
-            productIds: items.map(item => item.productId)
+            productIds: items.map(item => item.productId),
         });
 
         if (!isEligible) {
@@ -509,19 +509,19 @@ export default class DiscountCampaignService {
                 discountAmount: 0,
                 finalTotal: orderTotal,
                 isEligible: false,
-                error: 'Not eligible for this discount'
+                error: 'Not eligible for this discount',
             };
         }
 
         const discountAmount = await this.calculateDiscountAmount(campaign, {
             orderAmount: orderTotal,
-            productIds: items.map(item => item.productId)
+            productIds: items.map(item => item.productId),
         });
 
         return {
             discountAmount,
             finalTotal: Math.max(0, orderTotal - discountAmount),
-            isEligible: true
+            isEligible: true,
         };
     }
 
@@ -547,9 +547,9 @@ export default class DiscountCampaignService {
             include: [
                 {
                     model: User,
-                    attributes: ['id', 'firstName', 'lastName', 'email']
-                }
-            ]
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
+                },
+            ],
         });
 
         const totalUsage = usages.length;
@@ -566,7 +566,7 @@ export default class DiscountCampaignService {
                 acc[userId] = {
                     user: usage.user,
                     usageCount: 0,
-                    totalDiscount: 0
+                    totalDiscount: 0,
                 };
             }
             acc[userId].usageCount++;
@@ -584,7 +584,7 @@ export default class DiscountCampaignService {
             uniqueUsers,
             averageOrderValue,
             conversionRate: 0, // Would need additional data to calculate
-            topUsers
+            topUsers,
         };
     }
 
@@ -604,8 +604,8 @@ export default class DiscountCampaignService {
             const userUsageCount = await DiscountUsage.count({
                 where: {
                     campaignId: campaign.id,
-                    userId
-                }
+                    userId,
+                },
             });
 
             if (userUsageCount >= campaign.usageLimitPerUser) {
@@ -645,8 +645,8 @@ export default class DiscountCampaignService {
                     where: {
                         recipientId: userId,
                         status: BonusStatus.AVAILABLE,
-                        type: BonusType.DISCOUNT
-                    }
+                        type: BonusType.DISCOUNT,
+                    },
                 });
                 if (!hasReferralBonus) {
                     return false;
@@ -656,7 +656,7 @@ export default class DiscountCampaignService {
             case DiscountTargetType.FIRST_ORDER:
                 // Check if this is user's first order
                 const previousOrders = await DiscountUsage.count({
-                    where: { userId }
+                    where: { userId },
                 });
                 if (previousOrders > 0) {
                     return false;

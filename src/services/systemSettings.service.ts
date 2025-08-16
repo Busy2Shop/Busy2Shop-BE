@@ -2,7 +2,7 @@ import SystemSettings, {
     ISystemSettings, 
     ISettingValue, 
     SYSTEM_SETTING_KEYS, 
-    SystemSettingValueMap 
+    SystemSettingValueMap, 
 } from '../models/systemSettings.model';
 import { NotFoundError } from '../utils/customErrors';
 
@@ -135,8 +135,8 @@ export default class SystemSettingsService {
                     description: 'Service fee percentage applied to orders (deprecated - use SERVICE_FEE_AMOUNT)',
                     category: 'pricing',
                     isPublic: true,
-                    validation: { min: 0, max: 50 }
-                }
+                    validation: { min: 0, max: 50 },
+                },
             },
             {
                 key: SYSTEM_SETTING_KEYS.SERVICE_FEE_AMOUNT,
@@ -146,8 +146,8 @@ export default class SystemSettingsService {
                     description: 'Fixed service fee amount in naira',
                     category: 'pricing',
                     isPublic: true,
-                    validation: { min: 0, max: 2000 }
-                }
+                    validation: { min: 0, max: 2000 },
+                },
             },
             {
                 key: SYSTEM_SETTING_KEYS.DELIVERY_FEE,
@@ -157,8 +157,8 @@ export default class SystemSettingsService {
                     description: 'Fixed delivery fee in naira',
                     category: 'pricing',
                     isPublic: true,
-                    validation: { min: 0, max: 5000 }
-                }
+                    validation: { min: 0, max: 5000 },
+                },
             },
             {
                 key: SYSTEM_SETTING_KEYS.MINIMUM_ORDER_AMOUNT,
@@ -168,8 +168,8 @@ export default class SystemSettingsService {
                     description: 'Minimum order amount in naira',
                     category: 'business_rules',
                     isPublic: true,
-                    validation: { min: 0 }
-                }
+                    validation: { min: 0 },
+                },
             },
             {
                 key: SYSTEM_SETTING_KEYS.MAXIMUM_DISCOUNT_PERCENTAGE,
@@ -179,8 +179,8 @@ export default class SystemSettingsService {
                     description: 'Maximum discount percentage allowed',
                     category: 'discounts',
                     isPublic: false,
-                    validation: { min: 0, max: 100 }
-                }
+                    validation: { min: 0, max: 100 },
+                },
             },
             {
                 key: SYSTEM_SETTING_KEYS.MAXIMUM_SINGLE_DISCOUNT_AMOUNT,
@@ -190,8 +190,8 @@ export default class SystemSettingsService {
                     description: 'Maximum single discount amount in naira',
                     category: 'discounts',
                     isPublic: false,
-                    validation: { min: 0 }
-                }
+                    validation: { min: 0 },
+                },
             },
             {
                 key: SYSTEM_SETTING_KEYS.MINIMUM_ORDER_FOR_DISCOUNT,
@@ -201,8 +201,8 @@ export default class SystemSettingsService {
                     description: 'Minimum order amount to apply discounts',
                     category: 'discounts',
                     isPublic: true,
-                    validation: { min: 0 }
-                }
+                    validation: { min: 0 },
+                },
             },
             {
                 key: SYSTEM_SETTING_KEYS.PAYMENT_TIMEOUT_MINUTES,
@@ -212,8 +212,8 @@ export default class SystemSettingsService {
                     description: 'Payment timeout in minutes',
                     category: 'payment',
                     isPublic: true,
-                    validation: { min: 5, max: 120 }
-                }
+                    validation: { min: 5, max: 120 },
+                },
             },
             {
                 key: SYSTEM_SETTING_KEYS.SUPPORTED_PAYMENT_METHODS,
@@ -222,8 +222,8 @@ export default class SystemSettingsService {
                     type: 'array' as const,
                     description: 'Supported payment methods',
                     category: 'payment',
-                    isPublic: true
-                }
+                    isPublic: true,
+                },
             },
             {
                 key: SYSTEM_SETTING_KEYS.DEFAULT_CURRENCY,
@@ -233,8 +233,8 @@ export default class SystemSettingsService {
                     description: 'Default currency code',
                     category: 'general',
                     isPublic: true,
-                    validation: { enum: ['NGN', 'USD', 'GBP'] }
-                }
+                    validation: { enum: ['NGN', 'USD', 'GBP'] },
+                },
             },
             {
                 key: SYSTEM_SETTING_KEYS.MAINTENANCE_MODE,
@@ -243,9 +243,9 @@ export default class SystemSettingsService {
                     type: 'boolean' as const,
                     description: 'Whether the app is in maintenance mode',
                     category: 'system',
-                    isPublic: true
-                }
-            }
+                    isPublic: true,
+                },
+            },
         ];
 
         for (const setting of defaultSettings) {
@@ -336,6 +336,13 @@ export default class SystemSettingsService {
         }
 
         return { valid: true };
+    }
+
+    /**
+     * Get payment timeout in minutes
+     */
+    static async getPaymentTimeout(): Promise<number> {
+        return await this.getSetting(SYSTEM_SETTING_KEYS.PAYMENT_TIMEOUT_MINUTES);
     }
 
     /**

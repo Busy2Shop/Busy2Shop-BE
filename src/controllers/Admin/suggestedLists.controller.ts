@@ -343,7 +343,7 @@ export default class SuggestedListsController {
 
             case 'delete':
                 result = await ShoppingList.destroy({
-                    where: { id: { [Op.in]: listIds }, listType: 'suggested' }
+                    where: { id: { [Op.in]: listIds }, listType: 'suggested' },
                 });
                 break;
 
@@ -369,15 +369,15 @@ export default class SuggestedListsController {
         // Admin authentication is handled by middleware
 
         const totalSuggested = await ShoppingList.count({
-            where: { listType: 'suggested' }
+            where: { listType: 'suggested' },
         });
 
         const activeSuggested = await ShoppingList.count({
-            where: { listType: 'suggested', isActive: true }
+            where: { listType: 'suggested', isActive: true },
         });
 
         const popularSuggested = await ShoppingList.count({
-            where: { listType: 'suggested', isPopular: true }
+            where: { listType: 'suggested', isPopular: true },
         });
 
         const categoryCounts = await ShoppingList.findAll({

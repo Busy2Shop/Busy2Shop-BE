@@ -26,7 +26,7 @@ export class GoogleMapsService {
             return {
                 distance: this.calculateHaversineDistance(origin, destination),
                 duration: 0,
-                status: 'OK'
+                status: 'OK',
             };
         }
 
@@ -42,7 +42,7 @@ export class GoogleMapsService {
                 return {
                     distance: this.calculateHaversineDistance(origin, destination),
                     duration: 0,
-                    status: 'OK'
+                    status: 'OK',
                 };
             }
 
@@ -52,14 +52,14 @@ export class GoogleMapsService {
                 return {
                     distance: this.calculateHaversineDistance(origin, destination),
                     duration: 0,
-                    status: 'OK'
+                    status: 'OK',
                 };
             }
 
             return {
                 distance: element.distance.value / 1000, // Convert meters to kilometers
                 duration: element.duration.value, // seconds
-                status: 'OK'
+                status: 'OK',
             };
         } catch (error) {
             logger.error('Error calling Google Maps API:', error);
@@ -67,7 +67,7 @@ export class GoogleMapsService {
             return {
                 distance: this.calculateHaversineDistance(origin, destination),
                 duration: 0,
-                status: 'OK'
+                status: 'OK',
             };
         }
     }
@@ -85,7 +85,7 @@ export class GoogleMapsService {
                 destinations.map(destination => ({
                     distance: this.calculateHaversineDistance(origin, destination),
                     duration: 0,
-                    status: 'OK' as const
+                    status: 'OK' as const,
                 }))
             );
         }
@@ -107,7 +107,7 @@ export class GoogleMapsService {
                     destinations.map(destination => ({
                         distance: this.calculateHaversineDistance(origin, destination),
                         duration: 0,
-                        status: 'OK' as const
+                        status: 'OK' as const,
                     }))
                 );
             }
@@ -118,14 +118,14 @@ export class GoogleMapsService {
                         return {
                             distance: this.calculateHaversineDistance(origins[originIndex], destinations[destIndex]),
                             duration: 0,
-                            status: 'OK' as const
+                            status: 'OK' as const,
                         };
                     }
 
                     return {
                         distance: element.distance.value / 1000, // Convert meters to kilometers
                         duration: element.duration.value, // seconds
-                        status: 'OK' as const
+                        status: 'OK' as const,
                     };
                 })
             );
@@ -136,7 +136,7 @@ export class GoogleMapsService {
                 destinations.map(destination => ({
                     distance: this.calculateHaversineDistance(origin, destination),
                     duration: 0,
-                    status: 'OK' as const
+                    status: 'OK' as const,
                 }))
             );
         }
@@ -182,7 +182,7 @@ export class GoogleMapsService {
                 const result = await this.calculateDistance(targetLocation, candidate);
                 return {
                     location: candidate,
-                    distance: result.distance
+                    distance: result.distance,
                 };
             })
         );
@@ -205,7 +205,7 @@ export class GoogleMapsService {
                 const result = await this.calculateDistance(centerLocation, candidate);
                 return {
                     location: candidate,
-                    distance: result.distance
+                    distance: result.distance,
                 };
             })
         );

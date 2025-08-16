@@ -251,10 +251,10 @@ export default class OrderService {
                 { transaction },
             );
 
-            // Update the shopping list status to pending (not processing until payment and agent assignment)
+            // Keep the shopping list status as draft until payment is completed
             await shoppingList.update(
                 {
-                    status: 'pending',
+                    status: 'draft',
                     agentId: undefined, // No agent assigned until payment is completed
                 },
                 { transaction },
@@ -519,8 +519,25 @@ export default class OrderService {
             includes.push({
                 model: User,
                 as: 'agent',
-                attributes: ['id', 'firstName', 'lastName', 'email'],
+                attributes: [
+                    'id', 
+                    'firstName', 
+                    'lastName', 
+                    'email', 
+                    'phone', 
+                    'displayImage',
+                    'status',
+                    'createdAt',
+                ],
                 required: false,
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                        attributes: ['agentMetaData'],
+                        required: false,
+                    },
+                ],
             });
         }
 
@@ -578,8 +595,25 @@ export default class OrderService {
             includes.push({
                 model: User,
                 as: 'agent',
-                attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
+                attributes: [
+                    'id', 
+                    'firstName', 
+                    'lastName', 
+                    'email', 
+                    'phone', 
+                    'displayImage',
+                    'status',
+                    'createdAt',
+                ],
                 required: false,
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                        attributes: ['agentMetaData'],
+                        required: false,
+                    },
+                ],
             });
         }
 
@@ -605,6 +639,131 @@ export default class OrderService {
     }
 
     /**
+     * Get order by payment transaction ID
+     */
+    static async getOrderByPaymentId(
+        paymentId: string,
+        includeAgent: boolean = true,
+        includeCustomer: boolean = true,
+    ): Promise<Order | null> {
+        // Initialize includes array
+        const includes: Includeable[] = [
+            {
+                model: ShoppingList,
+                as: 'shoppingList',
+                include: [
+                    {
+                        model: ShoppingListItem,
+                        as: 'items',
+                    },
+                ],
+            },
+        ];
+
+        // Add the agent include if requested
+        if (includeAgent) {
+            includes.push({
+                model: User,
+                as: 'agent',
+                attributes: [
+                    'id', 
+                    'firstName', 
+                    'lastName', 
+                    'email', 
+                    'phone', 
+                    'displayImage',
+                    'status',
+                    'createdAt',
+                ],
+                required: false,
+                include: [
+                    {
+                        model: UserSettings,
+                        as: 'settings',
+                        attributes: ['agentMetaData'],
+                        required: false,
+                    },
+                ],
+            });
+        }
+
+        // Add customer include if requested
+        if (includeCustomer) {
+            includes.push({
+                model: User,
+                as: 'customer',
+                attributes: ['id', 'firstName', 'lastName', 'email', 'phone'],
+            });
+        }
+
+        const order = await Order.findOne({
+            where: { paymentId },
+            include: includes,
+        });
+
+        return order;
+    }
+
+    /**
+     * Update order with payment transaction ID
+     */
+    static async updateOrderPaymentId(orderId: string, paymentId: string): Promise<Order> {
+        const order = await Order.findByPk(orderId);
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
+
+        await order.update({ paymentId });
+        return order;
+    }
+
+    /**
+     * Update order payment status
+     */
+    static async updateOrderPaymentStatus(
+        orderId: string, 
+        paymentStatus: 'pending' | 'completed' | 'failed' | 'expired',
+        transaction?: Transaction
+    ): Promise<Order> {
+        const order = await Order.findByPk(orderId, { transaction });
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
+
+        const updateData: Partial<IOrder> = { paymentStatus };
+        
+        // If payment completed, also update order status if still pending
+        if (paymentStatus === 'completed' && order.status === 'pending') {
+            updateData.status = 'accepted';
+            updateData.acceptedAt = new Date();
+            updateData.paymentProcessedAt = new Date();
+        }
+        
+        // If payment failed or expired, cancel the order if still pending
+        if ((paymentStatus === 'failed' || paymentStatus === 'expired') && order.status === 'pending') {
+            updateData.status = 'cancelled';
+        }
+
+        await order.update(updateData, { transaction });
+        
+        // Log the payment status change (outside transaction for non-critical operation)
+        if (!transaction) {
+            await OrderTrailService.logOrderEvent(orderId, {
+                action: 'payment_status_updated',
+                description: `Payment status updated to ${paymentStatus}`,
+                performedBy: 'system',
+                metadata: {
+                    oldPaymentStatus: order.paymentStatus,
+                    newPaymentStatus: paymentStatus,
+                    paymentId: order.paymentId,
+                },
+            });
+        }
+
+        return order;
+    }
+
+    /**
      * Update order status with proper validation and side effects
      */
     static async updateOrderStatus(
@@ -619,8 +778,9 @@ export default class OrderService {
             | 'delivery'
             | 'completed'
             | 'cancelled',
+        externalTransaction?: Transaction
     ): Promise<Order> {
-        return await Database.transaction(async (transaction: Transaction) => {
+        const executeInTransaction = async (transaction: Transaction) => {
             const order = await this.getOrderById(id);
             const user = await User.findByPk(userId, { transaction });
 
@@ -712,7 +872,13 @@ export default class OrderService {
             }
 
             return await this.getOrderById(order.id);
-        });
+        };
+        
+        if (externalTransaction) {
+            return await executeInTransaction(externalTransaction);
+        } else {
+            return await Database.transaction(executeInTransaction);
+        }
     }
 
     /**
@@ -1066,7 +1232,9 @@ export default class OrderService {
         const order = await Order.findOne({
             where: {
                 shoppingListId,
-                customerId: userId
+                customerId: userId,
+                // Only look for pending orders to avoid returning completed/expired orders
+                paymentStatus: 'pending',
             },
             include: [
                 {
@@ -1086,6 +1254,8 @@ export default class OrderService {
                     required: false,
                 },
             ],
+            // Get the most recent order if multiple exist
+            order: [['createdAt', 'DESC']],
         });
         
         return order;
@@ -1184,7 +1354,7 @@ export default class OrderService {
             where: {
                 agentId: { [Op.is]: null },
                 paymentStatus: 'completed',
-                status: 'pending'
+                status: 'pending',
             } as WhereOptions<Order>,
             include: [
                 {

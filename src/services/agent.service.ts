@@ -391,7 +391,7 @@ export default class AgentService {
                                 ),
                             ),
                             // Path to the property
-                            Sequelize.literal("'{nin}'"),
+                            Sequelize.literal('\'{nin}\''),
                             // Value to set
                             Sequelize.literal(`'"${documents.nin}"'`),
                             // Create if it doesn't exist
@@ -420,7 +420,7 @@ export default class AgentService {
                                 ),
                             ),
                             // Path to the image property
-                            Sequelize.literal("'{images}'"),
+                            Sequelize.literal('\'{images}\''),
                             // If images are missing, initialize with an empty array
                             Sequelize.fn(
                                 'COALESCE',
@@ -429,7 +429,7 @@ export default class AgentService {
                                     Sequelize.col('agentMetaData'),
                                     'images',
                                 ),
-                                Sequelize.literal("'[]'::jsonb"),
+                                Sequelize.literal('\'[]\'::jsonb'),
                             ),
                             // Create if it doesn't exist
                             true,
@@ -481,7 +481,7 @@ export default class AgentService {
                                 ),
                             ),
                             // Path to the liveness verification property
-                            Sequelize.literal("'{livenessVerification}'"),
+                            Sequelize.literal('\'{livenessVerification}\''),
                             // Value to set (the liveness data as JSON)
                             Sequelize.literal(`'${JSON.stringify(documents.livenessVerification)}'::jsonb`),
                             // Create if it doesn't exist
@@ -510,7 +510,7 @@ export default class AgentService {
                                 ),
                             ),
                             // Path to the identity document property
-                            Sequelize.literal("'{identityDocument}'"),
+                            Sequelize.literal('\'{identityDocument}\''),
                             // Value to set (the identity document data as JSON)
                             Sequelize.literal(`'${JSON.stringify(documents.identityDocument)}'::jsonb`),
                             // Create if it doesn't exist
@@ -539,7 +539,7 @@ export default class AgentService {
                                 ),
                             ),
                             // Path to the kycComplete property
-                            Sequelize.literal("'{kycComplete}'"),
+                            Sequelize.literal('\'{kycComplete}\''),
                             // Value to set
                             Sequelize.literal(`'${documents.kycComplete}'::jsonb`),
                             // Create if it doesn't exist
@@ -568,7 +568,7 @@ export default class AgentService {
                                 ),
                             ),
                             // Path to the kycCompletedAt property
-                            Sequelize.literal("'{kycCompletedAt}'"),
+                            Sequelize.literal('\'{kycCompletedAt}\''),
                             // Value to set
                             Sequelize.literal(`'"${documents.kycCompletedAt}"'::jsonb`),
                             // Create if it doesn't exist
@@ -597,7 +597,7 @@ export default class AgentService {
                                 ),
                             ),
                             // Path to the kycStatus property
-                            Sequelize.literal("'{kycStatus}'"),
+                            Sequelize.literal('\'{kycStatus}\''),
                             // Value to set
                             Sequelize.literal(`'"${documents.kycStatus}"'::jsonb`),
                             // Create if it doesn't exist

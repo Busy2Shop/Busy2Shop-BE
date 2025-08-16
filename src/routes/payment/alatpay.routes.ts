@@ -4,17 +4,16 @@ import { AuthenticatedController, basicAuth } from '../../middlewares/authMiddle
 
 const router = Router();
 
-// Protected routes that require authentication
-router.post(
-    '/virtual-account',
-    basicAuth('access'),
-    AuthenticatedController(AlatPayController.generateVirtualAccount),
-);
-
 router.get(
     '/transaction/:transactionId',
     basicAuth('access'),
     AuthenticatedController(AlatPayController.checkPaymentStatus),
+);
+
+router.get(
+    '/redirect-info/:transactionId',
+    basicAuth('access'),
+    AuthenticatedController(AlatPayController.getPaymentRedirectInfo),
 );
 
 router.get(
@@ -23,23 +22,14 @@ router.get(
     AuthenticatedController(AlatPayController.getTransactionHistory),
 );
 
-router.get(
-    '/user-payments',
-    basicAuth('access'),
-    AuthenticatedController(AlatPayController.getUserPayments),
-);
 
 router.post(
     '/shopping-list/:shoppingListId/payment',
     basicAuth('access'),
-    AuthenticatedController(AlatPayController.generatePaymentLink),
+    AuthenticatedController(AlatPayController.generatePaymentDetails),
 );
 
-router.post(
-    '/order/:orderId/payment',
-    basicAuth('access'),
-    AuthenticatedController(AlatPayController.generateOrderPaymentLink),
-);
+// Removed: Complex order status endpoints - using simple transaction status check instead
 
 // Webhook route - this doesn't require authentication as it's called by ALATPay
 router.post('/webhook', AlatPayController.handleWebhook);

@@ -9,13 +9,13 @@ export default class UserAddressService {
         const addresses = await UserAddress.findAll({
             where: { 
                 userId,
-                isActive: true 
+                isActive: true, 
             },
             order: [
                 ['isDefault', 'DESC'],
                 ['lastUsedAt', 'DESC NULLS LAST'],
-                ['createdAt', 'DESC']
-            ]
+                ['createdAt', 'DESC'],
+            ],
         });
 
         return addresses;
@@ -27,8 +27,8 @@ export default class UserAddressService {
             where: { 
                 id: addressId,
                 userId,
-                isActive: true 
-            }
+                isActive: true, 
+            },
         });
 
         if (!address) {
@@ -53,16 +53,16 @@ export default class UserAddressService {
                 where: {
                     userId: addressData.userId,
                     googlePlaceId: addressData.googlePlaceId,
-                    isActive: true
-                }
+                    isActive: true,
+                },
             });
         } else {
             existingAddress = await UserAddress.findOne({
                 where: {
                     userId: addressData.userId,
                     fullAddress: addressData.fullAddress,
-                    isActive: true
-                }
+                    isActive: true,
+                },
             });
         }
 
@@ -76,8 +76,8 @@ export default class UserAddressService {
         const existingAddressCount = await UserAddress.count({
             where: { 
                 userId: addressData.userId,
-                isActive: true 
-            }
+                isActive: true, 
+            },
         });
 
         if (existingAddressCount === 0) {
@@ -110,10 +110,10 @@ export default class UserAddressService {
                 where: { 
                     userId,
                     id: { [Op.ne]: addressId },
-                    isActive: true 
+                    isActive: true, 
                 },
                 order: [['createdAt', 'DESC']],
-                limit: 1
+                limit: 1,
             });
 
             if (otherAddresses.length > 0) {
@@ -141,8 +141,8 @@ export default class UserAddressService {
             where: { 
                 userId,
                 isDefault: true,
-                isActive: true 
-            }
+                isActive: true, 
+            },
         });
 
         return address;
@@ -188,7 +188,7 @@ export default class UserAddressService {
             'Borno', 'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu',
             'FCT', 'Gombe', 'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi',
             'Kogi', 'Kwara', 'Lagos', 'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun',
-            'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara'
+            'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara',
         ];
 
         if (country.toLowerCase() === 'nigeria' && 
@@ -206,8 +206,8 @@ export default class UserAddressService {
             // Mock coordinates for now
             ...(isValid && {
                 latitude: 6.5244 + (Math.random() - 0.5) * 0.1, // Lagos area with some variation
-                longitude: 3.3792 + (Math.random() - 0.5) * 0.1
-            })
+                longitude: 3.3792 + (Math.random() - 0.5) * 0.1,
+            }),
         };
     }
 
@@ -217,12 +217,12 @@ export default class UserAddressService {
             where: { 
                 userId,
                 type,
-                isActive: true 
+                isActive: true, 
             },
             order: [
                 ['isDefault', 'DESC'],
-                ['createdAt', 'DESC']
-            ]
+                ['createdAt', 'DESC'],
+            ],
         });
 
         return addresses;
@@ -237,8 +237,8 @@ export default class UserAddressService {
         const addresses = await UserAddress.findAll({
             where: { 
                 userId,
-                isActive: true 
-            }
+                isActive: true, 
+            },
         });
 
         const byType = addresses.reduce((acc, address) => {
@@ -252,7 +252,7 @@ export default class UserAddressService {
         return {
             total: addresses.length,
             byType,
-            hasDefault
+            hasDefault,
         };
     }
 
@@ -272,7 +272,7 @@ export default class UserAddressService {
         for (const [userId, userAddresses] of Object.entries(addressesByUser)) {
             // Check if user has existing addresses
             const existingCount = await UserAddress.count({
-                where: { userId, isActive: true }
+                where: { userId, isActive: true },
             });
 
             // If no existing addresses, make the first one default

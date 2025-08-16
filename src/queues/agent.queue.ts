@@ -64,7 +64,7 @@ const agentAssignmentWorker = new Worker<AgentAssignmentJobData>(
             // Update job data with attempt count for next retry
             job.updateData({
                 ...job.data,
-                attemptCount: attemptCount + 1
+                attemptCount: attemptCount + 1,
             });
             
             throw error; // This will trigger a retry
@@ -109,7 +109,7 @@ export async function queueAgentAssignment(
                 orderId,
                 shoppingListId,
                 userId,
-                attemptCount: 0
+                attemptCount: 0,
             },
             {
                 delay: delayMinutes * 60 * 1000, // Convert minutes to milliseconds

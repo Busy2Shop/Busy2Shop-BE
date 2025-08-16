@@ -766,7 +766,7 @@ export default class AgentController {
                     notifications,
                     count: notifications.length,
                     page: parseInt(page as string),
-                    totalPages: 1
+                    totalPages: 1,
                 },
             });
 
@@ -944,7 +944,7 @@ export default class AgentController {
                         orderId, 
                         agentId: id, 
                         status: newStatus, 
-                        notes: notes || `Status updated to ${newStatus}` 
+                        notes: notes || `Status updated to ${newStatus}`, 
                     },
                     transaction,
                 });
@@ -993,7 +993,7 @@ export default class AgentController {
                         orderId, 
                         agentId: id, 
                         actualTotal: totalActualCost,
-                        deliveryNotes 
+                        deliveryNotes, 
                     },
                     transaction,
                 });
@@ -1016,7 +1016,7 @@ export default class AgentController {
                                 itemName: item.name,
                                 actualPrice: item.actualPrice,
                                 found: item.found !== false,
-                                notes: item.notes || null
+                                notes: item.notes || null,
                             },
                             transaction,
                         });
@@ -1034,7 +1034,7 @@ export default class AgentController {
                     replacements: { 
                         orderId, 
                         agentId: id, 
-                        notes: `Order completed. ${deliveryNotes || ''}`.trim()
+                        notes: `Order completed. ${deliveryNotes || ''}`.trim(),
                     },
                     transaction,
                 });

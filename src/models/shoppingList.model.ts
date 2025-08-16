@@ -41,10 +41,10 @@ export default class ShoppingList extends Model<ShoppingList | IShoppingList> {
     estimatedTotal: number;
 
     @Column({
-        type: DataType.ENUM('draft', 'pending', 'accepted', 'processing', 'completed', 'cancelled'),
+        type: DataType.ENUM('draft', 'accepted', 'processing', 'completed', 'cancelled'),
         defaultValue: 'draft',
     })
-    status: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled';
+    status: 'draft' | 'accepted' | 'processing' | 'completed' | 'cancelled';
 
     @IsUUID(4)
     @ForeignKey(() => User)
@@ -209,7 +209,7 @@ export interface IShoppingList {
     name: string;
     notes?: string;
     estimatedTotal?: number;
-    status?: 'draft' | 'pending' | 'accepted' | 'processing' | 'completed' | 'cancelled';
+    status?: 'draft' | 'accepted' | 'processing' | 'completed' | 'cancelled';
     customerId: string;
     marketId?: string;
     agentId?: string;

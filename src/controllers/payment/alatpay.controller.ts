@@ -7,9 +7,7 @@ import { logger } from '../../utils/logger';
 import OrderService from '../../services/order.service';
 import ShoppingListService from '../../services/shoppingList.service';
 import SystemSettingsService from '../../services/systemSettings.service';
-import { paymentWebhookQueue } from '../../queues/payment.queue';
 import ShoppingListItem from '../../models/shoppingListItem.model';
-import TransactionService from '../../services/transaction.service';
 
 // Interface for calculated fees
 interface CalculatedFees {
@@ -53,48 +51,9 @@ async function calculateOrderFees(
 }
 
 export default class AlatPayController {
-    /**
-     * Generate a virtual account for payment with automatic fee calculation
-     */
-    static async generateVirtualAccount(req: AuthenticatedRequest, res: Response) {
-        const { subtotal, orderId, description, currency, referenceType, discountAmount } = req.body;
-
-        if (!subtotal || !orderId) {
-            throw new BadRequestError('Subtotal and orderId are required');
-        }
-
-        // Calculate fees using system settings
-        const calculatedFees = await calculateOrderFees(subtotal, discountAmount);
-        
-        // You might want to validate if the order exists and belongs to the user
-        const user = req.user;
-
-        const response = await AlatPayService.generateVirtualAccount({
-            amount: calculatedFees.total,
-            orderId,
-            description: description || `Payment for ${referenceType === 'shopping_list' ? 'shopping list' : 'order'} ${orderId}`,
-            user,
-            currency: currency || 'NGN',
-            idempotencyKey: req.body.idempotencyKey,
-            referenceType: referenceType || 'order',
-            metadata: {
-                ...calculatedFees,
-                originalSubtotal: subtotal,
-            },
-        });
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Virtual account generated successfully',
-            data: {
-                ...response.data,
-                fees: calculatedFees,
-            },
-        });
-    }
 
     /**
-     * Check payment status and ensure order creation if payment is completed
+     * Check payment status with ALATPay verification fallback
      */
     static async checkPaymentStatus(req: AuthenticatedRequest, res: Response) {
         const { transactionId } = req.params;
@@ -103,62 +62,127 @@ export default class AlatPayController {
             throw new BadRequestError('Transaction ID is required');
         }
 
-        // Get the transaction status from AlatPay (this will also trigger webhook processing if status changed)
-        const response = await AlatPayService.checkTransactionStatus(transactionId);
+        try {
+            // Find order by transaction ID
+            const order = await OrderService.getOrderByPaymentId(transactionId);
 
-        // Get our local transaction record
-        const transaction = await TransactionService.getTransactionByProviderId(transactionId);
-        
-        if (!transaction) {
-            throw new NotFoundError('Transaction not found');
-        }
-
-        // Check if user has access to this transaction  
-        if (transaction.userId !== req.user.id) {
-            throw new BadRequestError('You do not have access to this transaction');
-        }
-
-        let orderInfo = null;
-
-        // If payment is completed and it's for a shopping list, check if order exists
-        if (response.data.status === 'COMPLETED' && transaction.type === 'shopping_list') {
-            try {
-                // Check if an order already exists for this shopping list using the efficient method
-                const relatedOrder = await OrderService.findOrderByShoppingListId(
-                    transaction.referenceId, 
-                    req.user.id
-                );
-
-                if (relatedOrder) {
-                    orderInfo = {
-                        orderId: relatedOrder.id,
-                        orderNumber: relatedOrder.orderNumber, // Using the actual human-readable order number
-                        status: relatedOrder.status,
-                        paymentStatus: relatedOrder.paymentStatus,
-                    };
-                }
-
-                // If no order exists, the webhook processing should create it soon
-                // We'll let the async processing handle it rather than creating it synchronously here
-                // to avoid race conditions
-            } catch (error) {
-                logger.error('Error checking for existing order:', error);
-                // Don't throw here, just log and continue
+            if (!order) {
+                res.status(200).json({
+                    status: 'success',
+                    message: 'No order found for this transaction',
+                    data: {
+                        status: 'not_found',
+                        orderNumber: null,
+                    },
+                });
+                return;
             }
-        }
 
-        res.status(200).json({
-            status: 'success',
-            message: 'Transaction status retrieved',
-            data: {
-                ...response.data,
-                // Include our local transaction info
-                localStatus: transaction.status,
-                transactionType: transaction.type,
-                referenceId: transaction.referenceId,
-                order: orderInfo,
-            },
-        });
+            // Verify user authorization
+            if (order.customerId !== req.user.id) {
+                throw new BadRequestError('Not authorized to view this order');
+            }
+
+            let actualPaymentStatus = order.paymentStatus;
+            let shouldSync = false;
+            let alatPayStatus = null;
+
+            // If payment is still pending, verify with ALATPay for missed webhooks
+            if (order.paymentStatus === 'pending') {
+                try {
+                    logger.info(`Verifying pending payment ${transactionId} with ALATPay`);
+                    alatPayStatus = await AlatPayService.checkTransactionStatus(transactionId);
+                    
+                    const isAlatPayCompleted = alatPayStatus?.status === 'COMPLETED' || alatPayStatus?.status === 'completed';
+                    
+                    if (isAlatPayCompleted && order.paymentStatus === 'pending') {
+                        logger.warn(`Payment status mismatch detected! ALATPay: ${alatPayStatus.status}, Local: ${order.paymentStatus}`);
+                        shouldSync = true;
+                    }
+                    
+                    logger.info('ALATPay status verification result:', {
+                        transactionId,
+                        localStatus: order.paymentStatus,
+                        alatPayStatus: alatPayStatus?.status,
+                        needsSync: shouldSync,
+                    });
+                } catch (verificationError) {
+                    logger.warn(`Failed to verify payment with ALATPay for transaction ${transactionId}:`, verificationError);
+                    // Continue with local status if verification fails
+                }
+            }
+
+            // Perform automatic sync if status mismatch detected
+            if (shouldSync && alatPayStatus) {
+                try {
+                    logger.info(`Auto-syncing payment status for transaction ${transactionId}`);
+                    
+                    const PaymentStatusSyncService = (await import('../../services/paymentStatusSync.service')).default;
+                    const result = await PaymentStatusSyncService.confirmPayment(
+                        order.id,
+                        transactionId,
+                        'api_sync',
+                        'system' // Auto-sync initiated by status check
+                    );
+                    
+                    if (result.success) {
+                        actualPaymentStatus = 'completed';
+                        logger.info(`Auto-sync successful for transaction ${transactionId}`, {
+                            assignedAgentId: result.assignedAgentId,
+                        });
+                        
+                        // Get fresh order data after sync
+                        const syncedOrder = await OrderService.getOrder(order.id, true, false);
+                        
+                        res.status(200).json({
+                            status: 'success',
+                            message: 'Payment status retrieved and synced',
+                            data: {
+                                status: syncedOrder.paymentStatus,
+                                orderNumber: syncedOrder.orderNumber,
+                                orderId: syncedOrder.id,
+                                orderStatus: syncedOrder.status,
+                                amount: syncedOrder.totalAmount,
+                                createdAt: syncedOrder.createdAt,
+                                paymentProcessedAt: syncedOrder.paymentProcessedAt,
+                                agentId: syncedOrder.agentId,
+                                shoppingListId: syncedOrder.shoppingListId,
+                                autoSynced: true,
+                                alatPayStatus: alatPayStatus?.status,
+                            },
+                        });
+                        return;
+                    } else {
+                        logger.error(`Auto-sync failed for transaction ${transactionId}:`, result.error);
+                    }
+                } catch (syncError) {
+                    logger.error(`Failed to auto-sync payment for transaction ${transactionId}:`, syncError);
+                    // Continue with original status
+                }
+            }
+
+            // Return current order status (with potential ALATPay verification info)
+            res.status(200).json({
+                status: 'success',
+                message: 'Payment status retrieved',
+                data: {
+                    status: actualPaymentStatus,
+                    orderNumber: order.orderNumber,
+                    orderId: order.id,
+                    orderStatus: order.status,
+                    amount: order.totalAmount,
+                    createdAt: order.createdAt,
+                    paymentProcessedAt: order.paymentProcessedAt,
+                    agentId: order.agentId,
+                    shoppingListId: order.shoppingListId,
+                    alatPayStatus: alatPayStatus?.status || 'not_checked',
+                    verified: !!alatPayStatus,
+                },
+            });
+        } catch (error) {
+            logger.error('Error checking payment status:', error);
+            throw error;
+        }
     }
 
     /**
@@ -188,75 +212,164 @@ export default class AlatPayController {
     }
 
     /**
-     * Get user payments
-     */
-    static async getUserPayments(req: AuthenticatedRequest, res: Response) {
-        const payments = await AlatPayService.getUserPayments(req.user.id);
-
-        res.status(200).json({
-            status: 'success',
-            message: 'User payments retrieved',
-            data: payments,
-        });
-    }
-
-    /**
-     * Handle webhook notifications from ALATPay
+     * Handle webhook notifications from ALATPay (Simplified)
      */
     static async handleWebhook(req: Request, res: Response) {
         try {
             const payload = req.body;
-
-            // Log webhook receipt
-            logger.info('Received ALATPay webhook', {
-                payloadSummary: payload?.Value?.Data
-                    ? {
-                        transactionId: payload.Value.Data.Id,
-                        status: payload.Value.Data.Status,
-                        amount: payload.Value.Data.Amount,
-                        orderId: payload.Value.Data.OrderId,
-                    }
-                    : 'Invalid payload structure',
-            });
-
-            // Find the transaction by provider transaction ID
-            const transaction = await TransactionService.getTransactionByProviderId(payload.Value.Data.Id);
-
-            if (!transaction) {
-                logger.warn(`Transaction not found for provider transaction ID: ${payload.Value.Data.Id}`);
-                return res.status(200).json({
-                    status: 'success',
-                    message: 'Webhook received but transaction not found',
-                });
+            const webhookData = payload?.Value?.Data;
+            
+            if (!webhookData) {
+                logger.warn('Invalid webhook payload structure', { payload });
+                res.status(200).json({ status: 'success', message: 'Invalid payload' });
+                return;
             }
 
-            // Process the webhook asynchronously using the queue system
-            await paymentWebhookQueue.add('process-webhook', {
-                providerTransactionId: payload.Value.Data.Id,
-                transactionId: transaction.id,
-                userId: transaction.userId,
+            const transactionId = webhookData.Id || '';
+            const paymentStatus = webhookData.Status;
+            
+            logger.info('Processing ALATPay webhook', {
+                transactionId,
+                status: paymentStatus,
+                amount: webhookData.Amount,
             });
 
-            // Always respond with 200 to acknowledge receipt
-            res.status(200).json({
-                status: 'success',
-                message: 'Webhook received',
-            });
+            // Only process completed payments
+            const isCompleted = paymentStatus === 'completed' || paymentStatus === 'COMPLETED';
+            if (!isCompleted) {
+                logger.info(`Payment not completed (status: ${paymentStatus}) - skipping`);
+                res.status(200).json({ status: 'success', message: 'Payment not completed' });
+                return;
+            }
+
+            // Find order by transaction ID
+            const order = await OrderService.getOrderByPaymentId(transactionId);
+            if (!order) {
+                logger.warn(`No order found for transaction ${transactionId}`);
+                res.status(200).json({ status: 'success', message: 'Order not found' });
+                return;
+            }
+
+            // Skip if already processed
+            if (order.paymentStatus === 'completed') {
+                logger.info(`Order ${order.orderNumber} already completed`);
+                res.status(200).json({ status: 'success', message: 'Already processed' });
+                return;
+            }
+
+            // Process payment confirmation
+            const PaymentStatusSyncService = (await import('../../services/paymentStatusSync.service')).default;
+            const result = await PaymentStatusSyncService.confirmPayment(
+                order.id,
+                transactionId,
+                'webhook',
+                'system'
+            );
+
+            if (result.success) {
+                logger.info(`Webhook processed successfully for order ${order.orderNumber}`, {
+                    assignedAgentId: result.assignedAgentId,
+                });
+                
+                res.status(200).json({
+                    status: 'success',
+                    message: 'Payment confirmed',
+                    data: {
+                        orderId: order.id,
+                        orderNumber: order.orderNumber,
+                        assignedAgentId: result.assignedAgentId,
+                    },
+                });
+                return;
+            } else {
+                logger.error(`Webhook processing failed for order ${order.orderNumber}:`, result.error);
+                res.status(200).json({ status: 'success', message: 'Processing failed' });
+                return;
+            }
+            
         } catch (error) {
-            logger.error('Error handling webhook:', error);
-
-            // Still return 200 to prevent retries
-            res.status(200).json({
-                status: 'success',
-                message: 'Webhook received with errors',
+            logger.error('Webhook processing error:', {
+                error: error instanceof Error ? error.message : String(error),
+                payload: req.body,
             });
+
+            // Always return 200 to prevent webhook retries
+            res.status(200).json({ status: 'success', message: 'Webhook received' });
+            return;
         }
     }
 
     /**
-     * Generate payment link for a shopping list and create order
+     * Get payment completion redirect information
      */
-    static async generatePaymentLink(req: AuthenticatedRequest, res: Response) {
+    static async getPaymentRedirectInfo(req: AuthenticatedRequest, res: Response) {
+        const { transactionId } = req.params;
+
+        if (!transactionId) {
+            throw new BadRequestError('Transaction ID is required');
+        }
+
+        try {
+            // Get the transaction status from AlatPay
+            const status = await AlatPayService.checkTransactionStatus(transactionId);
+
+            // Find order by transaction ID
+            const order = await OrderService.getOrderByPaymentId(transactionId);
+
+            if (!order) {
+                res.status(404).json({
+                    status: 'error',
+                    message: 'Order not found for this transaction',
+                    data: null,
+                });
+                return;
+            }
+
+            // Check if user is authorized to view this order
+            if (order.customerId !== req.user.id) {
+                res.status(403).json({
+                    status: 'error',
+                    message: 'Not authorized to view this order',
+                    data: null,
+                });
+                return;
+            }
+
+            // Return redirect information based on payment status
+            const paymentCompleted = status?.status === 'COMPLETED' || status?.status === 'completed';
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Payment redirect info retrieved',
+                data: {
+                    transactionId,
+                    orderId: order.id,
+                    orderNumber: order.orderNumber,
+                    paymentStatus: order.paymentStatus,
+                    paymentCompleted,
+                    redirectUrl: paymentCompleted ? `/orders/${order.orderNumber}?new=true&payment=completed` : null,
+                    shouldRedirect: paymentCompleted,
+                    order: {
+                        id: order.id,
+                        orderNumber: order.orderNumber,
+                        totalAmount: order.totalAmount,
+                        status: order.status,
+                        paymentStatus: order.paymentStatus,
+                        createdAt: order.createdAt,
+                        updatedAt: order.updatedAt,
+                    },
+                },
+            });
+        } catch (error) {
+            logger.error('Error getting payment redirect info:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Generate payment link for a shopping list and create order (Simplified)
+     */
+    static async generatePaymentDetails(req: AuthenticatedRequest, res: Response) {
         const { shoppingListId } = req.params;
         const { currency, deliveryAddress, customerNotes, discountAmount } = req.body;
 
@@ -281,207 +394,237 @@ export default class AlatPayController {
                 throw new BadRequestError('You do not have access to this shopping list');
             }
 
-            // Allow payment generation for draft or pending status (for retries)
-            if (!['draft', 'pending'].includes(shoppingList.status)) {
-                throw new BadRequestError(`Cannot create payment for shopping list in ${shoppingList.status} status`);
+            // Allow payment generation for draft status only
+            if (shoppingList.status !== 'draft') {
+                throw new BadRequestError(`This shopping list has already been processed (status: ${shoppingList.status})`);
             }
 
-            // Check if an order already exists for this shopping list
+            // Check for existing order with ALATPay verification
             const existingOrder = await OrderService.findOrderByShoppingListId(shoppingListId, req.user.id);
             
-            // If order exists and payment is completed, don't allow new payment
-            if (existingOrder && existingOrder.paymentStatus === 'completed') {
-                throw new BadRequestError('Payment has already been completed for this order');
+            if (existingOrder) {
+                logger.info(`Found existing order ${existingOrder.orderNumber} for shopping list ${shoppingListId}`);
+                
+                // If payment is completed, return completed order details
+                if (existingOrder.paymentStatus === 'completed') {
+                    const freshOrder = await OrderService.getOrder(existingOrder.id, true, false);
+                    
+                    res.status(200).json({
+                        status: 'success',
+                        message: 'Payment already completed for this order',
+                        data: {
+                            transactionId: freshOrder.paymentId,
+                            orderId: freshOrder.id,
+                            orderNumber: freshOrder.orderNumber,
+                            orderStatus: freshOrder.status,
+                            paymentStatus: freshOrder.paymentStatus,
+                            amount: freshOrder.totalAmount,
+                            createdAt: freshOrder.createdAt,
+                            paymentProcessedAt: freshOrder.paymentProcessedAt,
+                            agentId: freshOrder.agentId,
+                            fees: {
+                                subtotal: freshOrder.totalAmount - freshOrder.serviceFee - freshOrder.deliveryFee,
+                                serviceFee: freshOrder.serviceFee,
+                                deliveryFee: freshOrder.deliveryFee,
+                                discountAmount: 0,
+                                total: freshOrder.totalAmount,
+                            },
+                            isExistingOrder: true,
+                            paymentCompleted: true,
+                        },
+                    });
+                    return;
+                }
+                
+                // Check if pending order is still valid with ALATPay verification
+                if (existingOrder.paymentStatus === 'pending' && existingOrder.paymentId) {
+                    const paymentTimeoutMinutes = await SystemSettingsService.getPaymentTimeout();
+                    const orderAge = Date.now() - new Date(existingOrder.createdAt).getTime();
+                    const timeoutMs = paymentTimeoutMinutes * 60 * 1000;
+                    
+                    // Verify with ALATPay for missed webhooks
+                    let alatPayStatus = null;
+                    let shouldSync = false;
+                    
+                    try {
+                        logger.info(`Verifying existing order ${existingOrder.orderNumber} with ALATPay`);
+                        alatPayStatus = await AlatPayService.checkTransactionStatus(existingOrder.paymentId);
+                        
+                        const isAlatPayCompleted = alatPayStatus?.status === 'COMPLETED' || alatPayStatus?.status === 'completed';
+                        
+                        if (isAlatPayCompleted && existingOrder.paymentStatus === 'pending') {
+                            logger.warn(`Payment completed but not synced! Order: ${existingOrder.orderNumber}`);
+                            shouldSync = true;
+                        }
+                    } catch (verificationError) {
+                        logger.warn('Failed to verify existing order with ALATPay:', verificationError);
+                    }
+                    
+                    // Auto-sync if payment is completed on ALATPay
+                    if (shouldSync && alatPayStatus) {
+                        try {
+                            logger.info(`Auto-syncing completed payment for order ${existingOrder.orderNumber}`);
+                            
+                            const PaymentStatusSyncService = (await import('../../services/paymentStatusSync.service')).default;
+                            const result = await PaymentStatusSyncService.confirmPayment(
+                                existingOrder.id,
+                                existingOrder.paymentId,
+                                'api_sync',
+                                req.user.id
+                            );
+                            
+                            if (result.success) {
+                                const syncedOrder = await OrderService.getOrder(existingOrder.id, true, false);
+                                
+                                logger.info(`Payment auto-synced successfully for order ${existingOrder.orderNumber}`);
+                                
+                                res.status(200).json({
+                                    status: 'success',
+                                    message: 'Payment completed and synced',
+                                    data: {
+                                        transactionId: syncedOrder.paymentId,
+                                        orderId: syncedOrder.id,
+                                        orderNumber: syncedOrder.orderNumber,
+                                        orderStatus: syncedOrder.status,
+                                        paymentStatus: syncedOrder.paymentStatus,
+                                        amount: syncedOrder.totalAmount,
+                                        createdAt: syncedOrder.createdAt,
+                                        paymentProcessedAt: syncedOrder.paymentProcessedAt,
+                                        agentId: syncedOrder.agentId,
+                                        fees: {
+                                            subtotal: syncedOrder.totalAmount - syncedOrder.serviceFee - syncedOrder.deliveryFee,
+                                            serviceFee: syncedOrder.serviceFee,
+                                            deliveryFee: syncedOrder.deliveryFee,
+                                            discountAmount: 0,
+                                            total: syncedOrder.totalAmount,
+                                        },
+                                        isExistingOrder: true,
+                                        paymentCompleted: true,
+                                        autoSynced: true,
+                                    },
+                                });
+                                return;
+                            } else {
+                                logger.error(`Auto-sync failed for order ${existingOrder.orderNumber}:`, result.error);
+                            }
+                        } catch (syncError) {
+                            logger.error(`Failed to auto-sync order ${existingOrder.orderNumber}:`, syncError);
+                        }
+                    }
+                    
+                    if (orderAge < timeoutMs) {
+                        // Return existing pending order
+                        res.status(200).json({
+                            status: 'success',
+                            message: 'Existing pending order found',
+                            data: {
+                                transactionId: existingOrder.paymentId,
+                                orderId: existingOrder.id,
+                                orderNumber: existingOrder.orderNumber,
+                                orderStatus: existingOrder.status,
+                                paymentStatus: existingOrder.paymentStatus,
+                                amount: existingOrder.totalAmount,
+                                createdAt: existingOrder.createdAt,
+                                bankName: 'Wema Bank',
+                                accountName: 'Busy2Shop Limited',
+                                bankCode: '035',
+                                accountNumber: '8880164235',
+                                fees: {
+                                    subtotal: existingOrder.totalAmount - existingOrder.serviceFee - existingOrder.deliveryFee,
+                                    serviceFee: existingOrder.serviceFee,
+                                    deliveryFee: existingOrder.deliveryFee,
+                                    discountAmount: 0,
+                                    total: existingOrder.totalAmount,
+                                },
+                                isExistingOrder: true,
+                                timeRemaining: Math.max(0, timeoutMs - orderAge),
+                                paymentCompleted: false,
+                                alatPayStatus: alatPayStatus?.status || 'not_checked',
+                            },
+                        });
+                        return;
+                    } else {
+                        // Expire old pending order
+                        await OrderService.updateOrderPaymentStatus(existingOrder.id, 'expired');
+                        logger.info(`Expired old pending order ${existingOrder.orderNumber}`);
+                    }
+                }
             }
-            
-            // If order exists but payment failed/expired, we can continue with new payment
-            // This allows retry scenarios
 
-            // Calculate subtotal with explicit typing to fix TypeScript error
-            const subtotal =
-                shoppingList.estimatedTotal ||
-                shoppingList.items.reduce(
-                    (acc: number, item: ShoppingListItem) =>
-                        acc + ((item as any).userSetPrice || (item as any).userProvidedPrice || item.estimatedPrice || 0) * item.quantity,
-                    0,
-                );
+            // Calculate order totals
+            const subtotal = shoppingList.estimatedTotal || 
+                shoppingList.items.reduce((acc: number, item: ShoppingListItem) => 
+                    acc + ((item as any).userSetPrice || (item as any).userProvidedPrice || item.estimatedPrice || 0) * item.quantity, 0);
 
-            // Calculate fees using the reusable function
             const calculatedFees = await calculateOrderFees(subtotal, discountAmount || 0);
 
-            // Update shopping list status to pending only if it's currently draft
-            if (shoppingList.status === 'draft') {
-                await ShoppingListService.updateListStatus(shoppingListId, req.user.id, 'pending');
-            }
+            // Create new order
+            const order = await OrderService.createOrder({
+                customerId: req.user.id,
+                shoppingListId: shoppingListId,
+                totalAmount: calculatedFees.total,
+                status: 'pending',
+                paymentStatus: 'pending',
+                serviceFee: calculatedFees.serviceFee,
+                deliveryFee: calculatedFees.deliveryFee,
+                deliveryAddress: deliveryAddress,
+                customerNotes: customerNotes,
+            });
 
-            // Generate virtual account
+            logger.info(`Created new order ${order.orderNumber} for shopping list ${shoppingListId}`);
+
+            // Generate virtual account through ALATPay
             const response = await AlatPayService.generateVirtualAccount({
-                amount: calculatedFees.total, // Use calculated total including fees
-                orderId: shoppingListId,
+                amount: calculatedFees.total,
+                orderId: order.id,
                 description: `Payment for shopping list: ${shoppingList.name}`,
                 user: req.user,
                 currency: currency || 'NGN',
-                idempotencyKey: req.body.idempotencyKey,
-                referenceType: 'shopping_list',
-                metadata: {
-                    deliveryAddress,
-                    customerNotes,
-                    shoppingListId,
-                    customerId: req.user.id,
-                    ...calculatedFees,
-                },
+                orderNumber: order.orderNumber,
             });
-
-            let order: any;
             
-            // Extract transactionId safely from response
-            // Handle both new payment (response.data.data.transactionId) and existing payment (response.data.transactionId)
-            const transactionId = (response.data as any).transactionId || response.data.data?.transactionId;
-            
+            const transactionId = response.data.data?.transactionId;
             if (!transactionId) {
-                logger.error('No transaction ID found in payment response', { response: response.data });
+                logger.error('No transaction ID returned from ALATPay', { response: response.data });
                 throw new BadRequestError('Failed to generate payment: No transaction ID returned');
             }
-            
-            if (existingOrder && existingOrder.paymentStatus !== 'completed') {
-                // Update existing order with new payment details (retry scenario)
-                order = await existingOrder.update({
-                    totalAmount: calculatedFees.total,
-                    paymentStatus: 'pending',
-                    paymentId: transactionId,
-                    serviceFee: calculatedFees.serviceFee,
-                    deliveryFee: calculatedFees.deliveryFee,
-                    deliveryAddress: deliveryAddress,
-                    customerNotes: customerNotes,
-                    updatedAt: new Date(),
-                });
-                
-                logger.info(`Order ${order.id} updated for retry payment on shopping list ${shoppingListId}`);
-            } else {
-                // Create new order with pending payment status
-                order = await OrderService.createOrder({
-                    customerId: req.user.id,
-                    shoppingListId: shoppingListId,
-                    totalAmount: calculatedFees.total,
-                    status: 'pending', // Order pending payment
-                    paymentStatus: 'pending', // Payment not yet completed
-                    paymentId: transactionId,
-                    serviceFee: calculatedFees.serviceFee,
-                    deliveryFee: calculatedFees.deliveryFee,
-                    deliveryAddress: deliveryAddress,
-                    customerNotes: customerNotes,
-                });
-                
-                logger.info(`Order ${order.id} created with pending payment for shopping list ${shoppingListId}`);
-            }
 
-            // Handle response data for both new and existing payments
-            const responseData = response.data.data ? response.data.data : (response.data as any);
+            // Update order with payment transaction ID
+            await OrderService.updateOrderPaymentId(order.id, transactionId);
             
+            logger.info(`Payment created for order ${order.orderNumber}`, {
+                transactionId,
+                orderId: order.id,
+                amount: calculatedFees.total,
+            });
+
+            // Return payment details
+            const responseData = response.data.data;
             res.status(200).json({
                 status: 'success',
-                message: 'Payment link generated and order created successfully',
+                message: 'Payment details generated successfully',
                 data: {
-                    ...responseData, // AlatPay response data (either new or existing)
-                    transactionId: transactionId, // Ensure transactionId is included
+                    transactionId,
                     orderId: order.id,
+                    orderNumber: order.orderNumber,
                     orderStatus: order.status,
                     paymentStatus: order.paymentStatus,
-                    amount: calculatedFees.total, // Include the total amount as number
-                    createdAt: responseData.createdAt || new Date().toISOString(), // Include creation time
-                    // Add bank details for frontend display
+                    amount: calculatedFees.total,
+                    createdAt: responseData.createdAt || new Date().toISOString(),
                     bankName: 'Wema Bank',
                     accountName: 'Busy2Shop Limited',
                     bankCode: responseData.virtualBankCode || '035',
-                    // Include fee breakdown
+                    accountNumber: responseData.virtualBankAccountNumber || '8880164235',
                     fees: calculatedFees,
+                    isExistingOrder: false,
                 },
             });
         } catch (error) {
-            logger.error('Error generating payment link:', error);
+            logger.error('Error generating payment details:', error);
             throw error;
         }
     }
 
-    /**
-     * Generate payment link for an order
-     */
-    static async generateOrderPaymentLink(req: AuthenticatedRequest, res: Response) {
-        const { orderId } = req.params;
-        const { currency } = req.body;
-
-        if (!orderId) {
-            throw new BadRequestError('Order ID is required');
-        }
-
-        try {
-            // Get order details
-            const order = await OrderService.getOrder(orderId);
-
-            if (!order) {
-                throw new NotFoundError('Order not found');
-            }
-
-            // Check if the order belongs to the user
-            if (order.customerId !== req.user.id) {
-                throw new BadRequestError('You do not have access to this order');
-            }
-
-            // Generate virtual account
-            const response = await AlatPayService.generateVirtualAccount({
-                amount: order.totalAmount,
-                orderId: orderId,
-                description: `Payment for order #${orderId}`,
-                user: req.user,
-                currency: currency || 'NGN',
-                idempotencyKey: req.body.idempotencyKey,
-                referenceType: 'order',
-            });
-
-            res.status(200).json({
-                status: 'success',
-                message: 'Payment link generated successfully',
-                data: response.data,
-            });
-        } catch (error) {
-            logger.error('Error generating payment link:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Reconcile local transactions with ALATPay
-     */
-    static async reconcileTransactions(req: AuthenticatedRequest, res: Response) {
-        try {
-            const result = await AlatPayService.reconcileTransactions();
-
-            res.status(200).json({
-                status: 'success',
-                message: 'Transactions reconciled successfully',
-                data: result,
-            });
-        } catch (error) {
-            logger.error('Error reconciling transactions:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Check for expired transactions
-     */
-    static async checkExpiredTransactions(req: AuthenticatedRequest, res: Response) {
-        try {
-            const result = await AlatPayService.checkExpiredTransactions();
-
-            res.status(200).json({
-                status: 'success',
-                message: 'Expired transactions checked successfully',
-                data: result,
-            });
-        } catch (error) {
-            logger.error('Error checking expired transactions:', error);
-            throw error;
-        }
-    }
+    // Removed: Complex order status endpoints - webhook handles all order updates
+    // Only transaction status check endpoint remains for simple frontend polling
 }

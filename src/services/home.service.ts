@@ -583,12 +583,7 @@ export class HomeService {
 
     /**
      * Get featured markets with their top products for supermarket products section
-     * 
-     * This method ensures consistent data presentation by:
-     * 1. Excluding market types that don't have products (e.g., local_market)
-     * 2. Guaranteeing exactly the requested number of products per market
-     * 3. Padding markets with additional products or duplicates if needed
-     * 4. Providing comprehensive scoring and ranking
+     * Uses separate queries to avoid Sequelize association issues and guarantees exact product counts
      * 
      * @param limit - Number of markets to return (default: 6)
      * @param productsPerMarket - Exact number of products per market (default: 6)
@@ -615,56 +610,20 @@ export class HomeService {
 
             const whereConditions: any = {
                 isActive: true,
-                // Exclude market types that shouldn't have products (e.g., local_market)
                 marketType: { [Op.ne]: 'local_market' },
             };
 
             // Apply filters
             if (context?.filters?.marketTypes) {
-                // Filter out local_market from user-provided market types
                 const validMarketTypes = context.filters.marketTypes.filter(type => type !== 'local_market');
                 if (validMarketTypes.length > 0) {
                     whereConditions.marketType = { [Op.in]: validMarketTypes };
                 }
             }
 
-            // Get featured markets with their top products
+            // Step 1: Get markets only (no complex includes)
             const markets = await Market.findAll({
                 where: whereConditions,
-                include: [
-                    {
-                        model: Product,
-                        as: 'products',
-                        where: {
-                            isAvailable: true,
-                        },
-                        attributes: [
-                            'id', 'name', 'price', 'discountPrice', 'images',
-                            'stockQuantity', 'isPinned', 'createdAt',
-                        ],
-                        include: [
-                            {
-                                model: Review,
-                                as: 'reviews',
-                                attributes: ['rating'],
-                                required: false,
-                            },
-                        ],
-                        order: [
-                            ['isPinned', 'DESC'],
-                            ['createdAt', 'DESC'],
-                        ],
-                        limit: productsPerMarket,
-                        required: false, // Changed to false to handle markets with no available products gracefully
-                    },
-                    {
-                        model: Category,
-                        as: 'categories',
-                        attributes: ['id', 'name', 'icon'],
-                        through: { attributes: [] },
-                        required: false,
-                    },
-                ],
                 attributes: [
                     'id', 'name', 'address', 'marketType', 'images', 'isPinned',
                     'location', 'isActive', 'createdAt', 'updatedAt',
@@ -673,166 +632,160 @@ export class HomeService {
                     ['isPinned', 'DESC'],
                     ['createdAt', 'DESC'],
                 ],
-                limit: limit * 3, // Get more markets initially to account for filtering
+                limit: limit * 3, // Get more markets to filter those with products
             });
 
-            // Filter markets to only include those with products
-            const marketsWithProducts = markets.filter(market => {
-                const marketData = market.get({ plain: true });
-                const products = (marketData as any).products || [];
-                return Array.isArray(products) && products.length > 0;
-            });
-
-            // If no markets have products, return empty array rather than causing an error
-            if (marketsWithProducts.length === 0) {
-                logger.warn('No markets found with available products', {
-                    totalMarketsQueried: markets.length,
+            if (markets.length === 0) {
+                logger.warn('No markets found', {
                     limit,
                     productsPerMarket,
                 });
                 return [];
             }
 
-            // Ensure each market has exactly 6 products by padding with additional products if needed
-            const marketsWithExactProducts = await Promise.all(marketsWithProducts.map(async (market) => {
-                const marketData = market.get({ plain: true });
-                let products = (marketData as any).products || [];
-
-                if (products.length < productsPerMarket) {
-                    // Get additional products from this market to fill the gap
-                    const additionalProducts = await Product.findAll({
-                        where: {
-                            marketId: market.id,
-                            isAvailable: true,
-                            id: { [Op.notIn]: products.map((p: any) => p.id) },
-                        },
-                        include: [
-                            {
-                                model: Review,
-                                as: 'reviews',
-                                attributes: ['rating'],
-                                required: false,
-                            },
-                        ],
-                        attributes: [
-                            'id', 'name', 'price', 'discountPrice', 'images',
-                            'stockQuantity', 'isPinned', 'createdAt',
-                        ],
-                        order: [
-                            ['isPinned', 'DESC'],
-                            ['createdAt', 'DESC'],
-                        ],
-                        limit: productsPerMarket - products.length,
-                    });
-
-                    // Add the additional products
-                    const additionalProductsData = additionalProducts.map(p => p.get({ plain: true }));
-                    products = [...products, ...additionalProductsData];
-
-                    // If still not enough products, duplicate existing ones to fill the grid
-                    while (products.length < productsPerMarket && products.length > 0) {
-                        const remainingSlots = productsPerMarket - products.length;
-                        const productsToRepeat = products.slice(0, Math.min(remainingSlots, products.length));
-
-                        // Create duplicates with modified IDs to avoid conflicts
-                        const duplicatedProducts = productsToRepeat.map((product: any, index: number) => ({
-                            ...product,
-                            id: `${product.id}_dup_${Date.now()}_${index}`,
-                            name: product.name,
-                            isDuplicate: true,
-                        }));
-
-                        products = [...products, ...duplicatedProducts];
-                    }
-
-                    // Trim to exactly the required number
-                    products = products.slice(0, productsPerMarket);
-
-                    // Update the market data with the new products
-                    (marketData as any).products = products;
-
-                    logger.info(`Market "${market.name}" padded to ${products.length} products`, {
+            // Step 2: For each market, get products separately and ensure exact count
+            const marketsWithProducts = [];
+            
+            for (const market of markets) {
+                // Get products for this market
+                let products = await Product.findAll({
+                    where: {
                         marketId: market.id,
-                        originalCount: (marketData as any).products?.length || 0,
-                        paddedCount: products.length,
-                        targetCount: productsPerMarket,
-                    });
-                } else {
-                    logger.info(`Market "${market.name}" already has sufficient products`, {
-                        marketId: market.id,
-                        productCount: products.length,
-                        targetCount: productsPerMarket,
-                    });
+                        isAvailable: true,
+                    },
+                    attributes: [
+                        'id', 'name', 'price', 'discountPrice', 'images',
+                        'stockQuantity', 'isPinned', 'createdAt',
+                    ],
+                    order: [
+                        ['isPinned', 'DESC'],
+                        ['createdAt', 'DESC'],
+                    ],
+                    limit: productsPerMarket * 2, // Get more than needed for selection
+                });
+
+                // Skip markets with no products
+                if (products.length === 0) {
+                    continue;
                 }
 
-                return market;
-            }));
+                // Convert to plain objects
+                let productsData = products.map(p => p.get({ plain: true }));
 
-            // Score and rank markets with products
-            const scoredMarkets = marketsWithExactProducts.map(market => {
+                // Ensure exactly the requested number of products
+                if (productsData.length > productsPerMarket) {
+                    // Take the best products (already sorted)
+                    productsData = productsData.slice(0, productsPerMarket);
+                } else if (productsData.length < productsPerMarket) {
+                    // If we need more products, pad with duplicates
+                    const stillNeeded = productsPerMarket - productsData.length;
+                    
+                    for (let i = 0; i < stillNeeded; i++) {
+                        const sourceProduct = productsData[i % productsData.length];
+                        const duplicateProduct = {
+                            ...sourceProduct,
+                            id: `${sourceProduct.id}_dup_${Date.now()}_${i}`,
+                            isDuplicate: true,
+                        };
+                        productsData.push(duplicateProduct);
+                    }
+                }
+
+                // Final trim to exact count (safety measure)
+                productsData = productsData.slice(0, productsPerMarket);
+
+                // Add products to market
                 const marketData = market.get({ plain: true });
+                (marketData as any).products = productsData;
 
+                marketsWithProducts.push({
+                    ...marketData,
+                    products: productsData,
+                });
+
+                // Stop when we have enough markets
+                if (marketsWithProducts.length >= limit) {
+                    break;
+                }
+            }
+
+            // Step 3: Score and rank markets
+            const scoredMarkets = marketsWithProducts.map(marketData => {
                 const score = this.calculateContentScore(marketData, {
                     userContext: context?.userContext,
                     locationContext: context?.locationContext,
                     timeContext: new Date(),
                 });
 
-                // Add product quality boost
+                // Enhanced scoring with product quality metrics
                 let productQualityBoost = 0;
-                const products = (marketData as any).products || [];
-
+                const products = marketData.products || [];
+                
                 if (Array.isArray(products)) {
                     productQualityBoost = products.reduce((boost: number, product: any) => {
                         let productScore = 0;
-                        if (product.isPinned) productScore += 10;
-                        if (product.discountPrice && product.discountPrice < product.price) productScore += 5;
-                        if (product.reviews && Array.isArray(product.reviews) && product.reviews.length > 0) {
-                            const avgRating = product.reviews.reduce((sum: number, review: any) => sum + (review.rating || 0), 0) / product.reviews.length;
-                            productScore += avgRating * 2;
+                        
+                        // Boost for pinned products
+                        if (product.isPinned) productScore += 15;
+                        
+                        // Boost for discounted products
+                        if (product.discountPrice && product.discountPrice < product.price) {
+                            const discountPercent = ((product.price - product.discountPrice) / product.price) * 100;
+                            productScore += Math.min(discountPercent * 0.5, 10);
                         }
+                        
+                        // Penalty for duplicates
+                        if (product.isDuplicate) productScore *= 0.5;
+                        
                         return boost + productScore;
                     }, 0);
                 }
 
-                // Add boost for having products
-                const productCountBoost = Math.min(products.length * 5, 30);
-
                 return {
-                    market,
-                    score: score.score + productQualityBoost + productCountBoost,
+                    market: marketData,
+                    score: score.score + productQualityBoost,
                     reasons: [
                         ...score.reasons,
-                        ...(productQualityBoost > 0 ? ['Quality products available'] : []),
-                        ...(productCountBoost > 0 ? [`${products.length} products available`] : []),
+                        ...(productQualityBoost > 0 ? ['High-quality products'] : []),
                     ],
                 };
             });
 
+            // Step 4: Final sorting and selection
             const finalMarkets = scoredMarkets
                 .sort((a, b) => b.score - a.score)
                 .slice(0, limit)
                 .map(item => {
-                    (item.market as any).scoreDetails = {
-                        score: item.score,
-                        reasons: item.reasons,
+                    // Add score details to the market data
+                    const marketWithScore = {
+                        ...item.market,
+                        scoreDetails: {
+                            score: item.score,
+                            reasons: item.reasons,
+                        },
                     };
-                    return item.market;
+                    return marketWithScore;
                 });
 
-            // Log final results
-            logger.info('Featured markets with products - Final results', {
+            // Step 5: Validation and logging
+            const allMarketsValid = finalMarkets.every(market => 
+                market.products && market.products.length === productsPerMarket
+            );
+
+            logger.info('Featured markets with products - Separate queries results', {
                 totalMarketsReturned: finalMarkets.length,
                 targetLimit: limit,
                 productsPerMarket,
+                allMarketsValid,
                 marketBreakdown: finalMarkets.map(market => ({
                     marketId: market.id,
                     marketName: market.name,
-                    productCount: (market as any).products?.length || 0,
+                    productCount: market.products?.length || 0,
+                    hasDuplicates: (market.products || []).some((p: any) => p.isDuplicate),
                 })),
             });
 
-            return finalMarkets;
+            return finalMarkets as unknown as Market[];
 
         } catch (error) {
             logger.error('Error fetching featured markets with products:', {
@@ -840,7 +793,6 @@ export class HomeService {
                 stack: error instanceof Error ? error.stack : undefined,
                 limit,
                 productsPerMarket,
-                // whereConditions,
             });
             throw new BadRequestError('Failed to fetch featured markets with products');
         }
