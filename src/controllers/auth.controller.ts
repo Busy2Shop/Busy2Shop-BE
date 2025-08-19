@@ -637,8 +637,11 @@ export default class AuthController {
     }
 
     static async updateUser(req: AuthenticatedRequest, res: Response) {
-        const { firstName, lastName, otherName, displayImage, location, gender, isDeactivated } =
+        const { firstName, lastName, otherName, displayImage, location, gender, isDeactivated, phone, dob } =
             req.body;
+        
+        console.log('Update user request body:', req.body);
+        console.log('Update user file:', req.file);
 
         // Check if user is an agent with completed KYC - they cannot update display image
         if (req.user.status.userType === 'agent') {
@@ -674,12 +677,19 @@ export default class AuthController {
             ...(lastName && { lastName }),
             ...(otherName && { otherName }),
             ...(gender && { gender }),
+            ...(dob && { dob }),
             ...(url && { displayImage: url }),
             ...(location && {
                 location: { 
-                    country: location.country || 'NGN',
+                    country: location.country || 'Nigeria',
                     city: location.city,
                     address: location.address,
+                },
+            }),
+            ...(phone && phone.number && {
+                phone: {
+                    countryCode: phone.countryCode || '+234',
+                    number: phone.number,
                 },
             }),
         };
