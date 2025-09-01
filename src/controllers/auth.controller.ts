@@ -223,11 +223,11 @@ export default class AuthController {
             firstName,
             lastName,
             dob,
-            location: { country, city, address } = {},
+            location: { country = '', city = '', address = '' } = {},
             otherName,
             displayImage,
             gender,
-            phone: { countryCode, number } = {},
+            phone: { countryCode = '', number = '' } = {},
             password,
         } = req.body;
 

@@ -505,7 +505,7 @@ export default class ShoppingListController {
 
         try {
             // Get or create shopping list on server if needed
-            let shoppingList;
+            let shoppingList: any;
             if (listData.id && !listData.isLocal) {
                 // Get existing server list
                 shoppingList = await ShoppingListService.getShoppingList(listData.id);

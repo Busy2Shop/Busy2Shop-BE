@@ -94,37 +94,37 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                     const Database = (await import('../models/index')).Database;
                     
                     await Database.transaction(async (transaction) => {
-                        logger.info(`Starting payment completion processing for order ${order.orderNumber}`, {
-                            orderId: order.id,
-                            currentPaymentStatus: order.paymentStatus,
-                            currentOrderStatus: order.status,
-                            shoppingListId: order.shoppingListId,
-                            customerId: order.customerId,
+                        logger.info(`Starting payment completion processing for order ${order!.orderNumber}`, {
+                            orderId: order!.id,
+                            currentPaymentStatus: order!.paymentStatus,
+                            currentOrderStatus: order!.status,
+                            shoppingListId: order!.shoppingListId,
+                            customerId: order!.customerId,
                         });
                         
                         // 1. Update order payment status and record payment processed time
-                        logger.info(`Updating order ${order.orderNumber} payment status to completed`);
-                        await OrderService.updateOrderPaymentStatus(order.id, 'completed', transaction);
+                        logger.info(`Updating order ${order!.orderNumber} payment status to completed`);
+                        await OrderService.updateOrderPaymentStatus(order!.id, 'completed', transaction);
                         
                         // 2. Update shopping list status to accepted (payment confirmed)
-                        if (order.shoppingListId) {
-                            logger.info(`Updating shopping list ${order.shoppingListId} status to accepted`);
+                        if (order!.shoppingListId) {
+                            logger.info(`Updating shopping list ${order!.shoppingListId} status to accepted`);
                             await ShoppingListService.updateListStatus(
-                                order.shoppingListId, 
-                                order.customerId, 
+                                order!.shoppingListId, 
+                                order!.customerId, 
                                 'accepted',
                                 transaction
                             );
                             
                             // 3. Sync shopping list items with order if needed (ensure alignment)
                             try {
-                                logger.info(`Syncing shopping list ${order.shoppingListId} with order totals`);
-                                const shoppingList = await ShoppingListService.getShoppingList(order.shoppingListId);
+                                logger.info(`Syncing shopping list ${order!.shoppingListId} with order totals`);
+                                const shoppingList = await ShoppingListService.getShoppingList(order!.shoppingListId);
                                 
                                 if (shoppingList) {
                                     // Update estimated total and payment status using service method
                                     const updateData = {
-                                        estimatedTotal: order.totalAmount - order.serviceFee - order.deliveryFee,
+                                        estimatedTotal: order!.totalAmount - order!.serviceFee - order!.deliveryFee,
                                         paymentStatus: 'completed' as const,
                                         paymentProcessedAt: new Date(),
                                     };
@@ -132,18 +132,18 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                                     logger.info('Applying shopping list updates:', updateData);
                                     
                                     await ShoppingListService.updateShoppingList(
-                                        order.shoppingListId,
-                                        order.customerId,
+                                        order!.shoppingListId,
+                                        order!.customerId,
                                         updateData,
                                         transaction
                                     );
                                     
-                                    logger.info(`Shopping list ${order.shoppingListId} synced with order totals`);
+                                    logger.info(`Shopping list ${order!.shoppingListId} synced with order totals`);
                                 } else {
-                                    logger.error(`Shopping list ${order.shoppingListId} not found for sync`);
+                                    logger.error(`Shopping list ${order!.shoppingListId} not found for sync`);
                                 }
                             } catch (shoppingListError) {
-                                logger.error(`Failed to sync shopping list ${order.shoppingListId}:`, shoppingListError);
+                                logger.error(`Failed to sync shopping list ${order!.shoppingListId}:`, shoppingListError);
                                 // Continue processing even if shopping list sync fails
                             }
                         }
@@ -151,30 +151,30 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                         // 4. Auto-assign agent to the completed order
                         let assignedAgentId = null;
                         try {
-                            if (order.shoppingListId) {
-                                const availableAgents = await AgentService.getAvailableAgentsForOrder(order.shoppingListId);
+                            if (order!.shoppingListId) {
+                                const availableAgents = await AgentService.getAvailableAgentsForOrder(order!.shoppingListId);
                                 if (availableAgents.length > 0) {
                                     // Use the first available agent (could be enhanced with better logic)
                                     const selectedAgent = availableAgents[0];
-                                    await AgentService.assignOrderToAgent(order.id, selectedAgent.id);
+                                    await AgentService.assignOrderToAgent(order!.id, selectedAgent.id);
                                     assignedAgentId = selectedAgent.id;
-                                    logger.info(`Agent ${selectedAgent.id} automatically assigned to order ${order.orderNumber}`);
+                                    logger.info(`Agent ${selectedAgent.id} automatically assigned to order ${order!.orderNumber}`);
                                     
                                     // 5. Update order status to in_progress now that agent is assigned
-                                    await OrderService.updateOrderStatus(order.id, order.customerId, 'in_progress', transaction);
-                                    logger.info(`Order ${order.orderNumber} status updated to in_progress after agent assignment`);
+                                    await OrderService.updateOrderStatus(order!.id, order!.customerId, 'in_progress', transaction);
+                                    logger.info(`Order ${order!.orderNumber} status updated to in_progress after agent assignment`);
                                 } else {
-                                    logger.warn(`No available agent found for order ${order.orderNumber}`);
+                                    logger.warn(`No available agent found for order ${order!.orderNumber}`);
                                 }
                             }
                         } catch (agentError) {
-                            logger.error(`Failed to auto-assign agent for order ${order.orderNumber}:`, agentError);
+                            logger.error(`Failed to auto-assign agent for order ${order!.orderNumber}:`, agentError);
                             // Continue processing even if agent assignment fails
                         }
                         
                         // 6. Create comprehensive order trail entry
                         const OrderTrailService = (await import('../services/orderTrail.service')).default;
-                        await OrderTrailService.logOrderEvent(order.id, {
+                        await OrderTrailService.logOrderEvent(order!.id, {
                             action: 'payment_confirmed',
                             description: 'Payment confirmed via webhook - Order ready for shopping',
                             performedBy: 'system',
@@ -182,27 +182,27 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                                 transactionId: providerTransactionId,
                                 webhookStatus: webhookStatus,
                                 alatPayStatus: transactionStatus?.status,
-                                paymentAmount: order.totalAmount,
+                                paymentAmount: order!.totalAmount,
                                 assignedAgentId: assignedAgentId,
-                                shoppingListId: order.shoppingListId,
+                                shoppingListId: order!.shoppingListId,
                                 processedAt: new Date().toISOString(),
                             },
                         });
                         
-                        logger.info(`Order ${order.orderNumber} webhook processing completed successfully`, {
-                            orderId: order.id,
-                            shoppingListId: order.shoppingListId,
+                        logger.info(`Order ${order!.orderNumber} webhook processing completed successfully`, {
+                            orderId: order!.id,
+                            shoppingListId: order!.shoppingListId,
                             assignedAgentId: assignedAgentId,
-                            paymentAmount: order.totalAmount,
+                            paymentAmount: order!.totalAmount,
                         });
                     });
                     
                     // Verify updates outside transaction
                     try {
-                        const finalOrder = await OrderService.getOrder(order.id, false, false);
-                        const finalShoppingList = await ShoppingListService.getShoppingList(order.shoppingListId);
+                        const finalOrder = await OrderService.getOrder(order!.id, false, false);
+                        const finalShoppingList = await ShoppingListService.getShoppingList(order!.shoppingListId);
                         
-                        logger.info(`Final status verification for order ${order.orderNumber}:`, {
+                        logger.info(`Final status verification for order ${order!.orderNumber}:`, {
                             orderPaymentStatus: finalOrder.paymentStatus,
                             orderStatus: finalOrder.status,
                             shoppingListStatus: finalShoppingList.status,
@@ -210,7 +210,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                         });
                         
                         if (finalOrder.paymentStatus !== 'completed') {
-                            logger.error(`CRITICAL: Order ${order.orderNumber} payment status not updated correctly!`, {
+                            logger.error(`CRITICAL: Order ${order!.orderNumber} payment status not updated correctly!`, {
                                 expected: 'completed',
                                 actual: finalOrder.paymentStatus,
                             });

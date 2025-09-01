@@ -56,7 +56,7 @@ export default class EmailService {
     }
 
     private createNodemailerEmail(): SendEmailFunction {
-        let transporter;
+        let transporter: any;
 
         if (EMAIL_SERVICE === 'zoho') {
             // Zoho Mail configuration
