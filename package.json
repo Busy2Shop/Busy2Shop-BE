@@ -20,6 +20,7 @@
         "db:newmigration": "npx sequelize-cli migration:generate --name",
         "db:rename": "ts-node ./src/config/renameMigration.ts",
         "seed": "npx sequelize-cli db:seed:all",
+        "seed:agents": "ts-node src/seeders/seed-test-agents.ts",
         "down": "npx sequelize-cli db:migrate:undo",
         "format": "prettier --write \"src/**/*.{ts,js,json}\"",
         "format:check": "prettier --check \"src/**/*.{ts,js,json}\""
@@ -34,6 +35,7 @@
         "@types/socket.io": "^3.0.2",
         "axios": "^1.8.4",
         "bcrypt": "^5.1.1",
+        "bcryptjs": "^3.0.2",
         "body-parser": "^1.20.3",
         "bullmq": "^5.52.2",
         "cloudinary": "^1.41.3",

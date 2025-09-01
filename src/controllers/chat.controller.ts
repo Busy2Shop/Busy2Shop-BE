@@ -42,21 +42,29 @@ export default class ChatController {
         }
 
         // Verify the order exists and the user has access to it
-        const order = await OrderService.getOrder(orderId);
+        // Handle both UUID and order number
+        let order;
+        try {
+            // Try as order number first
+            order = await OrderService.getOrderByNumber(orderId);
+        } catch {
+            // If that fails, try as UUID
+            order = await OrderService.getOrder(orderId);
+        }
 
         // Check if the user is authorized to access this order's chat
         ChatController.verifyOrderAccess(order, userId, req.user.status.userType);
 
-        // Check if the chat is active
-        const isChatActive = await ChatService.isChatActive(orderId);
+        // Check if the chat is active (use actual order UUID)
+        const isChatActive = await ChatService.isChatActive(order.id);
         if (!isChatActive) {
             throw new BadRequestError('Chat is not active for this order');
         }
 
-        const messages = await ChatService.getMessagesByOrderId(orderId);
+        const messages = await ChatService.getMessagesByOrderId(order.id);
 
         // Mark messages as read
-        await ChatService.markMessagesAsRead(orderId, userId);
+        await ChatService.markMessagesAsRead(order.id, userId);
 
         res.status(200).json({
             status: 'success',
@@ -74,8 +82,16 @@ export default class ChatController {
         let result;
 
         if (orderId) {
-            await OrderService.getOrder(orderId as string);
-            result = await ChatService.getUnreadMessageCount(id, orderId as string);
+            // Handle both UUID and order number
+            let order;
+            try {
+                // Try as order number first
+                order = await OrderService.getOrderByNumber(orderId as string);
+            } catch {
+                // If that fails, try as UUID
+                order = await OrderService.getOrder(orderId as string);
+            }
+            result = await ChatService.getUnreadMessageCount(id, order.id);
         } else {
             result = await ChatService.getUnreadMessageCount(id);
         }
@@ -114,15 +130,23 @@ export default class ChatController {
         }
 
         // Verify the order exists and the user has access to it
-        const order = await OrderService.getOrder(orderId);
+        // Handle both UUID and order number
+        let order;
+        try {
+            // Try as order number first
+            order = await OrderService.getOrderByNumber(orderId);
+        } catch {
+            // If that fails, try as UUID
+            order = await OrderService.getOrder(orderId);
+        }
 
         // Check if the user is authorized to access this order's chat
         ChatController.verifyOrderAccess(order, userId, userType);
 
-        // Check if the chat is already active
-        const isChatActive = await ChatService.isChatActive(orderId);
+        // Check if the chat is already active (use actual order UUID)
+        const isChatActive = await ChatService.isChatActive(order.id);
         if (isChatActive) {
-            const activationData = await ChatService.getChatActivationData(orderId);
+            const activationData = await ChatService.getChatActivationData(order.id);
             res.status(200).json({
                 status: 'success',
                 message: 'Chat is already active',
@@ -133,7 +157,7 @@ export default class ChatController {
 
         // Activate chat
         const activationData: ChatActivationType = {
-            orderId,
+            orderId: order.id,
             activatedBy: {
                 id: userId,
                 type: userType as 'agent' | 'customer' | 'admin',
@@ -160,10 +184,21 @@ export default class ChatController {
     static async isChatActive(req: AuthenticatedRequest, res: Response) {
         const { orderId } = req.params;
 
-        const isChatActive = await ChatService.isChatActive(orderId);
+        // Handle both UUID and order number - get actual order UUID
+        let actualOrderId;
+        try {
+            // Try as order number first
+            const order = await OrderService.getOrderByNumber(orderId);
+            actualOrderId = order.id;
+        } catch {
+            // If that fails, assume it's already a UUID
+            actualOrderId = orderId;
+        }
+
+        const isChatActive = await ChatService.isChatActive(actualOrderId);
 
         if (isChatActive) {
-            const activationData = await ChatService.getChatActivationData(orderId);
+            const activationData = await ChatService.getChatActivationData(actualOrderId);
             res.status(200).json({
                 status: 'success',
                 isActive: true,

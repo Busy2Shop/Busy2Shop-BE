@@ -6,6 +6,7 @@ import AgentService, { IViewAgentsQuery } from '../services/agent.service';
 import UserSettings from '../models/userSettings.model';
 import { Op, QueryTypes } from 'sequelize';
 import { Database } from '../models';
+import { logger } from '../utils/logger';
 
 export default class AgentController {
     /**
@@ -187,31 +188,246 @@ export default class AgentController {
      */
     static async getStatus(req: AuthenticatedRequest, res: Response) {
         const { id } = req.user;
-        const status = await AgentService.getAgentStatus(id);
         
-        res.status(200).json({
-            status: 'success',
-            message: 'Agent status retrieved successfully',
-            data: status,
-        });
+        try {
+            // Use UserService like checkKycEligibility for consistency
+            const user = await UserService.viewSingleUser(id);
+            const settings = user.settings.get({ plain: true });
+            const agentMeta = settings?.agentMetaData;
+            
+            // Get current location from AgentLocation model
+            const currentLocation = await AgentService.getCurrentLocation(id);
+
+            const statusData = {
+                currentStatus: agentMeta?.currentStatus || 'offline',
+                isAcceptingOrders: agentMeta?.isAcceptingOrders || false,
+                lastStatusUpdate: agentMeta?.lastStatusUpdate || new Date().toISOString(),
+                lastUpdated: agentMeta?.lastStatusUpdate,
+                kycVerified: settings?.isKycVerified || false,
+                canGoOnline: settings?.isKycVerified || false,
+                location: currentLocation ? {
+                    latitude: currentLocation.latitude,
+                    longitude: currentLocation.longitude,
+                    accuracy: currentLocation.accuracy,
+                    address: currentLocation.address,
+                    timestamp: currentLocation.timestamp,
+                    lastUpdated: currentLocation.updatedAt
+                } : null,
+            };
+            
+            res.status(200).json({
+                status: 'success',
+                message: 'Agent status retrieved successfully',
+                data: statusData,
+            });
+        } catch (error) {
+            console.error('Error getting agent status:', error);
+            throw new BadRequestError('Failed to retrieve agent status');
+        }
     }
 
     /**
-     * Update agent status
+     * Update agent status (with KYC verification)
      * @param req AuthenticatedRequest
      * @param res Response
      */
     static async updateStatus(req: AuthenticatedRequest, res: Response) {
         const { id } = req.user;
-        const { status, isAcceptingOrders } = req.body;
+        const { status, isAcceptingOrders, metadata } = req.body;
         
-        const agent = await AgentService.updateAgentStatus(id, status, isAcceptingOrders);
+        // Validate status
+        const validStatuses = ['available', 'busy', 'away', 'offline'];
+        if (!validStatuses.includes(status)) {
+            throw new BadRequestError('Invalid status. Must be one of: available, busy, away, offline');
+        }
         
-        res.status(200).json({
-            status: 'success',
-            message: 'Agent status updated successfully',
-            data: agent,
-        });
+        try {
+            // First get current user data for KYC check and current status
+            const user = await UserService.viewSingleUser(id);
+            const settings = user.settings.get({ plain: true });
+            const agentMeta = settings?.agentMetaData;
+            
+            // Check KYC eligibility for 'available' status
+            if (status === 'available') {
+                const isKycVerified = settings?.isKycVerified;
+                const kycComplete = agentMeta?.kycComplete === true;
+                
+                if (!isKycVerified || !kycComplete) {
+                    res.status(403).json({
+                        status: 'error',
+                        message: 'KYC verification required to go online',
+                        code: 'KYC_REQUIRED',
+                        data: {
+                            currentStatus: agentMeta?.currentStatus || 'offline',
+                            kycVerified: isKycVerified,
+                            kycComplete: kycComplete,
+                            requiredActions: [
+                                !agentMeta?.identityDocument ? 'Upload KYC documents' : null,
+                                !kycComplete ? 'Complete KYC verification process' : null,
+                                !isKycVerified ? 'Wait for KYC approval' : null,
+                            ].filter(Boolean),
+                        },
+                    });
+                    return;
+                }
+            }
+            
+            // Update status using AgentService
+            const updatedAgent = await AgentService.updateAgentStatus(
+                id, 
+                status, 
+                status === 'available' ? (isAcceptingOrders !== false) : false
+            );
+            
+            // Get fresh status data
+            const updatedSettings = updatedAgent.settings?.get({ plain: true });
+            const updatedMeta = updatedSettings?.agentMetaData;
+            
+            res.status(200).json({
+                status: 'success',
+                message: 'Agent status updated successfully',
+                data: {
+                    currentStatus: updatedMeta?.currentStatus || status,
+                    isAcceptingOrders: updatedMeta?.isAcceptingOrders || false,
+                    lastStatusUpdate: updatedMeta?.lastStatusUpdate || new Date().toISOString(),
+                    kycVerified: updatedSettings?.isKycVerified || false,
+                },
+            });
+            
+        } catch (error: any) {
+            console.error('Error updating agent status:', error);
+            
+            // Handle specific error types
+            if (error.message?.includes('KYC verification')) {
+                res.status(403).json({
+                    status: 'error',
+                    message: error.message,
+                    code: 'KYC_REQUIRED',
+                    data: {
+                        currentStatus: 'offline',
+                        requiredActions: [
+                            'Complete KYC verification',
+                            'Upload required documents', 
+                            'Wait for approval',
+                        ],
+                    },
+                });
+                return;
+            }
+            
+            throw new BadRequestError('Failed to update agent status');
+        }
+    }
+
+    /**
+     * Update agent's current location
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async updateCurrentLocation(req: AuthenticatedRequest, res: Response) {
+        const { id, status } = req.user;
+        const { latitude, longitude, accuracy, timestamp, address } = req.body;
+
+        // Ensure the user is an agent
+        if (status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can update their location');
+        }
+
+        // Validate location data
+        if (!latitude || !longitude) {
+            throw new BadRequestError('Latitude and longitude are required');
+        }
+
+        try {
+            // Use AgentService to update current location
+            const updatedLocation = await AgentService.updateCurrentLocation(
+                id,
+                parseFloat(latitude),
+                parseFloat(longitude),
+                accuracy ? parseFloat(accuracy) : undefined,
+                address || undefined
+            );
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Location updated successfully',
+                data: {
+                    id: updatedLocation.id,
+                    latitude: updatedLocation.latitude,
+                    longitude: updatedLocation.longitude,
+                    accuracy: updatedLocation.accuracy,
+                    address: updatedLocation.address,
+                    timestamp: updatedLocation.timestamp,
+                    lastUpdated: updatedLocation.updatedAt
+                }
+            });
+
+        } catch (error) {
+            console.error('Error updating agent location:', error);
+            throw new BadRequestError('Failed to update location');
+        }
+    }
+
+    /**
+     * Check agent KYC status and eligibility to go online
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async checkKycEligibility(req: AuthenticatedRequest, res: Response) {
+        const { id } = req.user;
+        
+        try {
+            const user = await UserService.viewSingleUser(id);
+            const settings = user.settings.get({ plain: true });
+            const isKycVerified = settings?.isKycVerified;
+            const agentMeta = settings?.agentMetaData;
+            const kycComplete = agentMeta?.kycComplete === true;
+            const kycStatus = agentMeta?.kycStatus || 'incomplete';
+            
+            // If KYC is verified but kycComplete is not set, auto-update it
+            if (isKycVerified && !kycComplete) {
+                logger.info(`Auto-updating kycComplete flag for verified agent during KYC check ${id}`, {
+                    agentId: id,
+                    isKycVerified,
+                    kycComplete,
+                });
+                
+                // Update kycComplete flag in agent metadata
+                await AgentService.updateAgentDocuments(id, {
+                    kycComplete: true,
+                    kycCompletedAt: new Date().toISOString(),
+                });
+            }
+            
+            // Use isKycVerified as primary check
+            const canGoOnline = isKycVerified;
+            console.log({ id, canGoOnline, isKycVerified, kycComplete, kycStatus, settings });
+            res.status(200).json({
+                status: 'success',
+                message: 'KYC eligibility checked successfully',
+                data: {
+                    canGoOnline,
+                    isKycVerified,
+                    kycComplete,
+                    kycStatus,
+                    currentStatus: agentMeta?.currentStatus || 'offline',
+                    requirements: {
+                        kycVerified: isKycVerified,
+                        kycCompleted: kycComplete,
+                        documentsUploaded: !!agentMeta?.identityDocument,
+                    },
+                    nextSteps: !canGoOnline ? [
+                        !agentMeta?.identityDocument ? 'Upload KYC documents' : null,
+                        kycStatus === 'incomplete' ? 'Complete KYC verification process' : null,
+                        kycStatus === 'submitted' ? 'Wait for KYC approval' : null,
+                        !isKycVerified ? 'KYC approval pending' : null,
+                    ].filter(Boolean) : [],
+                },
+            });
+        } catch (error) {
+            console.error('Error checking KYC eligibility:', error);
+            throw new BadRequestError('Failed to check KYC eligibility');
+        }
     }
 
     /**
@@ -231,53 +447,70 @@ export default class AgentController {
             // Get user with full settings
             const user = await AgentService.getAgentById(id);
             
-            // Mock data for now - in a real app, this would come from order/transaction tables
+            // Query actual order statistics from database
+            const [orderStats] = await Database.query(`
+                SELECT 
+                    COUNT(*) as "totalOrders",
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as "completedOrders",
+                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as "cancelledOrders",
+                    COALESCE(SUM(CASE WHEN status = 'completed' THEN "totalAmount" * 0.15 ELSE 0 END), 0) as "totalEarnings",
+                    COALESCE(AVG(CASE WHEN status = 'completed' THEN "totalAmount" ELSE NULL END), 0) as "averageOrderValue",
+                    COUNT(DISTINCT "customerId") as "uniqueCustomers"
+                FROM "Orders" 
+                WHERE "agentId" = :agentId
+            `, {
+                replacements: { agentId: id },
+                type: QueryTypes.SELECT,
+            });
+
+            // Query this month's earnings
             const currentDate = new Date();
-            const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-            const lastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-            const endOfLastMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
-
-            // Calculate basic stats based on user data
-            // Use user creation date if settings don't exist or don't have joinDate
-            const joinDate = user.settings?.joinDate ? new Date(user.settings.joinDate) : user.createdAt;
-            const daysSinceJoin = Math.floor((currentDate.getTime() - joinDate.getTime()) / (1000 * 60 * 60 * 24));
+            const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).toISOString();
             
-            // Generate realistic stats based on join date and activity
-            const baseOrdersPerDay = 2;
-            const totalOrders = Math.floor(daysSinceJoin * baseOrdersPerDay * Math.random() * 0.8 + daysSinceJoin);
-            const completedOrders = Math.floor(totalOrders * 0.95); // 95% completion rate
-            const cancelledOrders = totalOrders - completedOrders;
-            const averageOrderValue = 3500; // Average order value in Naira
-            const commissionRate = 0.15; // 15% commission
-            const totalEarnings = Math.floor(completedOrders * averageOrderValue * commissionRate);
-            const thisMonthOrders = Math.floor(Math.min(totalOrders, 25)); // Max 25 orders this month
-            const thisMonthEarnings = Math.floor(thisMonthOrders * averageOrderValue * commissionRate);
-            const averageRating = 4.2 + Math.random() * 0.7; // Random rating between 4.2-4.9
-            const totalReviews = Math.floor(completedOrders * 0.8); // 80% of customers leave reviews
-            const responseTime = 45 + Math.floor(Math.random() * 60); // Response time in seconds
-            const activeHours = Math.floor(daysSinceJoin * 6 * Math.random() + daysSinceJoin * 2); // Hours active
-            const uniqueCustomers = Math.floor(totalOrders * 0.7); // Assuming some repeat customers
+            const [monthStats] = await Database.query(`
+                SELECT 
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as "thisMonthOrders",
+                    COALESCE(SUM(CASE WHEN status = 'completed' THEN "totalAmount" * 0.15 ELSE 0 END), 0) as "thisMonthEarnings"
+                FROM "Orders" 
+                WHERE "agentId" = :agentId 
+                    AND "createdAt" >= :startOfMonth
+            `, {
+                replacements: { agentId: id, startOfMonth },
+                type: QueryTypes.SELECT,
+            });
 
-            const stats = {
+            // Query ratings (would need Reviews table implementation)
+            // For now, use placeholder values since reviews system may not be implemented
+            const averageRating = 0; // Would come from Reviews table
+            const totalReviews = 0; // Would come from Reviews table
+
+            const stats = orderStats as any;
+            const monthData = monthStats as any;
+            
+            const totalOrders = parseInt(stats.totalOrders || 0);
+            const completedOrders = parseInt(stats.completedOrders || 0);
+            
+            const responseData = {
                 totalOrders,
                 completedOrders,
-                cancelledOrders,
-                totalEarnings,
-                thisMonthEarnings,
-                averageOrderValue,
-                averageRating: Math.round(averageRating * 10) / 10,
+                cancelledOrders: parseInt(stats.cancelledOrders || 0),
+                totalEarnings: parseFloat(stats.totalEarnings || 0),
+                thisMonthEarnings: parseFloat(monthData.thisMonthEarnings || 0),
+                averageOrderValue: parseFloat(stats.averageOrderValue || 0),
+                averageRating,
                 totalReviews,
-                completionRate: Math.round((completedOrders / totalOrders) * 100),
-                responseTime,
-                activeHours,
-                uniqueCustomers,
+                completionRate: totalOrders > 0 ? Math.round((completedOrders / totalOrders) * 100) : 0,
+                responseTime: 0, // Would need separate tracking
+                activeHours: 0, // Would need separate tracking
+                uniqueCustomers: parseInt(stats.uniqueCustomers || 0),
+                successRate: totalOrders > 0 ? Math.round((completedOrders / totalOrders) * 100) : 0,
                 lastActiveDate: user.settings?.lastLogin || new Date().toISOString(),
             };
 
             res.status(200).json({
                 status: 'success',
                 message: 'Agent stats retrieved successfully',
-                data: stats,
+                data: responseData,
             });
 
         } catch (error) {
@@ -357,18 +590,28 @@ export default class AgentController {
             for (let i = days - 1; i >= 0; i--) {
                 const date = new Date();
                 date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
                 
-                const earnings = Math.floor(Math.random() * 8000) + 1000; // 1000-9000 per day
-                const orders = Math.floor(Math.random() * 8) + 1; // 1-8 orders per day
-                const tips = Math.floor(Math.random() * 1000); // 0-1000 tips
-                const bonus = i === 0 ? Math.floor(Math.random() * 2000) : 0; // Random bonus today
+                // Query actual earnings for this date
+                const [result] = await Database.query(`
+                    SELECT 
+                        COALESCE(SUM(o."totalAmount" * 0.15), 0) as earnings,
+                        COUNT(o.id) as orders
+                    FROM "Orders" o
+                    WHERE o."agentId" = :agentId 
+                        AND o.status = 'completed'
+                        AND DATE(o."completedAt") = :date
+                `, {
+                    replacements: { agentId: id, date: dateStr },
+                    type: QueryTypes.SELECT,
+                });
 
                 dailyEarnings.push({
-                    date: date.toISOString().split('T')[0],
-                    earnings,
-                    orders,
-                    tips,
-                    bonus,
+                    date: dateStr,
+                    earnings: parseFloat((result as any)?.earnings || 0),
+                    orders: parseInt((result as any)?.orders || 0),
+                    tips: 0, // Tips would need separate tracking
+                    bonus: 0, // Bonus would need separate tracking
                 });
             }
 
@@ -381,6 +624,97 @@ export default class AgentController {
         } catch (error) {
             console.error('Error fetching daily earnings:', error);
             throw new BadRequestError('Failed to retrieve daily earnings');
+        }
+    }
+
+    /**
+     * Get agent earnings breakdown with aggregated data
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async getEarnings(req: AuthenticatedRequest, res: Response) {
+        const { id, status } = req.user;
+        const { startDate, endDate, period = 'monthly' } = req.query;
+
+        // Ensure the user is an agent
+        if (status.userType !== 'agent') {
+            throw new ForbiddenError('Only agents can access earnings data');
+        }
+
+        try {
+            // Query total earnings
+            const [totalStats] = await Database.query(`
+                SELECT 
+                    COALESCE(SUM(CASE WHEN status = 'completed' THEN "totalAmount" * 0.15 ELSE 0 END), 0) as "totalEarnings",
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as "ordersCompleted",
+                    COALESCE(AVG(CASE WHEN status = 'completed' THEN "totalAmount" ELSE NULL END), 0) as "averageOrderValue"
+                FROM "Orders" 
+                WHERE "agentId" = :agentId
+            `, {
+                replacements: { agentId: id },
+                type: QueryTypes.SELECT,
+            });
+
+            // Query period-specific earnings (default to last 30 days if no date range)
+            let periodCondition = '';
+            const replacements: any = { agentId: id };
+            
+            if (startDate && endDate) {
+                periodCondition = 'AND "completedAt" BETWEEN :startDate AND :endDate';
+                replacements.startDate = startDate;
+                replacements.endDate = endDate;
+            } else {
+                // Default to last 30 days
+                periodCondition = 'AND "completedAt" >= NOW() - INTERVAL \'30 days\'';
+            }
+
+            const [periodStats] = await Database.query(`
+                SELECT 
+                    COALESCE(SUM("totalAmount" * 0.15), 0) as "periodEarnings"
+                FROM "Orders" 
+                WHERE "agentId" = :agentId 
+                    AND status = 'completed'
+                    ${periodCondition}
+            `, {
+                replacements,
+                type: QueryTypes.SELECT,
+            });
+
+            // Query daily earnings breakdown for charts
+            const earnings = await Database.query(`
+                SELECT 
+                    DATE("completedAt") as date,
+                    COALESCE(SUM("totalAmount" * 0.15), 0) as amount,
+                    COUNT(*) as orders
+                FROM "Orders" 
+                WHERE "agentId" = :agentId 
+                    AND status = 'completed'
+                    AND "completedAt" >= NOW() - INTERVAL '30 days'
+                GROUP BY DATE("completedAt")
+                ORDER BY date DESC
+            `, {
+                replacements: { agentId: id },
+                type: QueryTypes.SELECT,
+            });
+
+            const stats = totalStats as any;
+            const periodData = periodStats as any;
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Earnings data retrieved successfully',
+                data: {
+                    totalEarnings: parseFloat(stats.totalEarnings || 0),
+                    periodEarnings: parseFloat(periodData.periodEarnings || 0),
+                    ordersCompleted: parseInt(stats.ordersCompleted || 0),
+                    averageOrderValue: parseFloat(stats.averageOrderValue || 0),
+                    earnings: earnings || []
+                },
+            });
+
+        } catch (error) {
+            console.error('Error fetching earnings:', error);
+            throw new BadRequestError('Failed to retrieve earnings data');
         }
     }
 
@@ -463,18 +797,34 @@ export default class AgentController {
         }
 
         try {
-            // Mock today's stats - in real app, this would aggregate from today's orders
-            const todayStats = {
-                earnings: Math.floor(Math.random() * 5000) + 1000, // 1000-6000
-                orders: Math.floor(Math.random() * 8) + 1, // 1-8 orders
-                rating: 4.2 + Math.random() * 0.7, // 4.2-4.9
-                activeTime: Math.floor(Math.random() * 8) + 2 + 'h ' + Math.floor(Math.random() * 60) + 'm',
-            };
+            const today = new Date().toISOString().split('T')[0];
+            
+            // Query actual today's stats
+            const [todayData] = await Database.query(`
+                SELECT 
+                    COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o."totalAmount" * 0.15 ELSE 0 END), 0) as "todayEarnings",
+                    COUNT(CASE WHEN o.status IN ('accepted', 'in_progress', 'shopping', 'delivery', 'completed') THEN 1 END) as "todayOrders",
+                    COUNT(CASE WHEN o.status = 'completed' THEN 1 END) as "completedToday",
+                    COUNT(CASE WHEN o.status NOT IN ('completed', 'cancelled') THEN 1 END) as "pendingToday"
+                FROM "Orders" o
+                WHERE o."agentId" = :agentId 
+                    AND DATE(o."createdAt") = :today
+            `, {
+                replacements: { agentId: id, today },
+                type: QueryTypes.SELECT,
+            });
+
+            const stats = todayData as any;
 
             res.status(200).json({
                 status: 'success',
                 message: 'Today stats retrieved successfully',
-                data: todayStats,
+                data: {
+                    todayEarnings: parseFloat(stats?.todayEarnings || 0),
+                    todayOrders: parseInt(stats?.todayOrders || 0),
+                    completedToday: parseInt(stats?.completedToday || 0),
+                    pendingToday: parseInt(stats?.pendingToday || 0),
+                },
             });
 
         } catch (error) {
@@ -583,15 +933,35 @@ export default class AgentController {
         }
 
         try {
-            // Get orders that are pending and not yet assigned to an agent
+            // Get orders that have payment completed but no agent assigned
+            // These are in 'pending' or 'in_progress' status waiting for agent acceptance
             const orders = await Database.query(`
                 SELECT 
                     o.id, o."orderNumber", o.status, o."totalAmount", o."serviceFee", o."deliveryFee",
-                    o."deliveryAddress", o."customerNotes", o."createdAt", o."acceptedAt",
+                    -- Only expose delivery city/area, not full address for privacy
+                    jsonb_build_object(
+                        'city', o."deliveryAddress"->>'city',
+                        'state', o."deliveryAddress"->>'state',
+                        'area', COALESCE(o."deliveryAddress"->>'address', 'Address provided')
+                    ) as "deliveryAddress",
+                    o."customerNotes", o."createdAt", o."acceptedAt",
                     (o."totalAmount" * 0.15) as "agentCommission",
-                    u."firstName", u."lastName", u.phone, u."displayImage",
-                    m.name as "marketName", m.address as "marketAddress", m.location as "marketLocation",
-                    sl.name as "listName", sl."estimatedTotal",
+                    -- Only customer first name for privacy
+                    u."firstName", 
+                    u."displayImage",
+                    -- Mask phone number for privacy (only show last 4 digits)
+                    CASE 
+                        WHEN u.phone IS NOT NULL THEN
+                            jsonb_build_object(
+                                'countryCode', u.phone->>'countryCode',
+                                'number', '****' || RIGHT(u.phone->>'number', 4)
+                            )
+                        ELSE NULL
+                    END as "phone",
+                    m.name as "marketName", m.address as "marketAddress",
+                    -- Don't expose exact market coordinates for security
+                    NULL as "marketLocation",
+                    sl.name as "listName", sl."estimatedTotal", sl.status as "shoppingListStatus",
                     COALESCE(
                         json_agg(
                             json_build_object(
@@ -607,13 +977,15 @@ export default class AgentController {
                 JOIN "ShoppingLists" sl ON o."shoppingListId" = sl.id
                 LEFT JOIN "Markets" m ON sl."marketId" = m.id
                 LEFT JOIN "ShoppingListItems" sli ON sl.id = sli."shoppingListId"
-                WHERE o.status = 'pending' 
-                    AND o."agentId" IS NULL
-                    AND o."paymentStatus" = 'completed'
+                WHERE o."paymentStatus" = 'completed' 
+                    AND (o."agentId" IS NULL OR o."agentId" = :agentId)
+                    AND o.status IN ('pending', 'accepted')
+                    AND sl.status = 'accepted'
                 GROUP BY o.id, u.id, m.id, sl.id
                 ORDER BY o."createdAt" ASC
                 LIMIT 20
             `, {
+                replacements: { agentId: id },
                 type: QueryTypes.SELECT,
             });
 

@@ -21,6 +21,8 @@ router.delete('/locations/:id', AuthenticatedController(AgentController.deleteLo
 // Agent status management routes (static paths)
 router.get('/status', AuthenticatedController(AgentController.getStatus));
 router.put('/status', AuthenticatedController(AgentController.updateStatus));
+router.post('/location', AuthenticatedController(AgentController.updateCurrentLocation));
+router.get('/kyc/eligibility', AuthenticatedController(AgentController.checkKycEligibility));
 
 // Agent profile and dashboard routes (static paths)
 router.get('/profile/stats', AuthenticatedController(AgentController.getAgentStats));
@@ -29,6 +31,9 @@ router.get('/profile/daily-earnings', AuthenticatedController(AgentController.ge
 router.get('/profile/today-stats', AuthenticatedController(AgentController.getTodayStats));
 router.get('/profile/data', AuthenticatedController(AgentController.getAgentProfileData));
 router.patch('/profile/status', AuthenticatedController(AgentController.updateAgentStatus));
+
+// Earnings endpoints
+router.get('/earnings', AuthenticatedController(AgentController.getEarnings));
 
 // Agent notifications
 router.get('/notifications', AuthenticatedController(AgentController.getNotifications));

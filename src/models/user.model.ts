@@ -218,7 +218,7 @@ export default class User extends Model<User | IUser> {
                         nin: '',
                         images: [],
                         currentStatus: 'offline',
-                        lastStatusUpdate: '',
+                        lastStatusUpdate: new Date().toISOString(),
                         isAcceptingOrders: false,
                     },
                 });

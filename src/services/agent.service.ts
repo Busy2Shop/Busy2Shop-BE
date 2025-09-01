@@ -10,6 +10,7 @@ import Pagination, { IPaging } from '../utils/pagination';
 import { Database } from '../models';
 import AgentLocation, { IAgentLocation } from '../models/agentLocation.model';
 import { GoogleMapsService } from '../utils/googleMaps';
+import { logger } from '../utils/logger';
 
 export interface IViewAgentsQuery {
     page?: number;
@@ -183,30 +184,84 @@ export default class AgentService {
             throw new NotFoundError('Shopping list not found');
         }
 
-        // Make sure we have a market ID
-        if (!shoppingList.marketId) {
-            throw new NotFoundError('Shopping list has no associated market');
+        // Build where clause for agent query
+        const whereClause: any = {
+            'status.userType': 'agent',
+            'status.activated': true,
+            'status.emailVerified': true,
+        };
+
+        // Exclude specific agents if provided
+        if (excludeAgentIds && excludeAgentIds.length > 0) {
+            whereClause.id = {
+                [Op.notIn]: excludeAgentIds,
+            };
         }
 
-        // Get the market to get its location
-        const market = await Market.findByPk(shoppingList.marketId);
-        if (!market || !market.location) {
-            // Instead of throwing an error, return an empty array if no market location
-            // This allows the code to continue and try other methods to find agents
-            console.warn(
-                `Market ${shoppingList.marketId} not found or has no location. Returning empty agent list.`,
+        // Get all available agents with KYC verification and proper status checks
+        const availableAgents = await User.findAll({
+            where: whereClause,
+            include: [
+                {
+                    model: UserSettings,
+                    as: 'settings',
+                    where: {
+                        isDeactivated: false,
+                        isKycVerified: true, // Only KYC verified agents
+                        // Check that agent has proper metadata and is accepting orders
+                        agentMetaData: {
+                            [Op.and]: [
+                                Sequelize.where(
+                                    Sequelize.fn('jsonb_extract_path_text', Sequelize.col('"settings"."agentMetaData"'), 'currentStatus'),
+                                    'available'
+                                ),
+                                Sequelize.where(
+                                    Sequelize.fn('jsonb_extract_path_text', Sequelize.col('"settings"."agentMetaData"'), 'isAcceptingOrders'),
+                                    'true'
+                                ),
+                                Sequelize.where(
+                                    Sequelize.fn('jsonb_extract_path_text', Sequelize.col('"settings"."agentMetaData"'), 'kycComplete'),
+                                    'true'
+                                ),
+                            ],
+                        },
+                    },
+                    required: true, // Exclude agents without proper settings
+                },
+            ],
+            limit: 10, // Limit to first 10 available agents
+            order: [['createdAt', 'ASC']], // Prioritize older agents (more experienced)
+        });
+
+        // Log agent availability for monitoring
+        console.log(`Found ${availableAgents.length} KYC-verified, available agents for shopping list ${shoppingListId}`);
+        
+        // Filter out agents who don't meet all criteria (additional safety check)
+        const fullyVerifiedAgents = availableAgents.filter(agent => {
+            const agentMeta = agent.settings?.agentMetaData;
+            const isFullyVerified = (
+                agent.settings?.isKycVerified === true &&
+                agentMeta?.kycComplete === true &&
+                agentMeta?.currentStatus === 'available' &&
+                agentMeta?.isAcceptingOrders === true
             );
-            return [];
+            
+            if (!isFullyVerified) {
+                console.log(`Agent ${agent.id} filtered out - KYC: ${agent.settings?.isKycVerified}, Status: ${agentMeta?.currentStatus}, Accepting: ${agentMeta?.isAcceptingOrders}, KYC Complete: ${agentMeta?.kycComplete}`);
+            }
+            
+            return isFullyVerified;
+        });
+
+        // If we have market location, try to sort by proximity (optional enhancement)
+        if (shoppingList.marketId && fullyVerifiedAgents.length > 0) {
+            const market = await Market.findByPk(shoppingList.marketId);
+            if (market && market.location) {
+                console.log(`Found ${fullyVerifiedAgents.length} agents for market ${market.name}`);
+            }
         }
 
-        // Now we can use the market's location to find agents near it
-        const agents = await this.findNearbyAgents(
-            market.location.latitude,
-            market.location.longitude,
-        );
-
-        // Filter out excluded agents
-        return agents.filter(agent => !excludeAgentIds.includes(agent.id));
+        return fullyVerifiedAgents;
     }
 
     /**
@@ -283,8 +338,9 @@ export default class AgentService {
                 throw new NotFoundError('Order not found');
             }
 
-            if (order.status !== 'pending') {
-                throw new BadRequestError('Can only assign pending orders to agents');
+            // Allow assignment to pending orders or orders that need reassignment
+            if (!['pending', 'accepted'].includes(order.status)) {
+                throw new BadRequestError('Can only assign pending or accepted orders to agents');
             }
 
             // Verify the agent exists and is active
@@ -322,11 +378,11 @@ export default class AgentService {
                 { transaction },
             );
 
-            // Also update the shopping list
+            // Also update the shopping list (assign agent, but don't change status - it's already 'accepted')
             await ShoppingList.update(
                 {
                     agentId,
-                    status: 'accepted',
+                    // Don't change status - it's already 'accepted' from payment confirmation
                 },
                 {
                     where: { id: order.shoppingListId },
@@ -631,7 +687,7 @@ export default class AgentService {
     }
 
     /**
-     * Update an agent's status
+     * Update an agent's status (with KYC verification for 'available' status)
      */
     static async updateAgentStatus(
         userId: string,
@@ -656,6 +712,36 @@ export default class AgentService {
 
         if (!user.settings) {
             throw new NotFoundError('User settings not found');
+        }
+
+        // Verify agent is KYC verified before allowing 'available' status
+        if (status === 'available' && isAcceptingOrders) {
+            const isKycVerified = user.settings.isKycVerified;
+            const agentMeta = user.settings.agentMetaData;
+            const kycComplete = agentMeta?.kycComplete === true;
+            
+            // Primary check: isKycVerified (set by admin approval)
+            if (!isKycVerified) {
+                throw new BadRequestError(
+                    'Agent must complete KYC verification before going online. ' +
+                    `KYC Status: ${isKycVerified ? 'Verified' : 'Not Verified'}`
+                );
+            }
+            
+            // If KYC is verified but kycComplete is not set, auto-update it
+            if (isKycVerified && !kycComplete) {
+                logger.info(`Auto-updating kycComplete flag for verified agent ${userId}`, {
+                    userId,
+                    isKycVerified,
+                    kycComplete,
+                });
+                
+                // Update kycComplete flag in agent metadata
+                await AgentService.updateAgentDocuments(userId, {
+                    kycComplete: true,
+                    kycCompletedAt: new Date().toISOString(),
+                });
+            }
         }
 
         const currentTime = new Date().toISOString();
@@ -687,6 +773,7 @@ export default class AgentService {
                         true
                     )
                 `),
+                    lastLogin: new Date(), // Update last seen
                 },
                 {
                     where: { userId: userId },
@@ -793,101 +880,90 @@ export default class AgentService {
         orderId: string,
         transaction?: Transaction,
     ): Promise<User> {
-        // Use the provided transaction or create a new one
-        const txn = transaction || (await Database.transaction());
-
-        try {
-            const agent = await User.findOne({
-                where: {
-                    id: agentId,
-                    'status.userType': 'agent',
-                },
-                include: [
-                    {
-                        model: UserSettings,
-                        as: 'settings',
-                    },
-                ],
-                transaction: txn,
-            });
-
-            if (!agent) {
-                throw new NotFoundError('Agent not found');
-            }
-
-            if (!agent.settings) {
-                throw new NotFoundError('User settings not found');
-            }
-
-            const currentTime = new Date().toISOString();
-
-            // Update only the status-related fields
-            await UserSettings.update(
+        const agent = await User.findOne({
+            where: {
+                id: agentId,
+                'status.userType': 'agent',
+            },
+            include: [
                 {
-                    agentMetaData: Sequelize.literal(`
-                    jsonb_set(
-                        jsonb_set(
-                            jsonb_set(
-                                COALESCE("agentMetaData", 
-                                    '{"nin":"","images":[],"currentStatus":"offline","lastStatusUpdate":"${currentTime}","isAcceptingOrders":false}'::jsonb
-                                ),
-                                '{currentStatus}',
-                                '"busy"'::jsonb,
-                                true
-                            ),
-                            '{lastStatusUpdate}',
-                            '"${currentTime}"'::jsonb,
-                            true
-                        ),
-                        '{isAcceptingOrders}',
-                        'false'::jsonb,
-                        true
-                    )
-                `),
+                    model: UserSettings,
+                    as: 'settings',
                 },
-                {
-                    where: { userId: agentId },
-                    transaction: txn,
-                },
-            );
+            ],
+            transaction,
+        });
 
-            // Only commit if we created our own transaction
-            if (!transaction) {
-                await txn.commit();
-            }
-
-            // Fetch the updated agent to return
-            return (await User.findOne({
-                where: {
-                    id: agentId,
-                    'status.userType': 'agent',
-                },
-                include: [
-                    {
-                        model: UserSettings,
-                        as: 'settings',
-                    },
-                ],
-                transaction: txn,
-            })) as User;
-        } catch (error) {
-            // Only rollback if we created our own transaction
-            if (!transaction) {
-                await txn.rollback();
-            }
-            throw error;
+        if (!agent) {
+            throw new NotFoundError('Agent not found');
         }
+
+        if (!agent.settings) {
+            throw new NotFoundError('User settings not found');
+        }
+
+        // Get current agent metadata or create default
+        const currentMetaData = agent.settings.agentMetaData || {
+            nin: '',
+            images: [],
+            currentStatus: 'offline' as AgentStatus,
+            lastStatusUpdate: new Date().toISOString(),
+            isAcceptingOrders: false,
+        };
+
+        // Update status fields
+        const updatedMetaData = {
+            ...currentMetaData,
+            currentStatus: 'busy' as AgentStatus,
+            isAcceptingOrders: false,
+            lastStatusUpdate: new Date().toISOString(),
+        };
+
+        // Update using simple JSON assignment
+        await UserSettings.update(
+            {
+                agentMetaData: updatedMetaData,
+            },
+            {
+                where: { userId: agentId },
+                transaction,
+            }
+        );
+
+        // Return the updated agent
+        return (await User.findOne({
+            where: {
+                id: agentId,
+                'status.userType': 'agent',
+            },
+            include: [
+                {
+                    model: UserSettings,
+                    as: 'settings',
+                },
+            ],
+            transaction,
+        })) as User;
     }
 
     /**
      * Get agent's current status
      */
     static async getAgentStatus(agentId: string): Promise<{
-        status: AgentStatus;
+        currentStatus: AgentStatus;
         isAcceptingOrders: boolean;
         lastStatusUpdate: string;
+        kycVerified: boolean;
+        canGoOnline: boolean;
     }> {
-        const agent = await User.findByPk(agentId);
+        const agent = await User.findByPk(agentId, {
+            include: [
+                {
+                    model: UserSettings,
+                    as: 'settings',
+                },
+            ],
+        });
 
         if (!agent) {
             throw new NotFoundError('Agent not found');
@@ -897,11 +973,33 @@ export default class AgentService {
             throw new BadRequestError('User is not an agent');
         }
 
+        const settings = agent.settings;
+        const agentMeta = settings?.agentMetaData;
+        const isKycVerified = settings?.isKycVerified || false;
+        const kycComplete = agentMeta?.kycComplete === true;
+
+        // If KYC is verified but kycComplete is not set, auto-update it
+        if (isKycVerified && !kycComplete) {
+            logger.info(`Auto-updating kycComplete flag for verified agent ${agentId}`, {
+                agentId,
+                isKycVerified,
+                kycComplete,
+            });
+            
+            // Update kycComplete flag in agent metadata
+            await AgentService.updateAgentDocuments(agentId, {
+                kycComplete: true,
+                kycCompletedAt: new Date().toISOString(),
+            });
+        }
+
+        // Use isKycVerified as the primary check for canGoOnline
         return {
-            status: agent.settings?.agentMetaData?.currentStatus ?? 'offline',
-            isAcceptingOrders: agent.settings?.agentMetaData?.isAcceptingOrders || false,
-            lastStatusUpdate:
-                agent.settings?.agentMetaData?.lastStatusUpdate ?? new Date().toISOString(),
+            currentStatus: agentMeta?.currentStatus ?? 'offline',
+            isAcceptingOrders: agentMeta?.isAcceptingOrders || false,
+            lastStatusUpdate: agentMeta?.lastStatusUpdate ?? new Date().toISOString(),
+            kycVerified: isKycVerified,
+            canGoOnline: isKycVerified,
         };
     }
 
@@ -1044,6 +1142,84 @@ export default class AgentService {
         return await AgentLocation.findAll({
             where: {
                 agentId,
+            },
+            transaction,
+        });
+    }
+
+    /**
+     * Update agent's current real-time location
+     */
+    static async updateCurrentLocation(
+        agentId: string,
+        latitude: number,
+        longitude: number,
+        accuracy?: number,
+        address?: string,
+        transaction?: Transaction,
+    ): Promise<AgentLocation> {
+        const txn = transaction || (await Database.transaction());
+
+        try {
+            // Find existing current_location record
+            let currentLocation = await AgentLocation.findOne({
+                where: {
+                    agentId,
+                    locationType: 'current_location',
+                },
+                transaction: txn,
+            });
+
+            const locationData: Partial<IAgentLocation> = {
+                latitude,
+                longitude,
+                accuracy: accuracy || undefined,
+                address: address || undefined,
+                timestamp: Date.now(),
+                isActive: true,
+                radius: 0, // Not applicable for current location
+            };
+
+            if (currentLocation) {
+                // Update existing current location
+                await currentLocation.update(locationData, { transaction: txn });
+            } else {
+                // Create new current location record
+                currentLocation = await AgentLocation.create({
+                    agentId,
+                    locationType: 'current_location',
+                    name: 'Current Location',
+                    ...locationData,
+                } as IAgentLocation, { transaction: txn });
+            }
+
+            // Only commit if we created our own transaction
+            if (!transaction) {
+                await txn.commit();
+            }
+
+            return currentLocation;
+        } catch (error) {
+            // Only rollback if we created our own transaction
+            if (!transaction) {
+                await txn.rollback();
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Get agent's current location
+     */
+    static async getCurrentLocation(
+        agentId: string,
+        transaction?: Transaction,
+    ): Promise<AgentLocation | null> {
+        return await AgentLocation.findOne({
+            where: {
+                agentId,
+                locationType: 'current_location',
+                isActive: true,
             },
             transaction,
         });

@@ -13,7 +13,7 @@ import {
     ForeignKey,
 } from 'sequelize-typescript';
 import User from './user.model';
-import bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 
 // Define the "Password" table model
 @Table

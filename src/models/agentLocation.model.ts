@@ -21,6 +21,9 @@ export interface IAgentLocation {
     isActive: boolean;
     name?: string; // optional name for the location
     address?: string; // optional address description
+    locationType?: 'service_area' | 'current_location'; // distinguish between service areas and real-time location
+    accuracy?: number; // for real-time location accuracy
+    timestamp?: number; // for real-time location timestamp
 }
 
 @Table
@@ -74,6 +77,25 @@ export default class AgentLocation extends Model<AgentLocation | IAgentLocation>
         allowNull: true,
     })
     address?: string;
+
+    @Column({
+        type: DataType.ENUM('service_area', 'current_location'),
+        allowNull: false,
+        defaultValue: 'service_area',
+    })
+    locationType: 'service_area' | 'current_location';
+
+    @Column({
+        type: DataType.DECIMAL(10, 2),
+        allowNull: true,
+    })
+    accuracy?: number;
+
+    @Column({
+        type: DataType.BIGINT,
+        allowNull: true,
+    })
+    timestamp?: number;
 
     @BelongsTo(() => User)
     agent: User;

@@ -179,6 +179,7 @@ export default class UserService {
                         'joinDate',
                         'isBlocked',
                         'isDeactivated',
+                        'isKycVerified',
                         'lastLogin',
                         'meta',
                         'agentMetaData',

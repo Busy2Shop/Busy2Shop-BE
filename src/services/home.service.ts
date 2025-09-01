@@ -648,7 +648,7 @@ export class HomeService {
             
             for (const market of markets) {
                 // Get products for this market
-                let products = await Product.findAll({
+                const products = await Product.findAll({
                     where: {
                         marketId: market.id,
                         isAvailable: true,

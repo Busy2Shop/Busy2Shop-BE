@@ -149,6 +149,13 @@ export default class AlatPayController {
                                 shoppingListId: syncedOrder.shoppingListId,
                                 autoSynced: true,
                                 alatPayStatus: alatPayStatus?.status,
+                                agent: syncedOrder.agent ? {
+                                    id: syncedOrder.agent.id,
+                                    firstName: syncedOrder.agent.firstName,
+                                    lastName: syncedOrder.agent.lastName,
+                                    phone: syncedOrder.agent.phone,
+                                    displayImage: syncedOrder.agent.displayImage,
+                                } : null,
                             },
                         });
                         return;
@@ -161,6 +168,9 @@ export default class AlatPayController {
                 }
             }
 
+            // Get order with agent info if needed
+            const orderWithAgent = await OrderService.getOrder(order.id, true, false);
+            
             // Return current order status (with potential ALATPay verification info)
             res.status(200).json({
                 status: 'success',
@@ -177,6 +187,13 @@ export default class AlatPayController {
                     shoppingListId: order.shoppingListId,
                     alatPayStatus: alatPayStatus?.status || 'not_checked',
                     verified: !!alatPayStatus,
+                    agent: orderWithAgent.agent ? {
+                        id: orderWithAgent.agent.id,
+                        firstName: orderWithAgent.agent.firstName,
+                        lastName: orderWithAgent.agent.lastName,
+                        phone: orderWithAgent.agent.phone,
+                        displayImage: orderWithAgent.agent.displayImage,
+                    } : null,
                 },
             });
         } catch (error) {

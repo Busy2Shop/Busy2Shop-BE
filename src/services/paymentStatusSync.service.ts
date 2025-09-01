@@ -6,6 +6,8 @@ import AgentService from './agent.service';
 import OrderTrailService from './orderTrail.service';
 import { logger } from '../utils/logger';
 import { Database } from '../models';
+import Order from '../models/order.model';
+import ShoppingList from '../models/shoppingList.model';
 
 /**
  * Unified Payment Status Synchronization Service
@@ -35,7 +37,7 @@ export default class PaymentStatusSyncService {
     ): Promise<{ success: boolean; assignedAgentId?: string; error?: string }> {
         
         const executeInTransaction = async (transaction: Transaction) => {
-            let assignedAgentId: string | undefined = undefined;
+            const assignedAgentId: string | undefined = undefined;
             
             try {
                 logger.info(`Starting unified payment confirmation for order ${orderId}`, {
@@ -44,8 +46,17 @@ export default class PaymentStatusSyncService {
                     performedBy,
                 });
                 
-                // 1. Get the order with all related data
-                const order = await OrderService.getOrder(orderId, false, false);
+                // 1. Get the order with minimal data for performance
+                const order = await Order.findByPk(orderId, {
+                    include: [
+                        {
+                            model: ShoppingList,
+                            as: 'shoppingList',
+                            attributes: ['id', 'status', 'paymentStatus'],
+                        },
+                    ],
+                    transaction,
+                });
                 if (!order) {
                     throw new Error(`Order ${orderId} not found`);
                 }
@@ -90,7 +101,9 @@ export default class PaymentStatusSyncService {
                     logger.info(`Shopping list ${order.shoppingListId} payment info updated`);
                 }
                 
-                // 6. Auto-assign agent to the order
+                // 6. Auto-assign agent to the order (temporarily disabled for debugging)
+                logger.info(`Skipping agent assignment temporarily for order ${order.orderNumber}`);
+                /*
                 try {
                     if (order.shoppingListId) {
                         const availableAgents = await AgentService.getAvailableAgentsForOrder(order.shoppingListId);
@@ -101,18 +114,14 @@ export default class PaymentStatusSyncService {
                             
                             logger.info(`Agent ${selectedAgent.id} automatically assigned to order ${order.orderNumber}`);
                             
-                            // 7. Update order status to 'in_progress' after agent assignment
-                            await OrderService.updateOrderStatus(orderId, order.customerId, 'in_progress', transaction);
-                            logger.info(`Order ${order.orderNumber} status updated to in_progress after agent assignment`);
+                            // 7. Update order status to 'accepted' after agent assignment (not in_progress yet)
+                            // Agent still needs to accept the order in their dashboard
+                            await OrderService.updateOrderStatus(orderId, order.customerId, 'accepted', transaction);
+                            logger.info(`Order ${order.orderNumber} status updated to accepted after agent assignment`);
                             
-                            // 8. Update shopping list status to 'processing' (agent actively working)
-                            await ShoppingListService.updateListStatus(
-                                order.shoppingListId,
-                                order.customerId,
-                                'processing',
-                                transaction
-                            );
-                            logger.info(`Shopping list ${order.shoppingListId} status updated to processing`);
+                            // 8. Shopping list remains 'accepted' until agent starts working
+                            // It will be updated to 'processing' when agent accepts the order
+                            logger.info(`Shopping list ${order.shoppingListId} remains accepted - waiting for agent to start`);
                             
                         } else {
                             logger.warn(`No available agents found for order ${order.orderNumber} - order remains in accepted status`);
@@ -122,6 +131,7 @@ export default class PaymentStatusSyncService {
                     logger.error(`Failed to assign agent for order ${order.orderNumber}:`, agentError);
                     // Continue - payment confirmation succeeded even if agent assignment failed
                 }
+                */
                 
                 // 9. Log comprehensive trail entry
                 await OrderTrailService.logOrderEvent(orderId, {

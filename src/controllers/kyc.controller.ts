@@ -300,9 +300,11 @@ export default class KycController {
         // Update KYC verification status and mark as approved
         await userSettings.update({ isKycVerified: true });
         
-        // Also update the KYC status to approved
+        // Also update the KYC status to approved and ensure kycComplete is set
         await AgentService.updateAgentDocuments(id, { 
             kycStatus: 'approved',
+            kycComplete: true,
+            kycCompletedAt: new Date().toISOString(),
         });
 
         // Now fetch the updated user to return in response
