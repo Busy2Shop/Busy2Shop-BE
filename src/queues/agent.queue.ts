@@ -1,8 +1,9 @@
 // src/queues/agent.queue.ts
 import { Queue, Worker } from 'bullmq';
 import { logger } from '../utils/logger';
-import OrderService from '../services/order.service';
+import AgentService from '../services/agent.service';
 import ShoppingListService from '../services/shoppingList.service';
+import OrderTrailService from '../services/orderTrail.service';
 import { connection } from './connection';
 
 // Define job data interface
@@ -40,23 +41,40 @@ const agentAssignmentWorker = new Worker<AgentAssignmentJobData>(
         logger.info(`Attempting to assign agent to order ${orderId} (attempt ${attemptCount + 1})`);
 
         try {
-            // Try to assign an agent to the order
-            const updatedOrder = await OrderService.assignAgentToOrder(orderId, shoppingListId);
+            // Get the best available agents for this order
+            const availableAgents = await AgentService.getAvailableAgentsForOrder(
+                shoppingListId,
+                [] // No exclusions on first attempt
+            );
+
+            if (availableAgents.length === 0) {
+                throw new Error(`No available agents found for order ${orderId}`);
+            }
+
+            // Try to assign the best agent (first in sorted list)
+            const selectedAgent = availableAgents[0];
+            const updatedOrder = await AgentService.assignOrderToAgent(orderId, selectedAgent.id);
             
             if (updatedOrder.agentId) {
-                // Agent was successfully assigned (OrderService already updated order status to 'accepted')
-                // Now update shopping list status to 'accepted' as well
-                await ShoppingListService.updateListStatus(
-                    shoppingListId,
-                    userId,
-                    'accepted'
-                );
+                // Agent was successfully assigned
+                logger.info(`Successfully assigned agent ${updatedOrder.agentId} to order ${orderId}`);
                 
-                logger.info(`Successfully assigned agent ${updatedOrder.agentId} to order ${orderId} and updated status to accepted`);
-                return { success: true, agentId: updatedOrder.agentId };
+                // Log the assignment in order trail
+                await OrderTrailService.logOrderEvent(orderId, {
+                    action: 'agent_assigned',
+                    description: `Order assigned to agent ${selectedAgent.firstName} ${selectedAgent.lastName}`,
+                    performedBy: 'system',
+                    metadata: {
+                        agentId: selectedAgent.id,
+                        agentName: `${selectedAgent.firstName} ${selectedAgent.lastName}`,
+                        assignmentMethod: 'auto',
+                        attemptCount: attemptCount + 1,
+                    },
+                });
+                
+                return { success: true, agentId: updatedOrder.agentId, agentName: `${selectedAgent.firstName} ${selectedAgent.lastName}` };
             } else {
-                // No agent available yet, job will be retried automatically
-                throw new Error(`No available agents found for order ${orderId}`);
+                throw new Error(`Failed to assign agent ${selectedAgent.id} to order ${orderId}`);
             }
         } catch (error) {
             logger.error(`Error assigning agent to order ${orderId}:`, error);
@@ -95,7 +113,7 @@ agentAssignmentWorker.on('completed', (job: any, result: any) => {
     logger.info(`Agent assignment completed for order ${job.data.orderId}: Agent ${result.agentId} assigned`);
 });
 
-// Helper function to queue agent assignment with delay
+// Helper function to queue agent assignment with delay and smart retry logic
 export async function queueAgentAssignment(
     orderId: string, 
     shoppingListId: string, 
@@ -103,6 +121,15 @@ export async function queueAgentAssignment(
     delayMinutes: number = 5
 ): Promise<void> {
     try {
+        // Check if there's already a pending job for this order to avoid duplicates
+        const existingJobs = await agentAssignmentQueue.getJobs(['waiting', 'delayed']);
+        const existingJob = existingJobs.find(job => job.id === `agent-assignment-${orderId}`);
+        
+        if (existingJob) {
+            logger.info(`Agent assignment job already exists for order ${orderId}`);
+            return;
+        }
+
         await agentAssignmentQueue.add(
             'assign-agent',
             {
@@ -114,6 +141,11 @@ export async function queueAgentAssignment(
             {
                 delay: delayMinutes * 60 * 1000, // Convert minutes to milliseconds
                 jobId: `agent-assignment-${orderId}`, // Unique job ID to prevent duplicates
+                // Progressive delay: each retry takes longer
+                backoff: {
+                    type: 'exponential',
+                    delay: Math.max(60000, delayMinutes * 60 * 1000), // Minimum 1 minute
+                },
             }
         );
         

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import AlatPayController from '../../controllers/payment/alatpay.controller';
 import { AuthenticatedController, basicAuth } from '../../middlewares/authMiddleware';
+import path from 'path';
 
 const router = Router();
 
@@ -33,5 +34,8 @@ router.post(
 
 // Webhook route - this doesn't require authentication as it's called by ALATPay
 router.post('/webhook', AlatPayController.handleWebhook);
+
+// TEST ENDPOINT - No authentication required for testing purposes
+router.post('/test/confirm-payment', AlatPayController.testConfirmPayment);
 
 export default router;

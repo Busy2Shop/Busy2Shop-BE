@@ -37,7 +37,7 @@ export default class PaymentStatusSyncService {
     ): Promise<{ success: boolean; assignedAgentId?: string; error?: string }> {
         
         const executeInTransaction = async (transaction: Transaction) => {
-            const assignedAgentId: string | undefined = undefined;
+            let assignedAgentId: string | undefined = undefined;
             
             try {
                 logger.info(`Starting unified payment confirmation for order ${orderId}`, {
@@ -101,12 +101,12 @@ export default class PaymentStatusSyncService {
                     logger.info(`Shopping list ${order.shoppingListId} payment info updated`);
                 }
                 
-                // 6. Auto-assign agent to the order (temporarily disabled for debugging)
-                logger.info(`Skipping agent assignment temporarily for order ${order.orderNumber}`);
-                /*
+                // 6. Auto-assign agent to the order if available
                 try {
                     if (order.shoppingListId) {
-                        const availableAgents = await AgentService.getAvailableAgentsForOrder(order.shoppingListId);
+                        const unparsedavailableAgents = await AgentService.getAvailableAgentsForOrder(order.shoppingListId);
+                        const availableAgents = JSON.parse(JSON.stringify(unparsedavailableAgents));
+                        console.log({ availableAgents });
                         if (availableAgents.length > 0) {
                             const selectedAgent = availableAgents[0];
                             await AgentService.assignOrderToAgent(orderId, selectedAgent.id);
@@ -131,7 +131,6 @@ export default class PaymentStatusSyncService {
                     logger.error(`Failed to assign agent for order ${order.orderNumber}:`, agentError);
                     // Continue - payment confirmation succeeded even if agent assignment failed
                 }
-                */
                 
                 // 9. Log comprehensive trail entry
                 await OrderTrailService.logOrderEvent(orderId, {

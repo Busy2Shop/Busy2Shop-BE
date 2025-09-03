@@ -32,6 +32,11 @@ router.get('/profile/today-stats', AuthenticatedController(AgentController.getTo
 router.get('/profile/data', AuthenticatedController(AgentController.getAgentProfileData));
 router.patch('/profile/status', AuthenticatedController(AgentController.updateAgentStatus));
 
+// Preferred locations routes
+router.get('/preferred-locations', AuthenticatedController(AgentController.getPreferredLocations));
+router.post('/preferred-locations', AuthenticatedController(AgentController.addPreferredLocation));
+router.delete('/preferred-locations/:id', AuthenticatedController(AgentController.removePreferredLocation));
+
 // Earnings endpoints
 router.get('/earnings', AuthenticatedController(AgentController.getEarnings));
 

@@ -8,6 +8,7 @@ import OrderService from '../../services/order.service';
 import ShoppingListService from '../../services/shoppingList.service';
 import SystemSettingsService from '../../services/systemSettings.service';
 import ShoppingListItem from '../../models/shoppingListItem.model';
+import PaymentStatusSyncService from '../../services/paymentStatusSync.service';
 
 // Interface for calculated fees
 interface CalculatedFees {
@@ -106,8 +107,42 @@ export default class AlatPayController {
                         alatPayStatus: alatPayStatus?.status,
                         needsSync: shouldSync,
                     });
-                } catch (verificationError) {
+                } catch (verificationError: any) {
                     logger.warn(`Failed to verify payment with ALATPay for transaction ${transactionId}:`, verificationError);
+                    
+                    // Check if this is a timeout scenario (30+ minutes and 404 with confirmation message)
+                    const isTimeoutError = verificationError?.statusCode === 400 && 
+                        verificationError?.message && 
+                        verificationError.message.includes('confirming your transaction') &&
+                        verificationError.message.includes('30 minutes');
+                    
+                    if (isTimeoutError) {
+                        // Check if order was created more than 30 minutes ago
+                        const orderCreatedAt = new Date(order.createdAt);
+                        const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000); // 30 minutes in milliseconds
+                        const minutesSinceCreation = Math.floor((Date.now() - orderCreatedAt.getTime()) / (60 * 1000));
+                        
+                        logger.info(`Timeout check for transaction ${transactionId}: created ${minutesSinceCreation} minutes ago (threshold: 30 minutes)`);
+                        
+                        if (orderCreatedAt < thirtyMinutesAgo) {
+                            logger.warn(`Transaction ${transactionId} has exceeded 30 minutes timeout (${minutesSinceCreation} minutes old), marking as failed`);
+                            
+                            try {
+                                // Update order payment status to failed
+                                await OrderService.updateOrderPaymentStatus(order.id, 'failed');
+                                
+                                // Update actual status for response
+                                actualPaymentStatus = 'failed';
+                                
+                                logger.info(`Successfully marked transaction ${transactionId} as failed due to timeout after ${minutesSinceCreation} minutes`);
+                            } catch (updateError) {
+                                logger.error(`Failed to update payment status to failed for transaction ${transactionId}:`, updateError);
+                            }
+                        } else {
+                            logger.info(`Transaction ${transactionId} is still within 30-minute window (${minutesSinceCreation} minutes old), keeping as pending`);
+                        }
+                    }
+                    
                     // Continue with local status if verification fails
                 }
             }
@@ -117,7 +152,6 @@ export default class AlatPayController {
                 try {
                     logger.info(`Auto-syncing payment status for transaction ${transactionId}`);
                     
-                    const PaymentStatusSyncService = (await import('../../services/paymentStatusSync.service')).default;
                     const result = await PaymentStatusSyncService.confirmPayment(
                         order.id,
                         transactionId,
@@ -171,10 +205,16 @@ export default class AlatPayController {
             // Get order with agent info if needed
             const orderWithAgent = await OrderService.getOrder(order.id, true, false);
             
+            // Determine appropriate message based on payment status
+            let responseMessage = 'Payment status retrieved';
+            if (actualPaymentStatus === 'failed') {
+                responseMessage = 'Payment has failed - transaction exceeded timeout period';
+            }
+            
             // Return current order status (with potential ALATPay verification info)
             res.status(200).json({
                 status: 'success',
-                message: 'Payment status retrieved',
+                message: responseMessage,
                 data: {
                     status: actualPaymentStatus,
                     orderNumber: order.orderNumber,
@@ -187,6 +227,7 @@ export default class AlatPayController {
                     shoppingListId: order.shoppingListId,
                     alatPayStatus: alatPayStatus?.status || 'not_checked',
                     verified: !!alatPayStatus,
+                    timeoutExpired: actualPaymentStatus === 'failed',
                     agent: orderWithAgent.agent ? {
                         id: orderWithAgent.agent.id,
                         firstName: orderWithAgent.agent.firstName,
@@ -275,7 +316,6 @@ export default class AlatPayController {
             }
 
             // Process payment confirmation
-            const PaymentStatusSyncService = (await import('../../services/paymentStatusSync.service')).default;
             const result = await PaymentStatusSyncService.confirmPayment(
                 order.id,
                 transactionId,
@@ -482,7 +522,6 @@ export default class AlatPayController {
                         try {
                             logger.info(`Auto-syncing completed payment for order ${existingOrder.orderNumber}`);
                             
-                            const PaymentStatusSyncService = (await import('../../services/paymentStatusSync.service')).default;
                             const result = await PaymentStatusSyncService.confirmPayment(
                                 existingOrder.id,
                                 existingOrder.paymentId,
@@ -640,6 +679,68 @@ export default class AlatPayController {
             logger.error('Error generating payment details:', error);
             throw error;
         }
+    }
+
+    /**
+     * Test endpoint for confirming payment - NO AUTH REQUIRED (for testing only)
+     */
+    static async testConfirmPayment(req: Request, res: Response) {
+            const { orderId, transactionId, source, performedBy } = req.body;
+
+            // Validate required fields
+            if (!orderId) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'orderId is required',
+                });
+            }
+
+            if (!transactionId) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'transactionId is required',
+                });
+            }
+
+            // Set defaults for optional fields
+            const confirmationSource = source || 'api_sync';
+            const performedByUser = performedBy || 'test-user';
+
+            logger.info('TEST: Confirming payment manually', {
+                orderId,
+                transactionId,
+                source: confirmationSource,
+                performedBy: performedByUser,
+            });
+
+            // Import and call the payment confirmation service
+            const result = await PaymentStatusSyncService.confirmPayment(
+                orderId,
+                transactionId,
+                confirmationSource,
+                performedByUser
+            );
+
+            logger.info('TEST: Payment confirmation successful', {
+                orderId,
+                transactionId,
+                result,
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Payment confirmed successfully',
+                data: {
+                    orderId,
+                    transactionId,
+                    assignedAgentId: result.assignedAgentId,
+                    source: confirmationSource,
+                    performedBy: performedByUser,
+                    fullDetails: result,
+                },
+            });
+
+
     }
 
     // Removed: Complex order status endpoints - webhook handles all order updates
