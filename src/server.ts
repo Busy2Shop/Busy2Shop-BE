@@ -1,6 +1,7 @@
 import app from './app';
 import { initiateDB } from './models';
 import { logger } from './utils/logger';
+// import { redisClient, redisPubClient, redisSubClient, testRedisConnection, getRedisStatus, redisHealthCheck } from './utils/redis';
 import { redisClient, redisPubClient, redisSubClient } from './utils/redis';
 import http from 'http';
 import SocketConfig from './clients/socket/index.config';
@@ -18,6 +19,22 @@ async function startServer(): Promise<void> {
     try {
         // Initiate a connection to the database
         await initiateDB();
+
+        // // Test Redis connection before proceeding
+        // logger.info('🔍 Testing Redis connection...');
+        // const redisConnected = await testRedisConnection();
+        
+        // if (!redisConnected) {
+        //     logger.warn('⚠️ Redis connection failed - server will continue but some features may be limited');
+        //     // Log Redis status for debugging
+        //     const status = getRedisStatus();
+        //     logger.warn('Redis Status:', JSON.stringify(status, null, 2));
+        // } else {
+        //     logger.info('✅ Redis connection verified successfully');
+        //     // Log a health check for good measure
+        //     const health = await redisHealthCheck();
+        //     logger.info('📊 Redis Health Check:', JSON.stringify(health, null, 2));
+        // }
 
         // Initialize Socket.IO
         new SocketConfig(server);
