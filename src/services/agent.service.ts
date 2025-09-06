@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { FindAndCountOptions, Op, Sequelize, Transaction } from 'sequelize';
+import { FindAndCountOptions, Op, Sequelize, Transaction, QueryTypes } from 'sequelize';
 import User from '../models/user.model';
 import UserSettings, { IAgentMeta } from '../models/userSettings.model';
 import Market from '../models/market.model';
 import ShoppingList from '../models/shoppingList.model';
+import ShoppingListItem from '../models/shoppingListItem.model';
 import Order from '../models/order.model';
 import { BadRequestError, NotFoundError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
@@ -254,7 +255,7 @@ export default class AgentService {
         })) as UserWithLocations[];
 
         logger.info(`Found ${availableAgents.length} KYC-verified, available agents for shopping list ${shoppingListId}`);
-        
+
         // Get active orders for all agents to determine their current workload
         const agentIds = availableAgents.map(agent => agent.id);
         const agentActiveOrders = await Order.findAll({
@@ -292,126 +293,126 @@ export default class AgentService {
         });
 
         logger.info(`Found ${agentActiveOrders.length} active orders across ${ordersByAgent.size} agents`);
-        
+
         // Enhanced logging for debugging agent assignment
         availableAgents.forEach(agent => {
             const agentOrders = ordersByAgent.get(agent.id) || [];
-            const ordersInTargetMarket = agentOrders.filter(order => 
+            const ordersInTargetMarket = agentOrders.filter(order =>
                 order.shoppingList?.market?.id === shoppingList.marketId
             ).length;
-            
+
             logger.info(`Agent ${agent.id} (${agent.firstName} ${agent.lastName}): ${agentOrders.length} total orders, ${ordersInTargetMarket} in target market ${shoppingList.marketId}`);
         });
-        
+
         // Process agents asynchronously for distance calculation and scoring  
         const agentScoringPromises = availableAgents.map(async (agent: UserWithLocations) => {
-                let score = 0;
-                let distance = Infinity;
-                
-                // Define market location for distance calculations
-                const marketLocation = shoppingList.market?.location ? {
-                    latitude: shoppingList.market.location.latitude,
-                    longitude: shoppingList.market.location.longitude,
-                } : null;
-                
-                // HIGHEST PRIORITY: Check if agent is already working in the same market (up to 3 orders)
-                const agentActiveOrders = ordersByAgent.get(agent.id) || [];
-                const totalActiveOrders = agentActiveOrders.length;
-                
-                // Check how many orders the agent has in the current market specifically
-                const ordersInCurrentMarket = agentActiveOrders.filter((order: Order) => 
-                    order.shoppingList?.market?.id === shoppingList.marketId
-                ).length;
-                
-                if (ordersInCurrentMarket > 0 && ordersInCurrentMarket < 3) {
-                    // TOP PRIORITY: Agent is already working in this exact market and has capacity
-                    score += 1000; // Maximum priority for same-market agents
-                    logger.info(`Agent ${agent.id} gets HIGHEST priority - already has ${ordersInCurrentMarket} orders in market ${shoppingList.marketId}`);
-                } else if (ordersInCurrentMarket >= 3) {
-                    // Agent is at capacity for this market - exclude them
-                    score -= 1000; // Massive penalty - should not be assigned
-                    logger.info(`Agent ${agent.id} at capacity in market ${shoppingList.marketId} with ${ordersInCurrentMarket} orders - excluded`);
-                } else if (totalActiveOrders > 0 && totalActiveOrders < 3) {
-                    // Secondary priority: Agent has active orders in other markets but under total capacity
-                    score += 200; // Good bonus for experienced agents with capacity
-                    logger.info(`Agent ${agent.id} has ${totalActiveOrders} active orders in other markets - medium priority`);
-                } else if (totalActiveOrders >= 3) {
-                    // Agent is at total capacity across all markets
-                    score -= 200; // Lower priority but still consider
-                    logger.info(`Agent ${agent.id} at total capacity with ${totalActiveOrders} orders across all markets`);
-                } else {
-                    // Agent has no active orders - fresh agent
-                    score += 50; // Small bonus for available fresh agents
-                    logger.info(`Agent ${agent.id} has no active orders - fresh agent`);
-                }
-                
-                // Score based on location proximity using Google Maps API with Haversine fallback
-                if (marketLocation && agent.locations && agent.locations.length > 0) {
-                    
-                    // Calculate distances to all agent locations using Google Maps API
-                    const distancePromises = agent.locations.map(async location => {
-                        const agentLocation = {
-                            latitude: location.latitude,
-                            longitude: location.longitude,
-                        };
-                        
-                        try {
-                            const result = await GoogleMapsService.calculateDistance(marketLocation, agentLocation);
-                            return result.distance;
-                        } catch (error) {
-                            // Fallback to Haversine if Google Maps fails
-                            logger.warn(`Google Maps API failed for agent ${agent.id}, using Haversine fallback`);
-                            return AgentService.calculateDistance(marketLocation.latitude, marketLocation.longitude, agentLocation.latitude, agentLocation.longitude);
-                        }
-                    });
-                    
-                    // Get the minimum distance (closest location)
-                    const distanceResults = await Promise.all(distancePromises);
-                    distance = Math.min(...distanceResults);
-                    
-                    // Score based on proximity (closer = higher score)
-                    if (distance <= 2) score += 100; // Within 2km - highest priority
-                    else if (distance <= 5) score += 80; // Within 5km - high priority
-                    else if (distance <= 10) score += 60; // Within 10km - medium priority
-                    else if (distance <= 20) score += 40; // Within 20km - low priority
-                    
-                    // Bonus for agents with preferred locations that match
-                    const hasPreferredLocationNearby = agent.locations.some(loc => 
-                        loc.locationType === 'service_area' && 
-                        AgentService.calculateDistance(marketLocation.latitude, marketLocation.longitude, loc.latitude, loc.longitude) <= loc.radius
-                    );
-                    
-                    if (hasPreferredLocationNearby) {
-                        score += 50; // Bonus for preferred location match
+            let score = 0;
+            let distance = Infinity;
+
+            // Define market location for distance calculations
+            const marketLocation = shoppingList.market?.location ? {
+                latitude: shoppingList.market.location.latitude,
+                longitude: shoppingList.market.location.longitude,
+            } : null;
+
+            // HIGHEST PRIORITY: Check if agent is already working in the same market (up to 3 orders)
+            const agentActiveOrders = ordersByAgent.get(agent.id) || [];
+            const totalActiveOrders = agentActiveOrders.length;
+
+            // Check how many orders the agent has in the current market specifically
+            const ordersInCurrentMarket = agentActiveOrders.filter((order: Order) =>
+                order.shoppingList?.market?.id === shoppingList.marketId
+            ).length;
+
+            if (ordersInCurrentMarket > 0 && ordersInCurrentMarket < 3) {
+                // TOP PRIORITY: Agent is already working in this exact market and has capacity
+                score += 1000; // Maximum priority for same-market agents
+                logger.info(`Agent ${agent.id} gets HIGHEST priority - already has ${ordersInCurrentMarket} orders in market ${shoppingList.marketId}`);
+            } else if (ordersInCurrentMarket >= 3) {
+                // Agent is at capacity for this market - exclude them
+                score -= 1000; // Massive penalty - should not be assigned
+                logger.info(`Agent ${agent.id} at capacity in market ${shoppingList.marketId} with ${ordersInCurrentMarket} orders - excluded`);
+            } else if (totalActiveOrders > 0 && totalActiveOrders < 3) {
+                // Secondary priority: Agent has active orders in other markets but under total capacity
+                score += 200; // Good bonus for experienced agents with capacity
+                logger.info(`Agent ${agent.id} has ${totalActiveOrders} active orders in other markets - medium priority`);
+            } else if (totalActiveOrders >= 3) {
+                // Agent is at total capacity across all markets
+                score -= 200; // Lower priority but still consider
+                logger.info(`Agent ${agent.id} at total capacity with ${totalActiveOrders} orders across all markets`);
+            } else {
+                // Agent has no active orders - fresh agent
+                score += 50; // Small bonus for available fresh agents
+                logger.info(`Agent ${agent.id} has no active orders - fresh agent`);
+            }
+
+            // Score based on location proximity using Google Maps API with Haversine fallback
+            if (marketLocation && agent.locations && agent.locations.length > 0) {
+
+                // Calculate distances to all agent locations using Google Maps API
+                const distancePromises = agent.locations.map(async location => {
+                    const agentLocation = {
+                        latitude: location.latitude,
+                        longitude: location.longitude,
+                    };
+
+                    try {
+                        const result = await GoogleMapsService.calculateDistance(marketLocation, agentLocation);
+                        return result.distance;
+                    } catch (error) {
+                        // Fallback to Haversine if Google Maps fails
+                        logger.warn(`Google Maps API failed for agent ${agent.id}, using Haversine fallback`);
+                        return AgentService.calculateDistance(marketLocation.latitude, marketLocation.longitude, agentLocation.latitude, agentLocation.longitude);
                     }
+                });
+
+                // Get the minimum distance (closest location)
+                const distanceResults = await Promise.all(distancePromises);
+                distance = Math.min(...distanceResults);
+
+                // Score based on proximity (closer = higher score)
+                if (distance <= 2) score += 100; // Within 2km - highest priority
+                else if (distance <= 5) score += 80; // Within 5km - high priority
+                else if (distance <= 10) score += 60; // Within 10km - medium priority
+                else if (distance <= 20) score += 40; // Within 20km - low priority
+
+                // Bonus for agents with preferred locations that match
+                const hasPreferredLocationNearby = agent.locations.some(loc =>
+                    loc.locationType === 'service_area' &&
+                    AgentService.calculateDistance(marketLocation.latitude, marketLocation.longitude, loc.latitude, loc.longitude) <= loc.radius
+                );
+
+                if (hasPreferredLocationNearby) {
+                    score += 50; // Bonus for preferred location match
                 }
-                
-                // Score based on current location if available
-                const currentLocation = agent.locations?.find(loc => loc.locationType === 'current_location');
-                if (currentLocation && marketLocation) {
-                    const currentDistance = AgentService.calculateDistance(
-                        marketLocation.latitude,
-                        marketLocation.longitude,
-                        currentLocation.latitude,
-                        currentLocation.longitude
-                    );
-                    
-                    // Prefer agents whose current location is closer
-                    if (currentDistance <= 1) score += 30; // Very close
-                    else if (currentDistance <= 3) score += 20; // Close
-                    else if (currentDistance <= 5) score += 10; // Nearby
-                }
-                
-                // Score based on agent experience (older agents get slight preference)
-                const daysActive = Math.floor((Date.now() - new Date(agent.createdAt).getTime()) / (1000 * 60 * 60 * 24));
-                if (daysActive > 30) score += 10; // Active for more than 30 days
-                else if (daysActive > 7) score += 5; // Active for more than 7 days
-                
-                return {
-                    agent,
-                    score,
-                    distance,
-                };
+            }
+
+            // Score based on current location if available
+            const currentLocation = agent.locations?.find(loc => loc.locationType === 'current_location');
+            if (currentLocation && marketLocation) {
+                const currentDistance = AgentService.calculateDistance(
+                    marketLocation.latitude,
+                    marketLocation.longitude,
+                    currentLocation.latitude,
+                    currentLocation.longitude
+                );
+
+                // Prefer agents whose current location is closer
+                if (currentDistance <= 1) score += 30; // Very close
+                else if (currentDistance <= 3) score += 20; // Close
+                else if (currentDistance <= 5) score += 10; // Nearby
+            }
+
+            // Score based on agent experience (older agents get slight preference)
+            const daysActive = Math.floor((Date.now() - new Date(agent.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+            if (daysActive > 30) score += 10; // Active for more than 30 days
+            else if (daysActive > 7) score += 5; // Active for more than 7 days
+
+            return {
+                agent,
+                score,
+                distance,
+            };
         });
 
         // Wait for all distance calculations to complete
@@ -434,19 +435,19 @@ export default class AgentService {
             });
 
         const sortedAgents = scoredAgents.map(item => item.agent).slice(0, 4); // Return top 4 agents
-        
+
         // Enhanced logging for final sorted agents
         logger.info(`Final sorted agents for market ${shoppingList.market?.name} (${shoppingList.marketId}):`);
         scoredAgents.slice(0, 10).forEach((item, index) => {
             const agent = item.agent;
             const agentOrders = ordersByAgent.get(agent.id) || [];
-            const ordersInMarket = agentOrders.filter(order => 
+            const ordersInMarket = agentOrders.filter(order =>
                 order.shoppingList?.market?.id === shoppingList.marketId
             ).length;
-            
+
             logger.info(`${index + 1}. Agent ${agent.id} (${agent.firstName} ${agent.lastName}) - Score: ${item.score}, Distance: ${item.distance.toFixed(2)}km, Orders in market: ${ordersInMarket}, Total orders: ${agentOrders.length}`);
         });
-        
+
         if (shoppingList.market?.location && sortedAgents.length > 0) {
             logger.info(`Selected top agent: ${sortedAgents[0].id} (${sortedAgents[0].firstName} ${sortedAgents[0].lastName})`);
         } else {
@@ -544,7 +545,7 @@ export default class AgentService {
                 // Fall back to service area locations
                 const serviceAreas = agent.locations.filter(loc => loc.locationType === 'service_area');
                 if (serviceAreas.length > 0) {
-                    const distances = serviceAreas.map(location => 
+                    const distances = serviceAreas.map(location =>
                         this.calculateDistance(latitude, longitude, location.latitude, location.longitude)
                     );
                     minDistance = Math.min(...distances);
@@ -576,43 +577,66 @@ export default class AgentService {
      */
     static async assignOrderToAgent(orderId: string, agentId: string, transaction?: Transaction): Promise<Order> {
         const txn = transaction;
-        
-            console.log('starting assignment transaction', { orderId, agentId });
-            // Get the order with shopping list
-            const order = await Order.findByPk(orderId, {
-                include: [
-                    {
-                        model: ShoppingList,
-                        as: 'shoppingList',
-                        attributes: ['id', 'status'],
-                    },
-                ],
-                // transaction: txn,
-            });
-        
-            console.log('fetched order for assignment', { order });
 
-            if (!order) {
-                throw new NotFoundError('Order not found');
-            }
-
-            // Update the order with agent assignment
-            await order.update(
+        console.log('starting assignment transaction', { orderId, agentId });
+        // Get the order with shopping list
+        const order = await Order.findByPk(orderId, {
+            include: [
                 {
-                    agentId,
-                    status: 'accepted', // Order is now assigned to agent
-                    acceptedAt: new Date(),
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    attributes: ['id', 'status'],
                 },
-                // { transaction: txn },
-            );
+            ],
+            // transaction: txn,
+        });
 
-            // Update agent status to busy (not accepting new orders)
-            await this.setAgentBusy(agentId, orderId, txn);
+        console.log('fetched order for assignment', { order });
 
-            // Log the assignment
-            logger.info(`Order ${orderId} successfully assigned to agent ${agentId}`);
+        if (!order) {
+            throw new NotFoundError('Order not found');
+        }
 
-            return order;
+        // Update the order with agent assignment
+        await order.update(
+            {
+                agentId,
+                status: 'accepted', // Order is now assigned to agent
+                acceptedAt: new Date(),
+            },
+            // { transaction: txn },
+        );
+
+        // Update agent status to busy (not accepting new orders)
+        await this.setAgentBusy(agentId, orderId, txn);
+
+        // Activate chat for the order now that agent is assigned
+        try {
+            // Get agent details for chat activation
+            const agent = await User.findByPk(agentId, {
+                attributes: ['id', 'firstName', 'lastName'],
+            });
+
+            if (agent) {
+                await ChatService.activateChat({
+                    orderId: orderId,
+                    activatedBy: {
+                        id: agentId,
+                        type: 'agent',
+                        name: `${agent.firstName} ${agent.lastName}`.trim(),
+                    },
+                });
+                logger.info(`Chat activated for order ${orderId} by agent ${agentId}`);
+            }
+        } catch (chatError) {
+            logger.warn(`Failed to activate chat for order ${orderId}:`, chatError);
+            // Don't fail the order assignment if chat activation fails
+        }
+
+        // Log the assignment
+        logger.info(`Order ${orderId} successfully assigned to agent ${agentId}`);
+
+        return order;
 
     }
 
@@ -938,7 +962,7 @@ export default class AgentService {
             const isKycVerified = user.settings.isKycVerified;
             const agentMeta = user.settings.agentMetaData;
             const kycComplete = agentMeta?.kycComplete === true;
-            
+
             // Primary check: isKycVerified (set by admin approval)
             if (!isKycVerified) {
                 throw new BadRequestError(
@@ -946,7 +970,7 @@ export default class AgentService {
                     `KYC Status: ${isKycVerified ? 'Verified' : 'Not Verified'}`
                 );
             }
-            
+
             // If KYC is verified but kycComplete is not set, auto-update it
             if (isKycVerified && !kycComplete) {
                 logger.info(`Auto-updating kycComplete flag for verified agent ${userId}`, {
@@ -954,7 +978,7 @@ export default class AgentService {
                     isKycVerified,
                     kycComplete,
                 });
-                
+
                 // Update kycComplete flag in agent metadata
                 await AgentService.updateAgentDocuments(userId, {
                     kycComplete: true,
@@ -1154,7 +1178,7 @@ export default class AgentService {
                 isKycVerified,
                 kycComplete,
             });
-            
+
             // Update kycComplete flag in agent metadata
             await AgentService.updateAgentDocuments(agentId, {
                 kycComplete: true,
@@ -1531,9 +1555,9 @@ export default class AgentService {
         const a =
             Math.sin(dLat / 2) * Math.sin(dLat / 2) +
             Math.cos(this.deg2rad(lat1)) *
-                Math.cos(this.deg2rad(lat2)) *
-                Math.sin(dLon / 2) *
-                Math.sin(dLon / 2);
+            Math.cos(this.deg2rad(lat2)) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c; // Distance in km
     }
@@ -1665,71 +1689,6 @@ export default class AgentService {
         });
     }
 
-    /**
-     * Agent rejects an assigned order
-     * @param agentId The agent ID
-     * @param orderId The order ID
-     * @param reason Reason for rejection
-     * @returns Boolean indicating success
-     */
-    static async rejectOrder(agentId: string, orderId: string, reason?: string): Promise<boolean> {
-        return Database.transaction(async (transaction: Transaction) => {
-            // Get the order and verify it's assigned to this agent
-            const order = await Order.findOne({
-                where: {
-                    id: orderId,
-                    agentId: agentId,
-                    status: 'accepted', // Can only reject assigned but not started orders
-                },
-                transaction,
-            });
-
-            if (!order) {
-                throw new NotFoundError('Order not found or not assigned to this agent');
-            }
-
-            // Remove agent assignment and reset order to pending
-            await order.update(
-                {
-                    status: 'pending',
-                },
-                { transaction }
-            );
-            
-            // Clear the agentId separately to avoid type issues
-            await Database.query(
-                'UPDATE "Orders" SET "agentId" = NULL WHERE "id" = :orderId',
-                {
-                    replacements: { orderId },
-                    transaction,
-                }
-            );
-
-            // Remove agent assignment from shopping list
-            if (order.shoppingListId) {
-                await ShoppingList.update(
-                    {
-                        status: 'accepted', // Reset to accepted for reassignment
-                    },
-                    {
-                        where: { id: order.shoppingListId },
-                        transaction,
-                    }
-                );
-            }
-
-            // Update agent status back to available
-            await this.updateAgentStatus(agentId, 'available', true, transaction);
-
-            logger.info(`Agent ${agentId} rejected order ${orderId}. Reason: ${reason || 'No reason provided'}`);
-
-            // Queue the order for reassignment to another agent
-            const { queueAgentAssignment } = await import('../queues/agent.queue');
-            await queueAgentAssignment(orderId, order.shoppingListId!, order.customerId, 1); // 1 minute delay
-
-            return true;
-        });
-    }
 
     /**
      * Get orders assigned to an agent
@@ -1747,13 +1706,29 @@ export default class AgentService {
             agentId: agentId,
         };
 
+        // Handle multiple status values separated by comma
         if (status) {
-            whereClause.status = status;
+            if (typeof status === 'string' && status.includes(',')) {
+                whereClause.status = { [Op.in]: status.split(',').map(s => s.trim()) };
+            } else {
+                whereClause.status = status;
+            }
         }
 
         return await Order.findAll({
             where: whereClause,
             include: [
+                {
+                    model: User,
+                    as: 'customer',
+                    attributes: [
+                        'id',
+                        'firstName',
+                        'lastName',
+                        'displayImage',
+                        'phone',
+                    ],
+                },
                 {
                     model: ShoppingList,
                     as: 'shoppingList',
@@ -1761,7 +1736,33 @@ export default class AgentService {
                         {
                             model: Market,
                             as: 'market',
-                            attributes: ['id', 'name', 'location'],
+                            attributes: ['id', 'name', 'address', 'location'],
+                        },
+                        {
+                            model: ShoppingListItem,
+                            as: 'items',
+                            attributes: [
+                                'id',
+                                'name',
+                                'quantity',
+                                'unit',
+                                'estimatedPrice',
+                                'actualPrice',
+                                'userProvidedPrice',
+                                'notes',
+                                'productImage',
+                            ],
+                        },
+                        {
+                            model: User,
+                            as: 'customer',
+                            attributes: [
+                                'id',
+                                'firstName',
+                                'lastName',
+                                'displayImage',
+                                'phone',
+                            ],
                         },
                     ],
                 },
@@ -1769,6 +1770,654 @@ export default class AgentService {
             order: [['createdAt', 'DESC']],
             limit,
         });
+    }
+
+    /**
+     * Get assigned shopping lists for an agent
+     * @param params Query parameters including status filter
+     * @returns Shopping lists assigned to the agent
+     */
+    static async getAssignedShoppingLists(params: { status?: string } = {}): Promise<any[]> {
+        const { status = 'accepted' } = params;
+
+        // For now, we get orders instead of shopping lists since orders are the main entity
+        // that get assigned to agents after payment confirmation
+        const orders = await Order.findAll({
+            where: {
+                [Op.and]: [
+                    Sequelize.literal('"agentId" IS NOT NULL'), // Has an agent assigned
+                    status === 'accepted' ? { status: { [Op.in]: ['accepted', 'in_progress', 'shopping'] } } : { status },
+                    { paymentStatus: 'completed' }, // Only include orders with completed payment
+                ],
+            },
+            include: [
+                {
+                    model: User,
+                    as: 'customer',
+                    attributes: ['id', 'firstName', 'lastName', 'displayImage', 'phone'],
+                },
+                {
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    include: [
+                        {
+                            model: Market,
+                            as: 'market',
+                            attributes: ['id', 'name', 'address', 'location'],
+                        },
+                        {
+                            model: ShoppingListItem,
+                            as: 'items',
+                            attributes: [
+                                'id', 'name', 'quantity', 'unit',
+                                'estimatedPrice', 'actualPrice',
+                                'userProvidedPrice', 'notes', 'productImage',
+                            ],
+                        },
+                    ],
+                },
+            ],
+            order: [['createdAt', 'DESC']],
+            limit: 50,
+        });
+
+        // Transform orders to look like shopping lists for frontend compatibility
+        const transformedShoppingLists = orders.map(order => {
+            const shoppingList = order.shoppingList;
+            return {
+                ...shoppingList?.toJSON(),
+                id: shoppingList?.id || order.id,
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                customer: order.customer,
+                customerNotes: order.customerNotes,
+                status: order.status,
+                paymentStatus: order.paymentStatus,
+                totalAmount: order.totalAmount,
+                serviceFee: order.serviceFee,
+                deliveryFee: order.deliveryFee,
+                createdAt: order.createdAt,
+                updatedAt: order.updatedAt,
+            };
+        });
+
+        return transformedShoppingLists;
+    }
+
+    /**
+     * Get assigned orders for an agent with proper structure expected by frontend
+     * @param params Query parameters including status filter
+     * @returns Orders assigned to the agent
+     */
+    static async getAssignedOrders(params: { status?: string } = {}): Promise<Order[]> {
+        const { status } = params;
+
+        const whereClause: any = {
+            agentId: { [Op.not]: null }, // Has an agent assigned
+            paymentStatus: 'completed', // Only include orders with completed payment
+        };
+
+        // Handle multiple status values separated by comma
+        if (status) {
+            if (status.includes(',')) {
+                whereClause.status = { [Op.in]: status.split(',').map(s => s.trim()) };
+            } else {
+                whereClause.status = status;
+            }
+        }
+
+        const orders = await Order.findAll({
+            where: whereClause,
+            include: [
+                {
+                    model: User,
+                    as: 'customer',
+                    attributes: ['id', 'firstName', 'lastName', 'displayImage', 'phone'],
+                },
+                {
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    include: [
+                        {
+                            model: Market,
+                            as: 'market',
+                            attributes: ['id', 'name', 'address', 'location'],
+                        },
+                        {
+                            model: ShoppingListItem,
+                            as: 'items',
+                            attributes: [
+                                'id', 'name', 'quantity', 'unit',
+                                'estimatedPrice', 'actualPrice',
+                                'userProvidedPrice', 'notes', 'productImage',
+                            ],
+                        },
+                    ],
+                },
+            ],
+            order: [['createdAt', 'DESC']],
+            limit: 50,
+        });
+
+        return orders;
+    }
+
+    /**
+     * Update order status by agent with validation
+     * @param agentId Agent ID
+     * @param orderId Order ID
+     * @param newStatus New status to set
+     * @param notes Optional notes for the status update
+     * @returns Updated order
+     */
+    static async updateOrderStatus(
+        agentId: string,
+        orderId: string,
+        newStatus: string,
+        notes?: string
+    ): Promise<Order> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            // Get the order with agent verification
+            const order = await Order.findOne({
+                where: {
+                    id: orderId,
+                    agentId: agentId, // Ensure this agent owns the order
+                },
+                include: [
+                    {
+                        model: ShoppingList,
+                        as: 'shoppingList',
+                        include: [
+                            {
+                                model: ShoppingListItem,
+                                as: 'items',
+                            },
+                        ],
+                    },
+                ],
+                transaction,
+            });
+
+            if (!order) {
+                throw new NotFoundError('Order not found or not assigned to this agent');
+            }
+
+            // Validate status transition
+            const validTransitions: Record<string, string[]> = {
+                'accepted': ['in_progress', 'shopping', 'cancelled'],
+                'in_progress': ['shopping', 'shopping_completed', 'cancelled'],
+                'shopping': ['shopping_completed', 'cancelled'],
+                'shopping_completed': ['delivery', 'cancelled'],
+                'delivery': ['completed', 'cancelled'],
+            };
+
+            const currentStatus = order.status;
+            const allowedNextStatuses = validTransitions[currentStatus] || [];
+
+            if (!allowedNextStatuses.includes(newStatus)) {
+                throw new BadRequestError(
+                    `Invalid status transition from ${currentStatus} to ${newStatus}`
+                );
+            }
+
+            // Update order status
+            const updateData: any = {
+                status: newStatus,
+            };
+
+            // Set appropriate timestamp based on status
+            switch (newStatus) {
+                case 'in_progress':
+                case 'shopping':
+                    updateData.shoppingStartedAt = new Date();
+                    break;
+                case 'shopping_completed':
+                    updateData.shoppingCompletedAt = new Date();
+                    break;
+                case 'delivery':
+                    updateData.deliveryStartedAt = new Date();
+                    break;
+                case 'completed':
+                    updateData.completedAt = new Date();
+                    break;
+                case 'cancelled':
+                    updateData.cancelledAt = new Date();
+                    break;
+            }
+
+            // Add notes if provided
+            if (notes) {
+                updateData.agentNotes = notes;
+            }
+
+            await order.update(updateData, { transaction });
+
+            // Update agent status based on order status
+            if (newStatus === 'completed' || newStatus === 'cancelled') {
+                // Set agent back to available
+                await this.setAgentAvailable(agentId, transaction);
+            }
+
+            logger.info(`Order ${orderId} status updated to ${newStatus} by agent ${agentId}`);
+
+            return order;
+        });
+    }
+
+    /**
+     * Start shopping for an order/shopping list
+     * @param agentId Agent ID
+     * @param shoppingListId Shopping List ID or Order ID
+     * @returns Updated order
+     */
+    static async startShopping(agentId: string, shoppingListId: string): Promise<Order> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            // Find order by shopping list ID or order ID
+            const order = await Order.findOne({
+                where: {
+                    [Op.or]: [
+                        { shoppingListId: shoppingListId },
+                        { id: shoppingListId },
+                    ],
+                    agentId: agentId,
+                },
+                transaction,
+            });
+
+            if (!order) {
+                throw new NotFoundError('Order not found or not assigned to this agent');
+            }
+
+            if (!['accepted', 'in_progress'].includes(order.status)) {
+                throw new BadRequestError('Order must be accepted to start shopping');
+            }
+
+            await order.update({
+                status: 'shopping',
+                shoppingStartedAt: new Date(),
+            }, { transaction });
+
+            logger.info(`Shopping started for order ${order.id} by agent ${agentId}`);
+
+            return order;
+        });
+    }
+
+    /**
+     * Complete shopping for an order with final prices
+     * @param agentId Agent ID
+     * @param shoppingListId Shopping List ID or Order ID
+     * @param finalPrices Array of final prices for items
+     * @returns Updated order
+     */
+    static async completeShopping(
+        agentId: string,
+        shoppingListId: string,
+        finalPrices: Array<{
+            itemId: string;
+            actualPrice: number;
+            status: string;
+            notes?: string;
+        }>
+    ): Promise<Order> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            // Find order by shopping list ID or order ID
+            const order = await Order.findOne({
+                where: {
+                    [Op.or]: [
+                        { shoppingListId: shoppingListId },
+                        { id: shoppingListId },
+                    ],
+                    agentId: agentId,
+                },
+                include: [
+                    {
+                        model: ShoppingList,
+                        as: 'shoppingList',
+                        include: [
+                            {
+                                model: ShoppingListItem,
+                                as: 'items',
+                            },
+                        ],
+                    },
+                ],
+                transaction,
+            });
+
+            if (!order) {
+                throw new NotFoundError('Order not found or not assigned to this agent');
+            }
+
+            if (order.status !== 'shopping') {
+                throw new BadRequestError('Order must be in shopping status to complete shopping');
+            }
+
+            // Update shopping list items with final prices
+            for (const priceUpdate of finalPrices) {
+                await ShoppingListItem.update(
+                    {
+                        actualPrice: priceUpdate.actualPrice,
+                        notes: priceUpdate.notes || '',
+                    },
+                    {
+                        where: { id: priceUpdate.itemId },
+                        transaction,
+                    }
+                );
+            }
+
+            // Calculate new total amount based on actual prices
+            const items = order.shoppingList?.items || [];
+            let newTotalAmount = 0;
+
+            for (const item of items) {
+                const priceUpdate = finalPrices.find(p => p.itemId === item.id);
+                const actualPrice = priceUpdate?.actualPrice || item.estimatedPrice || 0;
+                newTotalAmount += actualPrice * item.quantity;
+            }
+
+            // Add service fee and delivery fee
+            newTotalAmount += order.serviceFee + order.deliveryFee;
+
+            // Update order
+            await order.update({
+                status: 'shopping_completed',
+                shoppingCompletedAt: new Date(),
+                totalAmount: newTotalAmount,
+            }, { transaction });
+
+            logger.info(`Shopping completed for order ${order.id} by agent ${agentId}`);
+
+            return order;
+        });
+    }
+
+    /**
+     * Accept a shopping list/order by agent
+     * @param agentId Agent ID
+     * @param shoppingListId Shopping List ID
+     * @returns Updated order
+     */
+    static async acceptShoppingList(agentId: string, shoppingListId: string): Promise<Order> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            // This method should be used for orders that are assigned but need acceptance
+            const order = await Order.findOne({
+                where: {
+                    [Op.or]: [
+                        { shoppingListId: shoppingListId },
+                        { id: shoppingListId },
+                    ],
+                    agentId: agentId,
+                    status: 'accepted', // Already assigned, just need to move to in_progress
+                },
+                transaction,
+            });
+
+            if (!order) {
+                throw new NotFoundError('Order not found or not available for acceptance');
+            }
+
+            await order.update({
+                status: 'in_progress',
+                acceptedAt: new Date(),
+            }, { transaction });
+
+            logger.info(`Order ${order.id} accepted by agent ${agentId}`);
+
+            return order;
+        });
+    }
+
+    /**
+     * Reject an order by agent
+     * @param agentId Agent ID
+     * @param orderId Order ID
+     * @param reason Rejection reason
+     * @returns Success status
+     */
+    static async rejectOrder(agentId: string, orderId: string, reason: string): Promise<boolean> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            const order = await Order.findOne({
+                where: {
+                    id: orderId,
+                    agentId: agentId,
+                },
+                transaction,
+            });
+
+            if (!order) {
+                throw new NotFoundError('Order not found or not assigned to this agent');
+            }
+
+            // Add rejection record
+            const currentRejectedAgents = order.rejectedAgents || [];
+            currentRejectedAgents.push({
+                agentId: agentId,
+                reason: reason,
+                rejectedAt: new Date(),
+            });
+
+            await order.update({
+                status: 'pending', // Back to pending for reassignment
+                rejectedAgents: currentRejectedAgents,
+            }, { transaction });
+
+            // Set agentId to null using raw SQL to avoid TypeScript issues
+            await Database.query(
+                'UPDATE "Orders" SET "agentId" = NULL WHERE id = ?',
+                {
+                    replacements: [orderId],
+                    type: QueryTypes.UPDATE,
+                    transaction,
+                }
+            );
+
+            // Set agent back to available
+            await this.setAgentAvailable(agentId, transaction);
+
+            logger.info(`Order ${orderId} rejected by agent ${agentId}: ${reason}`);
+
+            return true;
+        });
+    }
+
+    /**
+     * Set agent as available (opposite of setBusy)
+     * @param agentId Agent ID
+     * @param transaction Optional transaction
+     */
+    static async setAgentAvailable(agentId: string, transaction?: Transaction): Promise<void> {
+        await UserSettings.update(
+            {
+                agentMetaData: Sequelize.literal(`
+                    COALESCE("agentMetaData", '{}') || 
+                    '{"currentStatus": "available", "isAcceptingOrders": true, "lastStatusUpdate": "${new Date().toISOString()}"}'
+                `),
+            },
+            {
+                where: { userId: agentId },
+                transaction,
+            }
+        );
+    }
+
+    /**
+     * Request delivery for a completed order
+     * @param agentId Agent ID
+     * @param orderId Order ID
+     * @returns Delivery request response
+     */
+    static async requestDelivery(agentId: string, orderId: string): Promise<any> {
+        return await Database.transaction(async (transaction: Transaction) => {
+            // Get the order with all necessary details
+            const order = await Order.findOne({
+                where: {
+                    id: orderId,
+                    agentId: agentId,
+                    status: 'shopping_completed', // Only allow delivery request after shopping is complete
+                },
+                include: [
+                    {
+                        model: User,
+                        as: 'customer',
+                        attributes: ['id', 'firstName', 'lastName', 'phone'],
+                    },
+                    {
+                        model: ShoppingList,
+                        as: 'shoppingList',
+                        include: [
+                            {
+                                model: Market,
+                                as: 'market',
+                                attributes: ['id', 'name', 'address', 'location'],
+                            },
+                        ],
+                    },
+                ],
+                transaction,
+            });
+
+            if (!order) {
+                throw new NotFoundError('Order not found or not ready for delivery');
+            }
+
+            const deliveryAddress = order.deliveryAddress;
+            const customer = order.customer;
+            const market = order.shoppingList?.market;
+
+            if (!deliveryAddress || !customer || !market) {
+                throw new BadRequestError('Missing required delivery information');
+            }
+
+            // Prepare delivery request data
+            const deliveryRequest = {
+                pickup_address: {
+                    latitude: market.location?.latitude || 6.5244,
+                    longitude: market.location?.longitude || 3.3792,
+                    address: market.address || 'Market Location',
+                },
+                delivery_address: {
+                    latitude: deliveryAddress.latitude,
+                    longitude: deliveryAddress.longitude,
+                    address: `${deliveryAddress.address}, ${deliveryAddress.city}`,
+                },
+                customer_details: {
+                    name: `${customer.firstName} ${customer.lastName}`,
+                    phone: customer.phone ?
+                        (typeof customer.phone === 'string' ? customer.phone :
+                            `${(customer.phone as any).countryCode}${(customer.phone as any).number}`) :
+                        '+234800000000', // fallback
+                },
+                order_details: {
+                    order_number: order.orderNumber,
+                    total_amount: parseFloat(order.totalAmount.toString()),
+                    delivery_fee: parseFloat(order.deliveryFee.toString()),
+                    payment_method: 'prepaid' as const,
+                },
+                vehicle_type: 'bike' as const,
+                delivery_instructions: `Busy2Shop Order ${order.orderNumber}. Please deliver to customer.`,
+            };
+
+            try {
+                // Import delivery service dynamically to avoid circular dependencies
+                const { kwikDeliveryService } = await import('./kwikDelivery.service');
+
+                // Authenticate with Kwik API
+                await kwikDeliveryService.authenticate({
+                    domain: process.env.KWIK_DOMAIN || 'busy2shop',
+                    environment: process.env.KWIK_ENVIRONMENT || 'production',
+                    email: process.env.KWIK_EMAIL || '',
+                    password: process.env.KWIK_PASSWORD || '',
+                });
+
+                // Create delivery request
+                const deliveryResponse = await kwikDeliveryService.createDeliveryRequest(deliveryRequest);
+
+                if (deliveryResponse.status === 'success') {
+                    // Update order with delivery information
+                    await order.update({
+                        status: 'delivery',
+                        deliveryStartedAt: new Date(),
+                        agentNotes: `${order.agentNotes || ''}\nKwik Delivery: ${deliveryResponse.task_id}, ETA: ${deliveryResponse.estimated_delivery_time}`,
+                    }, { transaction });
+
+                    logger.info(`Delivery requested for order ${orderId} by agent ${agentId}. Task ID: ${deliveryResponse.task_id}`);
+
+                    return {
+                        success: true,
+                        data: {
+                            taskId: deliveryResponse.task_id,
+                            estimatedTime: deliveryResponse.estimated_delivery_time,
+                            riderDetails: deliveryResponse.rider_details,
+                            trackingUrl: deliveryResponse.tracking_url,
+                        },
+                        message: 'Delivery requested successfully',
+                    };
+                } else {
+                    throw new Error(deliveryResponse.error_message || 'Delivery request failed');
+                }
+
+            } catch (error: any) {
+                logger.error(`Delivery request failed for order ${orderId}:`, error.message);
+                throw new BadRequestError(`Failed to request delivery: ${error.message}`);
+            }
+        });
+    }
+
+    /**
+     * Track delivery status for an order
+     * @param agentId Agent ID
+     * @param orderId Order ID
+     * @returns Delivery tracking information
+     */
+    static async trackDelivery(agentId: string, orderId: string): Promise<any> {
+        const order = await Order.findOne({
+            where: {
+                id: orderId,
+                agentId: agentId,
+                status: { [Op.in]: ['delivery', 'completed'] },
+            },
+        });
+
+        if (!order) {
+            throw new NotFoundError('Order not found or not in delivery status');
+        }
+
+        // Extract task ID from agent notes
+        const agentNotes = order.agentNotes || '';
+        const taskIdMatch = agentNotes.match(/Kwik Delivery: ([^,]+)/);
+
+        if (!taskIdMatch || !taskIdMatch[1]) {
+            throw new BadRequestError('No delivery tracking information found');
+        }
+
+        const taskId = taskIdMatch[1].trim();
+
+        try {
+            // Import delivery service dynamically
+            const { kwikDeliveryService } = await import('./kwikDelivery.service');
+
+            // Authenticate with Kwik API
+            await kwikDeliveryService.authenticate({
+                domain: process.env.KWIK_DOMAIN || 'busy2shop',
+                environment: process.env.KWIK_ENVIRONMENT || 'production',
+                email: process.env.KWIK_EMAIL || '',
+                password: process.env.KWIK_PASSWORD || '',
+            });
+
+            const trackingData = await kwikDeliveryService.trackDelivery(taskId);
+
+            return {
+                success: true,
+                data: trackingData,
+                message: 'Delivery tracking data retrieved',
+            };
+
+        } catch (error: any) {
+            logger.error(`Failed to track delivery for order ${orderId}:`, error.message);
+            throw new BadRequestError(`Failed to track delivery: ${error.message}`);
+        }
     }
 
     /**
@@ -1780,7 +2429,7 @@ export default class AgentService {
     static async getAvailableOrdersForAgent(agentId: string, limit: number = 10): Promise<Order[]> {
         // Get agent locations
         const agentLocations = await this.getAgentLocations(agentId);
-        
+
         if (agentLocations.length === 0) {
             logger.warn(`Agent ${agentId} has no locations set - returning empty order list`);
             return [];
@@ -1825,7 +2474,7 @@ export default class AgentService {
 
                 // Find the closest agent location to this market
                 let minDistance = Infinity;
-                
+
                 for (const agentLocation of agentLocations) {
                     const distance = this.calculateDistance(
                         marketLat,
@@ -1833,7 +2482,7 @@ export default class AgentService {
                         agentLocation.latitude,
                         agentLocation.longitude
                     );
-                    
+
                     // If it's a service area, check if market is within radius
                     if (agentLocation.locationType === 'service_area' && distance <= agentLocation.radius) {
                         minDistance = Math.min(minDistance, distance);

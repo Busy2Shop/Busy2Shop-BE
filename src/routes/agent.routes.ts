@@ -5,6 +5,7 @@ import { AuthenticatedController, basicAuth } from '../middlewares/authMiddlewar
 
 const router = Router();
 
+
 // Public routes with static paths
 router.get('/', AgentController.getAllAgents);
 router.get('/nearby', AgentController.findNearbyAgents);
@@ -48,11 +49,25 @@ router.get('/orders', AuthenticatedController(AgentController.getAgentOrders)); 
 router.get('/orders/available', AuthenticatedController(AgentController.getAvailableOrders));
 router.get('/orders/active', AuthenticatedController(AgentController.getActiveOrders));
 router.get('/orders/completed', AuthenticatedController(AgentController.getCompletedOrders));
+router.get('/orders/assigned', AuthenticatedController(AgentController.getAssignedOrders)); // Main endpoint for assigned orders
+router.get('/shopping-lists/assigned', AuthenticatedController(AgentController.getAssignedShoppingLists)); // Main endpoint for assigned shopping lists
 router.get('/orders/completed/today', AuthenticatedController(AgentController.getTodayCompletedOrders));
+
+// Order action endpoints
 router.post('/orders/:orderId/accept', AuthenticatedController(AgentController.acceptOrder));
 router.post('/orders/:orderId/reject', AuthenticatedController(AgentController.rejectOrder));
 router.patch('/orders/:orderId/status', AuthenticatedController(AgentController.updateOrderStatusForAgent));
+router.patch('/orders/:orderId/update-status', AuthenticatedController(AgentController.updateOrderStatus)); // Enhanced method
 router.post('/orders/:orderId/complete', AuthenticatedController(AgentController.completeOrder));
+
+// Shopping list action endpoints
+router.post('/shopping-lists/:shoppingListId/accept', AuthenticatedController(AgentController.acceptShoppingList)); // Accept shopping list
+router.post('/shopping-lists/:shoppingListId/start-shopping', AuthenticatedController(AgentController.startShopping)); // Start shopping
+router.post('/shopping-lists/:shoppingListId/complete-shopping', AuthenticatedController(AgentController.completeShopping)); // Complete shopping
+
+// Delivery management routes
+router.post('/orders/:orderId/request-delivery', AuthenticatedController(AgentController.requestDelivery)); // Request delivery via Kwik
+router.get('/orders/:orderId/track-delivery', AuthenticatedController(AgentController.trackOrderDelivery)); // Track delivery status
 
 // More specific static paths
 router.get(

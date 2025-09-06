@@ -552,7 +552,7 @@ export default class AgentController {
                     COUNT(*) as "todayOrders",
                     COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as "completedToday",
                     COALESCE(SUM(CASE WHEN status IN ('pending', 'accepted', 'in_progress') THEN 1 ELSE 0 END), 0) as "pendingToday",
-                    COALESCE(SUM(CASE WHEN status = 'completed' THEN COALESCE("agentCommission", "deliveryFee" * 0.15, 0) ELSE 0 END), 0) as "todayEarnings"
+                    COALESCE(SUM(CASE WHEN status = 'completed' THEN ("deliveryFee" * 0.15) ELSE 0 END), 0) as "todayEarnings"
                 FROM "Orders" 
                 WHERE "agentId" = :agentId 
                 AND "createdAt" >= :startOfDay 
@@ -592,7 +592,7 @@ export default class AgentController {
             // Get overall earnings stats
             const earningsStats = await Database.query(`
                 SELECT 
-                    COALESCE(SUM(CASE WHEN status = 'completed' THEN COALESCE("agentCommission", "deliveryFee" * 0.15, 0) ELSE 0 END), 0) as "totalEarnings",
+                    COALESCE(SUM(CASE WHEN status = 'completed' THEN ("deliveryFee" * 0.15) ELSE 0 END), 0) as "totalEarnings",
                     COUNT(CASE WHEN status = 'completed' THEN 1 END) as "completedOrders",
                     COUNT(*) as "totalOrders"
                 FROM "Orders" 
@@ -608,7 +608,7 @@ export default class AgentController {
             const recentEarnings = await Database.query(`
                 SELECT 
                     DATE("createdAt") as date,
-                    COALESCE(SUM(CASE WHEN status = 'completed' THEN COALESCE("agentCommission", "deliveryFee" * 0.15, 0) ELSE 0 END), 0) as amount,
+                    COALESCE(SUM(CASE WHEN status = 'completed' THEN ("deliveryFee" * 0.15) ELSE 0 END), 0) as amount,
                     COUNT(CASE WHEN status = 'completed' THEN 1 END) as orders
                 FROM "Orders" 
                 WHERE "agentId" = :agentId 
@@ -654,13 +654,16 @@ export default class AgentController {
                     o."status",
                     o."totalAmount",
                     o."deliveryFee",
-                    o."agentCommission",
+                    CASE 
+                        WHEN o."status" = 'completed' THEN (o."deliveryFee" * 0.15)
+                        ELSE 0
+                    END as "agentEarnings",
                     o."createdAt",
                     o."updatedAt",
-                    CASE 
-                        WHEN sl."items" IS NOT NULL THEN json_array_length(sl."items"::json)
-                        ELSE 0 
-                    END as "itemCount"
+                    COALESCE(
+                        (SELECT COUNT(*) FROM "ShoppingListItems" sli WHERE sli."shoppingListId" = sl."id"),
+                        0
+                    ) as "itemCount"
                 FROM "Orders" o
                 LEFT JOIN "ShoppingLists" sl ON o."shoppingListId" = sl."id"
                 WHERE o."agentId" = :agentId
@@ -884,7 +887,10 @@ export default class AgentController {
                     o."orderNumber",
                     o."status", 
                     o."totalAmount",
-                    o."agentCommission",
+                    CASE 
+                        WHEN o."status" = 'completed' THEN (o."deliveryFee" * 0.15)
+                        ELSE 0
+                    END as "agentEarnings",
                     o."createdAt",
                     o."completedAt"
                 FROM "Orders" o
@@ -941,5 +947,240 @@ export default class AgentController {
             message: 'Order completed successfully',
             data: { orderId, agentId },
         });
+    }
+
+    // ===============================================
+    // SHOPPING LIST MANAGEMENT ENDPOINTS
+    // ===============================================
+
+    /**
+     * Get assigned shopping lists (main method used by frontend)
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async getAssignedShoppingLists(req: AuthenticatedRequest, res: Response) {
+        const { status } = req.query;
+        
+        try {
+            logger.info(`Getting assigned shopping lists with status: ${status}`);
+            const result = await AgentService.getAssignedShoppingLists({
+                status: status as string,
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Assigned shopping lists retrieved successfully',
+                data: result,
+            });
+        } catch (error: any) {
+            logger.error('Error getting assigned shopping lists:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to retrieve assigned shopping lists',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * Get assigned orders (main method used by frontend)
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async getAssignedOrders(req: AuthenticatedRequest, res: Response) {
+        const { status, page, size, startDate, endDate } = req.query;
+        
+        try {
+            logger.info(`Getting assigned orders with status: ${status}`);
+            const result = await AgentService.getAssignedOrders({
+                status: status as string,
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Assigned orders retrieved successfully',
+                data: result,
+            });
+        } catch (error: any) {
+            logger.error('Error getting assigned orders:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to retrieve assigned orders',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * Accept a shopping list and start order process
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async acceptShoppingList(req: AuthenticatedRequest, res: Response) {
+        const { shoppingListId } = req.params;
+        const agentId = req.user.id;
+        
+        try {
+            const order = await AgentService.acceptShoppingList(agentId, shoppingListId);
+            
+            res.status(200).json({
+                status: 'success',
+                message: 'Shopping list accepted successfully',
+                data: { order },
+            });
+        } catch (error: any) {
+            logger.error('Error accepting shopping list:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to accept shopping list',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * Start shopping process
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async startShopping(req: AuthenticatedRequest, res: Response) {
+        const { shoppingListId } = req.params;
+        const agentId = req.user.id;
+        
+        try {
+            const order = await AgentService.startShopping(agentId, shoppingListId);
+            
+            res.status(200).json({
+                status: 'success',
+                message: 'Shopping started successfully',
+                data: { order },
+            });
+        } catch (error: any) {
+            logger.error('Error starting shopping:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to start shopping',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * Complete shopping process with final prices
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async completeShopping(req: AuthenticatedRequest, res: Response) {
+        const { shoppingListId } = req.params;
+        const { finalPrices } = req.body;
+        const agentId = req.user.id;
+        
+        try {
+            const order = await AgentService.completeShopping(agentId, shoppingListId, finalPrices);
+            
+            res.status(200).json({
+                status: 'success',
+                message: 'Shopping completed successfully',
+                data: { order },
+            });
+        } catch (error: any) {
+            logger.error('Error completing shopping:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to complete shopping',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * Update order status with comprehensive validation
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async updateOrderStatus(req: AuthenticatedRequest, res: Response) {
+        const { orderId } = req.params;
+        const { status, notes } = req.body;
+        const agentId = req.user.id;
+
+        try {
+            const result = await AgentService.updateOrderStatus(
+                agentId,
+                orderId,
+                status,
+                notes
+            );
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Order status updated successfully',
+                data: result,
+            });
+        } catch (error: any) {
+            logger.error('Error updating order status:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to update order status',
+                error: error.message,
+            });
+        }
+    }
+
+    // ===============================================
+    // DELIVERY MANAGEMENT ENDPOINTS
+    // ===============================================
+
+    /**
+     * Request delivery for a completed order
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async requestDelivery(req: AuthenticatedRequest, res: Response) {
+        const { orderId } = req.params;
+        const agentId = req.user.id;
+        
+        try {
+            const deliveryRequest = await AgentService.requestDelivery(agentId, orderId);
+            
+            res.status(200).json({
+                status: 'success',
+                message: 'Delivery requested successfully',
+                data: deliveryRequest,
+            });
+        } catch (error: any) {
+            logger.error('Error requesting delivery:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to request delivery',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * Track delivery status for an order
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async trackOrderDelivery(req: AuthenticatedRequest, res: Response) {
+        const { orderId } = req.params;
+        const agentId = req.user.id;
+        
+        try {
+            const deliveryStatus = await AgentService.trackDelivery(agentId, orderId);
+            
+            res.status(200).json({
+                status: 'success',
+                message: 'Delivery status retrieved successfully',
+                data: deliveryStatus,
+            });
+        } catch (error: any) {
+            logger.error('Error tracking delivery:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to track delivery',
+                error: error.message,
+            });
+        }
     }
 }
