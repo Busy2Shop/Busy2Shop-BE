@@ -20,17 +20,9 @@ interface PaymentExpiryCheckJobData {
 }
 
 // Create queues
-export const paymentWebhookQueue = new Queue<PaymentWebhookJobData>('payment-webhook', {
-    connection: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-    },
-});
+export const paymentWebhookQueue = new Queue<PaymentWebhookJobData>('payment-webhook', { connection });
 
-export const paymentExpiryCheckQueue = new Queue<PaymentExpiryCheckJobData>(
-    'payment-expiry-check',
-    { connection },
-);
+export const paymentExpiryCheckQueue = new Queue<PaymentExpiryCheckJobData>('payment-expiry-check', { connection});
 
 // Process webhook jobs
 const webhookWorker = new Worker<PaymentWebhookJobData>(
