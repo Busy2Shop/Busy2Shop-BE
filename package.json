@@ -67,6 +67,7 @@
         "phone": "^3.1.59",
         "prettier": "^3.5.3",
         "puppeteer": "^22.13.0",
+        "resend": "^6.0.2",
         "sequelize": "^6.37.3",
         "sequelize-cli": "^6.6.2",
         "sequelize-typescript": "^2.1.6",
