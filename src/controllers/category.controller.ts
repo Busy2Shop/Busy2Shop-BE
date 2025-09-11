@@ -52,6 +52,41 @@ export default class CategoryController {
         });
     }
 
+    // Test endpoint for category creation (NO AUTHENTICATION)
+    static async testCreateCategory(req: Request, res: Response) {
+        const { name, description, icon } = req.body;
+
+        if (!name) {
+            throw new BadRequestError('Category name is required');
+        }
+
+        // Handle category images upload
+        const files = req.files as Express.Multer.File[] | undefined;
+        const imageUrls: string[] = [];
+
+        if (files && files.length > 0) {
+            // For testing, we'll just use placeholder URLs
+            for (const file of files) {
+                const testUrl = `https://via.placeholder.com/400x300?text=${encodeURIComponent(file.originalname)}`;
+                imageUrls.push(testUrl);
+            }
+        }
+
+        // Create the category using service
+        const newCategory = await CategoryService.addCategory({
+            name,
+            description,
+            icon,
+            images: imageUrls,
+        });
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Test category created successfully',
+            data: newCategory,
+        });
+    }
+
     static async getAllCategories(req: Request, res: Response) {
         const { page, size, q, isPinned, includeProducts } = req.query;
 

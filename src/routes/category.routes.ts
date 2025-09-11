@@ -11,6 +11,13 @@ router.get('/', CategoryController.getAllCategories);
 router.get('/:id', CategoryController.getCategory);
 router.get('/:id/markets', CategoryController.getMarketsByCategory);
 
+// Test routes (NO AUTHENTICATION REQUIRED)
+router.post(
+    '/test-create',
+    upload,
+    CategoryController.testCreateCategory,
+);
+
 // Protected routes
 router.post(
     '/',

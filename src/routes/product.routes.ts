@@ -7,12 +7,26 @@ const router = Router();
 const upload = uploadMiddleware(UploadType.Array, 'files', 5);
 // Public routes
 router.get('/', ProductController.getAllProducts);
+router.get('/stats', ProductController.getProductStats);
 router.get('/:id', ProductController.getProduct);
 
 // Market products route
 router.get('/market/:marketId', ProductController.getMarketProducts);
 
-// Protected routes
+// Admin routes (protected)
+router.post(
+    '/admin-create',
+    basicAuth('access'),
+    upload,
+    AuthenticatedController(ProductController.createProduct),
+);
+router.post(
+    '/admin-bulk',
+    basicAuth('access'),
+    AuthenticatedController(ProductController.bulkCreateProducts),
+);
+
+// Original protected routes
 router.post(
     '/',
     basicAuth('access'),

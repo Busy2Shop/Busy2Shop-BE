@@ -28,28 +28,42 @@ router.delete(
     adminAuth('admin'),
     AdminAuthenticatedController(AdminController.deleteAdmin),
 );
-router.post(
-    '/block-user',
-    adminAuth('admin'),
-    AdminAuthenticatedController(AdminController.blockUser),
-);
-router.post(
-    '/unblock-user',
-    adminAuth('admin'),
-    AdminAuthenticatedController(AdminController.unblockUser),
-);
-router.post(
-    '/deactivate-user',
-    adminAuth('admin'),
-    AdminAuthenticatedController(AdminController.deactivateUser),
-);
-router.post(
-    '/activate-user',
-    adminAuth('admin'),
-    AdminAuthenticatedController(AdminController.activateUser),
-);
+// User management routes - enhanced with better filtering
 router.get('/users', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllUsers));
-router.get('/user/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getUser));
+router.get('/users/customers', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllCustomers));
+router.get('/users/agents', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllAgents));
+router.get('/users/stats/overview', adminAuth('admin'), AdminAuthenticatedController(AdminController.getUserStats));
+router.get('/users/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getUser));
+router.get('/users/:id/activity', adminAuth('admin'), AdminAuthenticatedController(AdminController.getUserActivity));
+
+// User action routes
+router.patch('/users/:id/block', adminAuth('admin'), AdminAuthenticatedController(AdminController.blockUser));
+router.patch('/users/:id/unblock', adminAuth('admin'), AdminAuthenticatedController(AdminController.unblockUser));
+router.patch('/users/:id/deactivate', adminAuth('admin'), AdminAuthenticatedController(AdminController.deactivateUser));
+router.patch('/users/:id/activate', adminAuth('admin'), AdminAuthenticatedController(AdminController.activateUser));
+router.patch('/users/:id/profile', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateUserProfile));
+router.delete('/users/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteUser));
+
+// User detailed data routes
+router.get('/users/:id/orders', adminAuth('admin'), AdminAuthenticatedController(AdminController.getUserOrders));
+router.get('/users/:id/shopping-lists', adminAuth('admin'), AdminAuthenticatedController(AdminController.getUserShoppingLists));
+router.get('/users/:id/locations', adminAuth('admin'), AdminAuthenticatedController(AdminController.getUserLocations));
+
+// Agent specific routes
+router.patch('/users/:id/kyc/approve', adminAuth('admin'), AdminAuthenticatedController(AdminController.approveAgentKyc));
+router.patch('/users/:id/kyc/reject', adminAuth('admin'), AdminAuthenticatedController(AdminController.rejectAgentKyc));
+
+// Agent analytics and performance
+router.get('/agents/:id/performance', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAgentPerformanceMetrics));
+router.get('/agents/:id/location-history', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAgentLocationHistory));
+router.patch('/agents/:id/status', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateAgentStatus));
+router.get('/agents/:id/analytics', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAgentAnalytics));
+
+// User creation
+router.post('/users/create', adminAuth('admin'), AdminAuthenticatedController(AdminController.createUser));
+
+// Bulk actions
+router.post('/users/bulk-action', adminAuth('admin'), AdminAuthenticatedController(AdminController.bulkUserAction));
 
 // KYC Management - audit the authentication requeirements
 router.patch(
@@ -72,5 +86,6 @@ router.patch(
 
 // Suggested Lists Management
 router.use('/shopping-lists', adminAuth('admin'), suggestedListsRoutes);
+
 
 export default router;

@@ -142,7 +142,8 @@ export default class UserService {
                 {
                     model: UserSettingsModel,
                     as: 'settings',
-                    where: settingsWhere,
+                    where: Object.keys(settingsWhere).length > 0 ? settingsWhere : undefined,
+                    required: false, // LEFT JOIN to get all users even without settings
                 },
             ],
         };
@@ -155,8 +156,8 @@ export default class UserService {
 
         const { rows: users, count } = await User.findAndCountAll(queryOptions);
 
-        // Calculate the total count
-        const totalCount = (count as unknown as []).length;
+        // Calculate the total count - handle different count types from Sequelize
+        const totalCount = typeof count === 'number' ? count : Array.isArray(count) ? (count as any[]).length : 0;
 
         if (page && size && users.length > 0) {
             const totalPages = Pagination.estimateTotalPage({

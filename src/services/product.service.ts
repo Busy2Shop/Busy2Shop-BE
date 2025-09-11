@@ -153,7 +153,8 @@ export default class ProductService {
                 case 'rating':
                     return [[literal('avg_rating'), 'DESC NULLS LAST']];
                 case 'popularity':
-                    return [[literal('order_count'), 'DESC NULLS LAST']];
+                    // Shopping list functionality not implemented yet, fallback to newest
+                    return [['createdAt', 'DESC']];
                 case 'relevance':
                 default:
                     if (query) {
@@ -184,15 +185,18 @@ export default class ProductService {
                 where: {
                     isActive: true,
                 },
-                ...(categoryId && {
-                    include: [{
+                include: [
+                    {
                         model: Category,
                         as: 'categories',
-                        where: { id: categoryId },
+                        attributes: ['id', 'name', 'description'],
                         through: { attributes: [] },
-                        required: true,
-                    }],
-                }),
+                        ...(categoryId && {
+                            where: { id: categoryId },
+                            required: true,
+                        }),
+                    },
+                ],
             },
         ];
 
@@ -219,19 +223,7 @@ export default class ProductService {
             ]);
         }
 
-        if (sortBy === 'popularity') {
-            attributesConfig.include.push([
-                literal(`(
-                    SELECT COUNT(*)
-                    FROM "shoppingListItems" sli
-                    INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
-                    WHERE sli."productId" = "Product".id 
-                    AND sl.status IN ('completed', 'processing')
-                    AND sl."createdAt" >= NOW() - INTERVAL '30 days'
-                )`),
-                'order_count',
-            ]);
-        }
+        // Note: For popularity sorting, we'll use createdAt since shopping list functionality is not implemented
 
         // Basic query options
         const queryOptions: FindAndCountOptions<Product> = {
@@ -289,55 +281,16 @@ export default class ProductService {
                     model: Market,
                     as: 'market',
                     attributes: ['id', 'name', 'marketType', 'address', 'images', 'isPinned'],
-                },
-                {
-                    model: Review,
-                    as: 'reviews',
-                    attributes: ['id', 'rating', 'comment', 'createdAt'],
-                    include: [{
-                        model: User,
-                        as: 'reviewer',
-                        attributes: ['id', 'firstName', 'lastName'],
-                    }],
-                    separate: true,
-                    order: [['createdAt', 'DESC']],
-                    limit: 10,
+                    include: [
+                        {
+                            model: Category,
+                            as: 'categories',
+                            attributes: ['id', 'name', 'description'],
+                            through: { attributes: [] },
+                        },
+                    ],
                 },
             ],
-            attributes: {
-                include: [
-                    // Add average rating
-                    [
-                        literal(`(
-                            SELECT AVG(rating)::DECIMAL(3,2)
-                            FROM reviews 
-                            WHERE "productId" = "Product".id
-                        )`),
-                        'averageRating',
-                    ],
-                    // Add review count
-                    [
-                        literal(`(
-                            SELECT COUNT(*)
-                            FROM reviews 
-                            WHERE "productId" = "Product".id
-                        )`),
-                        'reviewCount',
-                    ],
-                    // Add order count (last 30 days)
-                    [
-                        literal(`(
-                            SELECT COUNT(*)
-                            FROM "shoppingListItems" sli
-                            INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
-                            WHERE sli."productId" = "Product".id 
-                            AND sl.status IN ('completed', 'processing')
-                            AND sl."createdAt" >= NOW() - INTERVAL '30 days'
-                        )`),
-                        'recentOrders',
-                    ],
-                ],
-            },
         });
 
         if (!product) {
@@ -443,14 +396,7 @@ export default class ProductService {
             Product.findAll({
                 where: { isAvailable: true, isPinned: true },
                 attributes: [
-                    [fn('AVG', literal(`(
-                        SELECT COUNT(*)
-                        FROM "shoppingListItems" sli
-                        INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
-                        WHERE sli."productId" = "Product".id 
-                        AND sl.status IN ('completed', 'processing')
-                        AND sl."createdAt" >= NOW() - INTERVAL '30 days'
-                    )`)), 'avgOrders'],
+                    [literal('0'), 'avgOrders'],
                     [fn('AVG', col('price')), 'avgPrice'],
                     [fn('AVG', literal(`(
                         SELECT AVG(rating)
@@ -465,14 +411,7 @@ export default class ProductService {
             Product.findAll({
                 where: { isAvailable: true, isPinned: false },
                 attributes: [
-                    [fn('AVG', literal(`(
-                        SELECT COUNT(*)
-                        FROM "shoppingListItems" sli
-                        INNER JOIN "shoppingLists" sl ON sli."shoppingListId" = sl.id
-                        WHERE sli."productId" = "Product".id 
-                        AND sl.status IN ('completed', 'processing')
-                        AND sl."createdAt" >= NOW() - INTERVAL '30 days'
-                    )`)), 'avgOrders'],
+                    [literal('0'), 'avgOrders'],
                     [fn('AVG', col('price')), 'avgPrice'],
                     [fn('AVG', literal(`(
                         SELECT AVG(rating)
@@ -692,7 +631,7 @@ export default class ProductService {
 
     static async bulkAddProducts(products: IProduct[], ownerId: string): Promise<Product[]> {
         // Validate that all products belong to markets owned by this user
-        const marketIds = [...new Set(products.map(p => p.marketId))];
+        const marketIds = Array.from(new Set(products.map(p => p.marketId)));
 
         const ownedMarkets = await Market.count({
             where: {
@@ -736,5 +675,69 @@ export default class ProductService {
                 },
             ],
         });
+    }
+
+    // TEST METHOD - BULK CREATE WITHOUT VALIDATION
+    static async testBulkAddProducts(products: IProduct[]): Promise<Product[]> {
+        // Skip all validation for testing purposes
+        // Create all products directly
+        const createdProducts = await Product.bulkCreate(products);
+        // Return all created products with their markets
+        return await Product.findAll({
+            where: {
+                id: { [Op.in]: createdProducts.map(p => p.id) },
+            },
+            include: [
+                {
+                    model: Market,
+                    as: 'market',
+                    attributes: ['id', 'name', 'marketType', 'address'],
+                },
+            ],
+        });
+    }
+
+    /**
+     * Get product statistics (Admin function)
+     */
+    static async getProductStats(): Promise<{
+        totalProducts: number;
+        availableProducts: number;
+        lowStockProducts: number;
+        outOfStockProducts: number;
+        averagePrice: number;
+        totalValue: number;
+    }> {
+        const [
+            totalProducts,
+            availableProducts,
+            lowStockProducts,
+            outOfStockProducts,
+            priceData,
+        ] = await Promise.all([
+            Product.count(),
+            Product.count({ where: { isAvailable: true } }),
+            Product.count({ where: { stockQuantity: { [Op.gt]: 0, [Op.lt]: 10 } } }),
+            Product.count({ where: { stockQuantity: 0 } }),
+            Product.findAll({
+                attributes: [
+                    [fn('AVG', col('price')), 'averagePrice'],
+                    [fn('SUM', literal('price * "Product"."stockQuantity"')), 'totalValue'],
+                ],
+                where: { price: { [Op.not]: null } },
+                raw: true,
+            }),
+        ]);
+
+        const priceStats = priceData[0] as any;
+
+        return {
+            totalProducts,
+            availableProducts,
+            lowStockProducts,
+            outOfStockProducts,
+            averagePrice: parseFloat(priceStats?.averagePrice || '0'),
+            totalValue: parseFloat(priceStats?.totalValue || '0'),
+        };
     }
 }

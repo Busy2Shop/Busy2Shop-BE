@@ -8,6 +8,84 @@ import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 import CloudinaryClientConfig from '../clients/cloudinary.config';
 
 export default class ProductController {
+    // TEST METHOD - BYPASS AUTHENTICATION
+    static async testCreateProduct(req: Request, res: Response) {
+        const {
+            name,
+            description,
+            price,
+            discountPrice,
+            marketId,
+            barcode,
+            sku,
+            stockQuantity,
+            attributes,
+            isPinned = false,
+            isAvailable = false,
+        } = req.body;
+
+        if (!name || !price || !marketId) {
+            throw new BadRequestError('Product name, price, and market ID are required');
+        }
+
+        // Skip market ownership check for testing
+        const newProduct = await ProductService.addProduct({
+            name,
+            description,
+            price: parseFloat(price),
+            discountPrice: discountPrice ? parseFloat(discountPrice) : undefined,
+            marketId,
+            barcode,
+            sku,
+            stockQuantity: stockQuantity ? parseInt(stockQuantity) : undefined,
+            attributes: typeof attributes === 'string' ? JSON.parse(attributes) : attributes,
+            images: [],
+            isAvailable: isAvailable === true || isAvailable === 'true',
+            isPinned: isPinned === true || isPinned === 'true',
+        });
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Test product created successfully',
+            data: newProduct,
+        });
+    }
+
+    // TEST METHOD - BULK CREATE WITHOUT AUTHENTICATION
+    static async testBulkCreateProducts(req: Request, res: Response) {
+        const { products } = req.body;
+
+        if (!products || !Array.isArray(products) || products.length === 0) {
+            throw new BadRequestError('Please provide an array of products');
+        }
+
+        // Validate required fields for each product
+        for (const product of products) {
+            if (!product.name || !product.price || !product.marketId) {
+                throw new BadRequestError(
+                    'Product name, price, and market ID are required for all products',
+                );
+            }
+        }
+
+        // Convert attributes if they're strings
+        const processedProducts = products.map(product => ({
+            ...product,
+            attributes: typeof product.attributes === 'string' ? JSON.parse(product.attributes) : product.attributes,
+            isAvailable: product.isAvailable === true || product.isAvailable === 'true',
+            isPinned: product.isPinned === true || product.isPinned === 'true',
+        }));
+
+        // Using test method to skip validations
+        const createdProducts = await ProductService.testBulkAddProducts(processedProducts);
+
+        res.status(201).json({
+            status: 'success',
+            message: `${createdProducts.length} test products created successfully`,
+            data: createdProducts,
+        });
+    }
+
     static async createProduct(req: AuthenticatedRequest, res: Response) {
         const {
             name,
@@ -20,6 +98,7 @@ export default class ProductController {
             stockQuantity,
             attributes,
             isPinned = false, // Allow setting isPinned during creation
+            isAvailable = false, // Default to false for review workflow
         } = req.body;
 
         if (!name || !price || !marketId) {
@@ -61,7 +140,7 @@ export default class ProductController {
             stockQuantity: stockQuantity ? parseInt(stockQuantity) : undefined,
             attributes,
             images: imageUrls,
-            isAvailable: true,
+            isAvailable: isAvailable === true || isAvailable === 'true', // Respect frontend setting
             isPinned: isPinned === true || isPinned === 'true', // Allow admin to pin during creation
         });
 
@@ -471,6 +550,19 @@ export default class ProductController {
                 marketId,
                 algorithm: 'market_gap_analysis_with_demand_prediction',
             },
+        });
+    }
+
+    /**
+     * Get product statistics (Admin function)
+     */
+    static async getProductStats(req: Request, res: Response) {
+        const stats = await ProductService.getProductStats();
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Product statistics retrieved successfully',
+            data: stats,
         });
     }
 }
