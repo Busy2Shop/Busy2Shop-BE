@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import AdminService from '../../services/AdminServices/admin.service';
 import { AdminAuthenticatedRequest } from '../../middlewares/authMiddleware';
-import { BadRequestError, ForbiddenError } from '../../utils/customErrors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../../utils/customErrors';
 import { ADMIN_EMAIL } from '../../utils/constants';
 import { AuthUtil } from '../../utils/token';
 import { emailService, EmailTemplate } from '../../utils/Email';
@@ -10,8 +10,11 @@ import { IBlockMeta, IAgentMeta } from '../../models/userSettings.model';
 import { Database } from '../../models';
 import { QueryTypes } from 'sequelize';
 import Order from '../../models/order.model';
+import ShoppingList from '../../models/shoppingList.model';
 import ShoppingListItem from '../../models/shoppingListItem.model';
 import Market from '../../models/market.model';
+import AgentLocation from '../../models/agentLocation.model';
+import UserAddress from '../../models/userAddress.model';
 
 export default class AdminController {
     // static async getUserStats(req: Request, res: Response) {
@@ -628,7 +631,16 @@ export default class AdminController {
 
         const user = await UserService.viewSingleUser(id);
 
-        // Get user's orders and shopping lists as activities
+        // Handle special types for performance and analytics
+        if (type === 'performance') {
+            return AdminController.getAgentPerformanceMetrics(req, res);
+        }
+
+        if (type === 'analytics') {
+            return AdminController.getAgentAnalytics(req, res);
+        }
+
+        // Default activity behavior
         const activities = [];
         
         // Get shopping lists
@@ -638,22 +650,38 @@ export default class AdminController {
             order: [['createdAt', 'DESC']],
         });
 
-        // Get assigned orders if agent
-        if (user.status.userType === 'agent') {
-            const assignedOrders = await user.$get('assignedOrders', {
+        // Get actual orders for better activity tracking
+        let orders: Order[] = [];
+        if (user.status.userType === 'customer') {
+            orders = await Order.findAll({
+                where: { customerId: id },
+                include: [{ model: ShoppingList, as: 'shoppingList', attributes: ['name'] }],
                 limit: parseInt(size as string),
                 offset: (parseInt(page as string) - 1) * parseInt(size as string),
-                order: [['createdAt', 'DESC']],
+                order: [['createdAt', 'DESC']]
             });
-            activities.push(...assignedOrders.map(order => ({
-                id: order.id,
-                type: 'order_assigned',
-                description: `Assigned shopping list: ${order.name}`,
-                status: order.status,
-                date: order.createdAt,
-            })));
+        } else if (user.status.userType === 'agent') {
+            orders = await Order.findAll({
+                where: { agentId: id },
+                include: [{ model: ShoppingList, as: 'shoppingList', attributes: ['name'] }],
+                limit: parseInt(size as string),
+                offset: (parseInt(page as string) - 1) * parseInt(size as string),
+                order: [['createdAt', 'DESC']]
+            });
         }
 
+        // Add order activities
+        activities.push(...orders.map(order => ({
+            id: order.id,
+            type: user.status.userType === 'agent' ? 'order_assigned' : 'order_placed',
+            description: user.status.userType === 'agent' 
+                ? `Assigned order: ${order.shoppingList?.name || 'Shopping List'}`
+                : `Placed order: ${order.shoppingList?.name || 'Shopping List'}`,
+            status: order.status,
+            date: order.createdAt,
+        })));
+
+        // Add shopping list activities
         activities.push(...shoppingLists.map(list => ({
             id: list.id,
             type: 'shopping_list_created',
@@ -835,60 +863,96 @@ export default class AdminController {
 
         const user = await UserService.viewSingleUser(id);
 
-        // Get orders based on user type
+        // Get actual orders based on user type
         let orders: any[] = [];
         let totalCount = 0;
 
+        const whereCondition: any = {};
+        if (status) {
+            whereCondition.status = status;
+        }
+
         if (user.status.userType === 'customer') {
-            // Get shopping lists and their orders for customers
-            const shoppingLists = await user.$get('shoppingLists', {
+            // Get orders where user is the customer
+            const result = await Order.findAndCountAll({
+                where: {
+                    customerId: id,
+                    ...whereCondition
+                },
                 include: [{
-                    model: Order,
-                    as: 'order',
-                    required: false,
-                    ...(status && { where: { status } }),
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    attributes: ['id', 'name', 'notes', 'estimatedTotal'],
+                    include: [{
+                        model: ShoppingListItem,
+                        as: 'items',
+                        attributes: ['id', 'name', 'quantity', 'unit', 'notes']
+                    }]
                 }],
                 limit: parseInt(size as string),
                 offset: (parseInt(page as string) - 1) * parseInt(size as string),
                 order: [['createdAt', 'DESC']],
             });
 
-            orders = shoppingLists.map(list => ({
-                id: list.id,
-                type: 'shopping_list',
-                name: list.name,
-                status: list.status,
-                estimatedTotal: list.estimatedTotal,
-                createdAt: list.createdAt,
-                updatedAt: list.updatedAt,
+            orders = result.rows.map(order => ({
+                id: order.id,
+                orderNumber: order.orderNumber,
+                status: order.status,
+                totalAmount: order.totalAmount,
+                serviceFee: order.serviceFee,
+                deliveryFee: order.deliveryFee,
+                deliveryAddress: order.deliveryAddress,
+                customerNotes: order.customerNotes,
+                agentNotes: order.agentNotes,
+                createdAt: order.createdAt,
+                updatedAt: order.updatedAt,
+                completedAt: order.completedAt,
+                shoppingList: order.shoppingList,
+                items: order.shoppingList?.items || []
             }));
 
-            totalCount = shoppingLists.length;
+            totalCount = result.count;
         } else if (user.status.userType === 'agent') {
-            // Get assigned shopping lists for agents
-            const assignedLists = await user.$get('assignedOrders', {
+            // Get orders assigned to the agent
+            const result = await Order.findAndCountAll({
+                where: {
+                    agentId: id,
+                    ...whereCondition
+                },
                 include: [{
-                    model: Order,
-                    as: 'order',
-                    required: false,
-                    ...(status && { where: { status } }),
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    attributes: ['id', 'name', 'notes', 'estimatedTotal'],
+                    include: [{
+                        model: ShoppingListItem,
+                        as: 'items',
+                        attributes: ['id', 'name', 'quantity', 'unit', 'notes']
+                    }]
                 }],
                 limit: parseInt(size as string),
                 offset: (parseInt(page as string) - 1) * parseInt(size as string),
                 order: [['createdAt', 'DESC']],
             });
 
-            orders = assignedLists.map(list => ({
-                id: list.id,
-                type: 'assigned_order',
-                name: list.name,
-                status: list.status,
-                estimatedTotal: list.estimatedTotal,
-                createdAt: list.createdAt,
-                updatedAt: list.updatedAt,
+            orders = result.rows.map(order => ({
+                id: order.id,
+                orderNumber: order.orderNumber,
+                status: order.status,
+                totalAmount: order.totalAmount,
+                serviceFee: order.serviceFee,
+                deliveryFee: order.deliveryFee,
+                deliveryAddress: order.deliveryAddress,
+                customerNotes: order.customerNotes,
+                agentNotes: order.agentNotes,
+                createdAt: order.createdAt,
+                updatedAt: order.updatedAt,
+                acceptedAt: order.acceptedAt,
+                completedAt: order.completedAt,
+                shoppingList: order.shoppingList,
+                items: order.shoppingList?.items || []
             }));
 
-            totalCount = assignedLists.length;
+            totalCount = result.count;
         }
 
         res.status(200).json({
@@ -951,31 +1015,96 @@ export default class AdminController {
 
     static async getUserLocations(req: AdminAuthenticatedRequest, res: Response) {
         const { id } = req.params;
+        const { page = 1, size = 10, startDate, endDate } = req.query;
 
         const user = await UserService.viewSingleUser(id);
 
         if (user.status.userType === 'agent') {
-            // Get agent locations
-            const locations = await user.$get('locations');
+            // Get agent locations with pagination and date filtering
+            const whereCondition: any = {};
+            
+            if (startDate || endDate) {
+                whereCondition.createdAt = {};
+                if (startDate) whereCondition.createdAt[require('sequelize').Op.gte] = new Date(startDate as string);
+                if (endDate) whereCondition.createdAt[require('sequelize').Op.lte] = new Date(endDate as string);
+            }
+
+            const result = await AgentLocation.findAndCountAll({
+                where: {
+                    agentId: id,
+                    ...whereCondition
+                },
+                limit: parseInt(size as string),
+                offset: (parseInt(page as string) - 1) * parseInt(size as string),
+                order: [['createdAt', 'DESC']],
+            });
+
+            const locations = result.rows.map(location => ({
+                id: location.id,
+                latitude: location.latitude,
+                longitude: location.longitude,
+                address: location.address || `${location.latitude}, ${location.longitude}`,
+                name: location.name,
+                locationType: location.locationType,
+                accuracy: location.accuracy,
+                timestamp: location.timestamp || location.createdAt,
+                isActive: location.isActive,
+                createdAt: location.createdAt,
+                status: location.isActive ? 'active' : 'inactive'
+            }));
             
             res.status(200).json({
                 status: 'success',
                 message: 'Agent locations retrieved successfully',
                 data: {
-                    locations: locations || [],
+                    locations,
                     currentLocation: user.location || null,
+                    pagination: {
+                        page: parseInt(page as string),
+                        size: parseInt(size as string),
+                        total: result.count,
+                        totalPages: Math.ceil(result.count / parseInt(size as string)),
+                    },
                 },
             });
         } else {
-            // Get customer addresses
-            const addresses = await user.$get('addresses');
+            // Get customer addresses with pagination
+            const result = await UserAddress.findAndCountAll({
+                where: { userId: id },
+                limit: parseInt(size as string),
+                offset: (parseInt(page as string) - 1) * parseInt(size as string),
+                order: [['lastUsedAt', 'DESC'], ['createdAt', 'DESC']],
+            });
+
+            const locations = result.rows.map(address => ({
+                id: address.id,
+                latitude: address.latitude,
+                longitude: address.longitude,
+                address: address.fullAddress || address.address,
+                name: address.title,
+                type: address.type,
+                city: address.city,
+                state: address.state,
+                country: address.country,
+                isDefault: address.isDefault,
+                isActive: address.isActive,
+                createdAt: address.createdAt,
+                lastUsedAt: address.lastUsedAt,
+                status: address.isActive ? 'active' : 'inactive'
+            }));
             
             res.status(200).json({
                 status: 'success',
                 message: 'User addresses retrieved successfully',
                 data: {
-                    addresses: addresses || [],
+                    locations,
                     currentLocation: user.location || null,
+                    pagination: {
+                        page: parseInt(page as string),
+                        size: parseInt(size as string),
+                        total: result.count,
+                        totalPages: Math.ceil(result.count / parseInt(size as string)),
+                    },
                 },
             });
         }
@@ -1209,6 +1338,459 @@ export default class AdminController {
                 monthlyPerformance: monthlyStats,
             },
         });
+    }
+
+    // Admin Order Management Methods
+    static async getAllOrders(req: AdminAuthenticatedRequest, res: Response) {
+        const { 
+            page = 1, 
+            size = 10, 
+            status, 
+            paymentStatus, 
+            customerId, 
+            agentId, 
+            startDate, 
+            endDate, 
+            orderNumber, 
+            q 
+        } = req.query;
+
+        try {
+            const queryParams: any = {
+                page: parseInt(page as string),
+                size: parseInt(size as string),
+            };
+
+            // Build where conditions
+            const whereConditions: any = {};
+            if (status) whereConditions.status = status;
+            if (paymentStatus) whereConditions.paymentStatus = paymentStatus;
+            if (customerId) whereConditions.customerId = customerId;
+            if (agentId) whereConditions.agentId = agentId;
+            if (orderNumber) whereConditions.orderNumber = orderNumber;
+
+            // Date range filter
+            if (startDate || endDate) {
+                const dateFilter: any = {};
+                if (startDate) dateFilter[require('sequelize').Op.gte] = new Date(startDate as string);
+                if (endDate) dateFilter[require('sequelize').Op.lte] = new Date(endDate as string);
+                whereConditions.createdAt = dateFilter;
+            }
+
+            // Text search across multiple fields
+            if (q) {
+                const searchTerm = q as string;
+                whereConditions[require('sequelize').Op.or] = [
+                    { orderNumber: { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
+                    { '$customer.firstName$': { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
+                    { '$customer.lastName$': { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
+                    { '$customer.email$': { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
+                    { '$agent.firstName$': { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
+                    { '$agent.lastName$': { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
+                ];
+            }
+
+            const { count, rows: orders } = await Order.findAndCountAll({
+                where: whereConditions,
+                include: [
+                    {
+                        model: require('../../models/user.model').default,
+                        as: 'customer',
+                        attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
+                    },
+                    {
+                        model: require('../../models/user.model').default,
+                        as: 'agent',
+                        attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
+                    },
+                    {
+                        model: ShoppingList,
+                        as: 'shoppingList',
+                        attributes: ['id', 'name', 'notes', 'estimatedTotal'],
+                        include: [
+                            {
+                                model: ShoppingListItem,
+                                as: 'items',
+                                attributes: ['id', 'name', 'quantity', 'unit', 'estimatedPrice', 'actualPrice', 'notes']
+                            },
+                            {
+                                model: Market,
+                                as: 'market',
+                                attributes: ['id', 'name', 'address'],
+                            }
+                        ]
+                    }
+                ],
+                limit: queryParams.size,
+                offset: (queryParams.page - 1) * queryParams.size,
+                order: [['createdAt', 'DESC']],
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Orders retrieved successfully',
+                data: {
+                    orders,
+                    pagination: {
+                        page: queryParams.page,
+                        size: queryParams.size,
+                        total: count,
+                        totalPages: Math.ceil(count / queryParams.size),
+                    },
+                },
+            });
+        } catch (error) {
+            console.error('Error in getAllOrders:', error);
+            throw error;
+        }
+    }
+
+    static async getOrderStats(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            // Get comprehensive order statistics
+            const stats = await Database.query(`
+                SELECT 
+                    COUNT(*) as total_orders,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_orders,
+                    COUNT(CASE WHEN status IN ('accepted', 'in_progress', 'shopping', 'shopping_completed') THEN 1 END) as in_progress_orders,
+                    COUNT(CASE WHEN status = 'disputed' THEN 1 END) as disputed_orders,
+                    COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_orders,
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_orders,
+                    COALESCE(SUM(CASE WHEN status = 'completed' THEN "totalAmount" ELSE 0 END), 0) as total_revenue,
+                    COALESCE(AVG(CASE WHEN status = 'completed' THEN "totalAmount" ELSE NULL END), 0) as avg_order_value
+                FROM "Orders"
+            `, {
+                type: QueryTypes.SELECT,
+            });
+
+            const data = stats[0] as any;
+            const totalOrders = parseInt(data.total_orders || '0');
+            const completedOrders = parseInt(data.completed_orders || '0');
+            
+            const completionRate = totalOrders > 0 ? (completedOrders / totalOrders) * 100 : 0;
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Order statistics retrieved successfully',
+                data: {
+                    totalOrders,
+                    completedOrders,
+                    inProgressOrders: parseInt(data.in_progress_orders || '0'),
+                    disputedOrders: parseInt(data.disputed_orders || '0'),
+                    cancelledOrders: parseInt(data.cancelled_orders || '0'),
+                    pendingOrders: parseInt(data.pending_orders || '0'),
+                    totalRevenue: parseFloat(data.total_revenue || '0'),
+                    avgOrderValue: parseFloat(data.avg_order_value || '0'),
+                    completionRate: Math.round(completionRate * 100) / 100,
+                },
+            });
+        } catch (error) {
+            console.error('Error in getOrderStats:', error);
+            throw error;
+        }
+    }
+
+    static async getAdminOrder(req: AdminAuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+
+        try {
+            // Check if the id is a UUID (old format) or orderNumber (new format)
+            let order;
+            const OrderController = require('../order.controller').default;
+            if (OrderController.isOrderNumber(id)) {
+                // New format: orderNumber (e.g., B2S-ABC123)
+                const OrderService = require('../../services/order.service').default;
+                order = await OrderService.getOrderByNumber(id);
+            } else {
+                // Old format: UUID
+                order = await Order.findByPk(id, {
+                    include: [
+                        {
+                            model: require('../../models/user.model').default,
+                            as: 'customer',
+                            attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
+                        },
+                        {
+                            model: require('../../models/user.model').default,
+                            as: 'agent',
+                            attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
+                        },
+                        {
+                            model: ShoppingList,
+                            as: 'shoppingList',
+                            attributes: ['id', 'name', 'notes', 'estimatedTotal'],
+                            include: [
+                                {
+                                    model: ShoppingListItem,
+                                    as: 'items',
+                                    attributes: ['id', 'name', 'quantity', 'unit', 'estimatedPrice', 'actualPrice', 'notes']
+                                },
+                                {
+                                    model: Market,
+                                    as: 'market',
+                                    attributes: ['id', 'name', 'address'],
+                                }
+                            ]
+                        }
+                    ]
+                });
+            }
+
+            if (!order) {
+                throw new BadRequestError('Order not found');
+            }
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Order retrieved successfully',
+                data: order,
+            });
+        } catch (error) {
+            console.error('Error in getAdminOrder:', error);
+            throw error;
+        }
+    }
+
+    static async updateOrderStatusAdmin(req: AdminAuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+        const { status, notes } = req.body;
+
+        if (!status) {
+            throw new BadRequestError('Status is required');
+        }
+
+        try {
+            const order = await Order.findByPk(id);
+            if (!order) {
+                throw new BadRequestError('Order not found');
+            }
+
+            // Update order status
+            await order.update({ status });
+
+            // Add to order trail if OrderTrailService exists
+            try {
+                const OrderTrailService = require('../../services/orderTrail.service').default;
+                await OrderTrailService.addTrailEntry(id, {
+                    action: 'status_updated',
+                    description: `Order status updated to ${status} by admin`,
+                    performedBy: 'admin',
+                    performedByType: 'admin',
+                    metadata: { 
+                        previousStatus: order.status,
+                        newStatus: status,
+                        adminNotes: notes 
+                    },
+                });
+            } catch (trailError) {
+                console.warn('Could not add order trail entry:', trailError);
+            }
+
+            // Get updated order with relations
+            const updatedOrder = await Order.findByPk(id, {
+                include: [
+                    {
+                        model: require('../../models/user.model').default,
+                        as: 'customer',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    },
+                    {
+                        model: require('../../models/user.model').default,
+                        as: 'agent',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    }
+                ]
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Order status updated successfully',
+                data: updatedOrder,
+            });
+        } catch (error) {
+            console.error('Error in updateOrderStatusAdmin:', error);
+            throw error;
+        }
+    }
+
+    static async cancelOrderAdmin(req: AdminAuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        if (!reason) {
+            throw new BadRequestError('Cancellation reason is required');
+        }
+
+        try {
+            const order = await Order.findByPk(id);
+            if (!order) {
+                throw new BadRequestError('Order not found');
+            }
+
+            if (order.status === 'completed' || order.status === 'cancelled') {
+                throw new BadRequestError(`Cannot cancel order with status: ${order.status}`);
+            }
+
+            // Update order status to cancelled
+            await order.update({ 
+                status: 'cancelled',
+                agentNotes: `Admin cancelled: ${reason}`,
+            });
+
+            // Add to order trail
+            try {
+                const OrderTrailService = require('../../services/orderTrail.service').default;
+                await OrderTrailService.addTrailEntry(id, {
+                    action: 'order_cancelled',
+                    description: `Order cancelled by admin. Reason: ${reason}`,
+                    performedBy: 'admin',
+                    performedByType: 'admin',
+                    metadata: { 
+                        reason,
+                        previousStatus: order.status,
+                    },
+                });
+            } catch (trailError) {
+                console.warn('Could not add order trail entry:', trailError);
+            }
+
+            const updatedOrder = await Order.findByPk(id, {
+                include: [
+                    {
+                        model: require('../../models/user.model').default,
+                        as: 'customer',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    },
+                    {
+                        model: require('../../models/user.model').default,
+                        as: 'agent',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    }
+                ]
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Order cancelled successfully',
+                data: updatedOrder,
+            });
+        } catch (error) {
+            console.error('Error in cancelOrderAdmin:', error);
+            throw error;
+        }
+    }
+
+    static async reassignOrder(req: AdminAuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+        const { agentId } = req.body;
+
+        if (!agentId) {
+            throw new BadRequestError('Agent ID is required');
+        }
+
+        try {
+            const order = await Order.findByPk(id);
+            if (!order) {
+                throw new BadRequestError('Order not found');
+            }
+
+            // Verify agent exists and is active
+            const agent = await require('../../services/user.service').default.viewSingleUser(agentId);
+            if (agent.status?.userType !== 'agent') {
+                throw new BadRequestError('Invalid agent ID');
+            }
+
+            const previousAgentId = order.agentId;
+            
+            // Update order with new agent
+            await order.update({ agentId });
+
+            // Add to order trail
+            try {
+                const OrderTrailService = require('../../services/orderTrail.service').default;
+                await OrderTrailService.addTrailEntry(id, {
+                    action: 'order_reassigned',
+                    description: `Order reassigned to agent ${agent.firstName} ${agent.lastName}`,
+                    performedBy: 'admin',
+                    performedByType: 'admin',
+                    metadata: { 
+                        previousAgentId,
+                        newAgentId: agentId,
+                    },
+                });
+            } catch (trailError) {
+                console.warn('Could not add order trail entry:', trailError);
+            }
+
+            const updatedOrder = await Order.findByPk(id, {
+                include: [
+                    {
+                        model: require('../../models/user.model').default,
+                        as: 'customer',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    },
+                    {
+                        model: require('../../models/user.model').default,
+                        as: 'agent',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    }
+                ]
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Order reassigned successfully',
+                data: updatedOrder,
+            });
+        } catch (error) {
+            console.error('Error in reassignOrder:', error);
+            throw error;
+        }
+    }
+
+    static async getOrderTrail(req: AdminAuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+
+        if (!id) {
+            throw new BadRequestError('Order ID is required');
+        }
+
+        try {
+            // Check if order exists first
+            const order = await Order.findByPk(id);
+            if (!order) {
+                throw new NotFoundError('Order not found');
+            }
+
+            // Get order trail using the OrderTrailService
+            const OrderTrailService = require('../../services/orderTrail.service').default;
+            const trail = await OrderTrailService.getOrderTrail(id);
+
+            // Format the trail data for admin consumption
+            const formattedTrail = trail.map((entry: any) => ({
+                id: entry.id,
+                orderId: entry.orderId,
+                action: entry.action,
+                description: entry.description,
+                performedBy: entry.user 
+                    ? `${entry.user.firstName} ${entry.user.lastName}` 
+                    : entry.performedBy || 'System',
+                performedByType: entry.performedByType || 'system',
+                metadata: entry.metadata,
+                createdAt: entry.timestamp || entry.createdAt,
+                previousValue: entry.previousValue,
+                newValue: entry.newValue,
+            }));
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Order trail retrieved successfully',
+                data: formattedTrail,
+            });
+        } catch (error) {
+            console.error('Error in getOrderTrail:', error);
+            throw error;
+        }
     }
 
     static async createUser(req: AdminAuthenticatedRequest, res: Response) {

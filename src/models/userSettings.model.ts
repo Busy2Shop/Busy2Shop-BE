@@ -130,6 +130,20 @@ export interface IAgentMeta {
         url: string;
         uploadedAt: string;
     };
+    bankDetails?: {
+        bankName: string;
+        accountNumber: string;
+        accountName: string;
+        bankCode?: string;
+    };
+    vehicleInfo?: {
+        type: 'motorcycle' | 'bicycle' | 'car' | 'van' | 'truck';
+        plateNumber: string;
+        model: string;
+        make?: string;
+        year?: number;
+        color?: string;
+    };
     kycComplete?: boolean;
     kycStatus?: 'submitted' | 'approved' | 'rejected';
     kycCompletedAt?: string;

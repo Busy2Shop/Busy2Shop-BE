@@ -84,6 +84,15 @@ router.patch(
 //     AdminAuthenticatedController(AuthenticatedController(AlatPayController.checkExpiredTransactions))
 // );
 
+// Order Management Routes
+router.get('/orders', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllOrders));
+router.get('/orders/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getOrderStats));
+router.get('/orders/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAdminOrder));
+router.patch('/orders/:id/status', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateOrderStatusAdmin));
+router.post('/orders/:id/cancel', adminAuth('admin'), AdminAuthenticatedController(AdminController.cancelOrderAdmin));
+router.patch('/orders/:id/reassign', adminAuth('admin'), AdminAuthenticatedController(AdminController.reassignOrder));
+router.get('/orders/:id/trail', adminAuth('admin'), AdminAuthenticatedController(AdminController.getOrderTrail));
+
 // Suggested Lists Management
 router.use('/shopping-lists', adminAuth('admin'), suggestedListsRoutes);
 
