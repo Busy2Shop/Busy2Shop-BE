@@ -28,6 +28,20 @@ router.delete(
     adminAuth('admin'),
     AdminAuthenticatedController(AdminController.deleteAdmin),
 );
+router.patch(
+    '/activate',
+    adminAuth('admin'),
+    AdminAuthenticatedController(AdminController.activateAdmin),
+);
+router.patch(
+    '/deactivate',
+    adminAuth('admin'),
+    AdminAuthenticatedController(AdminController.deactivateAdmin),
+);
+// Dashboard stats route
+router.get('/dashboard/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDashboardStats));
+
+
 // User management routes - enhanced with better filtering
 router.get('/users', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllUsers));
 router.get('/users/customers', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllCustomers));
@@ -96,5 +110,34 @@ router.get('/orders/:id/trail', adminAuth('admin'), AdminAuthenticatedController
 // Suggested Lists Management
 router.use('/shopping-lists', adminAuth('admin'), suggestedListsRoutes);
 
+// Admin Market Management Routes
+router.get('/markets', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllMarkets));
+router.get('/markets/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getMarketStats));
+router.get('/markets/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getMarket));
+router.post('/markets', adminAuth('admin'), AdminAuthenticatedController(AdminController.createMarket));
+router.put('/markets/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateMarket));
+router.delete('/markets/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteMarket));
+router.patch('/markets/:id/toggle-pin', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleMarketPin));
+
+// Admin Product Management Routes
+router.get('/products', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllProducts));
+router.get('/products/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getProductStats));
+router.get('/products/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getProduct));
+router.post('/products', adminAuth('admin'), AdminAuthenticatedController(AdminController.createProduct));
+router.post('/products/bulk', adminAuth('admin'), AdminAuthenticatedController(AdminController.bulkCreateProducts));
+router.put('/products/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateProduct));
+router.delete('/products/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteProduct));
+router.patch('/products/:id/toggle-pin', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleProductPin));
+router.post('/products/bulk-operation', adminAuth('admin'), AdminAuthenticatedController(AdminController.bulkProductOperation));
+
+// Admin Category Management Routes
+router.get('/categories', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllCategories));
+router.get('/categories/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getCategoryStats));
+router.get('/categories/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getCategory));
+router.post('/categories', adminAuth('admin'), AdminAuthenticatedController(AdminController.createCategory));
+router.put('/categories/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateCategory));
+router.delete('/categories/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteCategory));
+router.patch('/categories/:id/toggle-pin', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleCategoryPin));
 
 export default router;
+

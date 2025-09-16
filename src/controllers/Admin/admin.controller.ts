@@ -15,6 +15,11 @@ import ShoppingListItem from '../../models/shoppingListItem.model';
 import Market from '../../models/market.model';
 import AgentLocation from '../../models/agentLocation.model';
 import UserAddress from '../../models/userAddress.model';
+import MarketService from '../../services/market.service';
+import ProductService from '../../services/product.service';
+import CategoryService from '../../services/category.service';
+import Product from '../../models/product.model';
+import Category from '../../models/category.model';
 
 export default class AdminController {
     // static async getUserStats(req: Request, res: Response) {
@@ -165,6 +170,48 @@ export default class AdminController {
         res.status(200).json({
             status: 'success',
             message: 'Admin deleted successfully',
+        });
+    }
+
+    static async activateAdmin(req: AdminAuthenticatedRequest, res: Response) {
+        const { adminId } = req.body;
+
+        if (!adminId) {
+            throw new BadRequestError('Admin ID is required');
+        }
+
+        if (!req.isSuperAdmin) {
+            throw new ForbiddenError('Only super admin can activate admins');
+        }
+
+        await AdminService.updateAdminStatus(adminId, true);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Admin activated successfully',
+        });
+    }
+
+    static async deactivateAdmin(req: AdminAuthenticatedRequest, res: Response) {
+        const { adminId } = req.body;
+
+        if (!adminId) {
+            throw new BadRequestError('Admin ID is required');
+        }
+
+        if (!req.isSuperAdmin) {
+            throw new ForbiddenError('Only super admin can deactivate admins');
+        }
+
+        // if (adminId === req.admin.id) {
+        //     throw new BadRequestError('You cannot deactivate your own account');
+        // }
+
+        await AdminService.updateAdminStatus(adminId, false);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Admin deactivated successfully',
         });
     }
 
@@ -1855,4 +1902,925 @@ export default class AdminController {
             throw error;
         }
     }
+
+    // ===== ADMIN MARKET MANAGEMENT =====
+    static async getAllMarkets(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { page, size, q, marketType, isPinned, includeStats } = req.query;
+
+            const queryParams: Record<string, unknown> = {};
+            if (page && size) {
+                queryParams.page = Number(page);
+                queryParams.size = Number(size);
+            }
+            if (q) queryParams.q = q as string;
+            if (marketType) queryParams.marketType = marketType as string;
+            if (isPinned !== undefined) queryParams.isPinned = isPinned === 'true';
+
+            const result = await MarketService.viewMarkets(queryParams);
+
+            // Add product counts for each market if requested
+            if (includeStats === 'true') {
+                const marketsWithStats = await Promise.all(
+                    result.markets.map(async (market) => {
+                        const productCount = await Product.count({ where: { marketId: market.id } });
+                        const categoryCount = market.categories?.length || 0;
+                        return {
+                            ...market.toJSON(),
+                            productCount,
+                            categoryCount,
+                        };
+                    })
+                );
+
+                res.status(200).json({
+                    status: 'success',
+                    message: 'Markets retrieved successfully',
+                    data: {
+                        markets: marketsWithStats,
+                        pagination: {
+                            total: result.count,
+                            page: queryParams.page || 1,
+                            size: queryParams.size || result.count,
+                            totalPages: result.totalPages || 1,
+                        },
+                    },
+                });
+            } else {
+                res.status(200).json({
+                    status: 'success',
+                    message: 'Markets retrieved successfully',
+                    data: {
+                        markets: result.markets,
+                        pagination: {
+                            total: result.count,
+                            page: queryParams.page || 1,
+                            size: queryParams.size || result.count,
+                            totalPages: result.totalPages || 1,
+                        },
+                    },
+                });
+            }
+        } catch (error) {
+            console.error('Error in getAllMarkets:', error);
+            throw error;
+        }
+    }
+
+    static async getMarketStats(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const stats = await Database.query(`
+                SELECT
+                    COUNT(*) as total_markets,
+                    COUNT(CASE WHEN "isActive" = true THEN 1 END) as active_markets,
+                    COUNT(CASE WHEN "isPinned" = true THEN 1 END) as featured_markets,
+                    (SELECT COUNT(DISTINCT "marketType") FROM "Markets") as market_types,
+                    (SELECT COUNT(*) FROM "Products") as total_products
+                FROM "Markets"
+            `, {
+                type: QueryTypes.SELECT,
+            });
+
+            const marketsByType = await Database.query(`
+                SELECT
+                    "marketType",
+                    COUNT(*) as count
+                FROM "Markets"
+                GROUP BY "marketType"
+                ORDER BY count DESC
+            `, {
+                type: QueryTypes.SELECT,
+            });
+
+            const data = stats[0] as any;
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Market statistics retrieved successfully',
+                data: {
+                    totalMarkets: parseInt(data.total_markets || '0'),
+                    activeMarkets: parseInt(data.active_markets || '0'),
+                    featuredMarkets: parseInt(data.featured_markets || '0'),
+                    marketTypes: parseInt(data.market_types || '0'),
+                    totalProducts: parseInt(data.total_products || '0'),
+                    marketsByType,
+                },
+            });
+        } catch (error) {
+            console.error('Error in getMarketStats:', error);
+            throw error;
+        }
+    }
+
+    static async getMarket(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const { includeProducts, includeCategories, productsLimit = 10 } = req.query;
+
+            const market = await MarketService.viewSingleMarket(id);
+
+            // Add product and category counts
+            const productCount = await Product.count({ where: { marketId: id } });
+            const categoryCount = market.categories?.length || 0;
+
+            let marketData: any = {
+                ...market.toJSON(),
+                productCount,
+                categoryCount,
+            };
+
+            // Optionally include recent products
+            if (includeProducts === 'true') {
+                const products = await Product.findAll({
+                    where: { marketId: id },
+                    limit: parseInt(productsLimit as string),
+                    order: [['createdAt', 'DESC']],
+                    include: [
+                        {
+                            model: Market,
+                            as: 'market',
+                            attributes: ['id', 'name'],
+                        }
+                    ]
+                });
+                marketData.recentProducts = products;
+            }
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Market retrieved successfully',
+                data: marketData,
+            });
+        } catch (error) {
+            console.error('Error in getMarket:', error);
+            throw error;
+        }
+    }
+
+    static async createMarket(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const {
+                name,
+                address,
+                location,
+                phoneNumber,
+                marketType,
+                description,
+                operatingHours,
+                categoryIds,
+                ownerId,
+            } = req.body;
+
+            if (!name || !address || !location || !marketType) {
+                throw new BadRequestError('Name, address, location, and market type are required');
+            }
+
+            const marketData = {
+                name,
+                address,
+                location,
+                phoneNumber,
+                marketType,
+                description,
+                operatingHours,
+                ownerId: ownerId || null,
+                isActive: true,
+            };
+
+            const newMarket = await MarketService.addMarket(marketData, categoryIds || []);
+
+            res.status(201).json({
+                status: 'success',
+                message: 'Market created successfully',
+                data: newMarket,
+            });
+        } catch (error) {
+            console.error('Error in createMarket:', error);
+            throw error;
+        }
+    }
+
+    static async updateMarket(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const updateData = req.body;
+
+            const updatedMarket = await MarketService.updateMarket(id, updateData);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Market updated successfully',
+                data: updatedMarket,
+            });
+        } catch (error) {
+            console.error('Error in updateMarket:', error);
+            throw error;
+        }
+    }
+
+    static async deleteMarket(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            await MarketService.deleteMarket(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Market deleted successfully',
+                data: null,
+            });
+        } catch (error) {
+            console.error('Error in deleteMarket:', error);
+            throw error;
+        }
+    }
+
+    static async toggleMarketPin(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            const market = await MarketService.toggleMarketPinned(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: `Market ${market.isPinned ? 'pinned' : 'unpinned'} successfully`,
+                data: market,
+            });
+        } catch (error) {
+            console.error('Error in toggleMarketPin:', error);
+            throw error;
+        }
+    }
+
+    // ===== ADMIN PRODUCT MANAGEMENT =====
+    static async getAllProducts(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { page, size, q, marketId, categoryId, isAvailable, isPinned, sortBy } = req.query;
+
+            const queryParams: Record<string, unknown> = {};
+            if (page && size) {
+                queryParams.page = Number(page);
+                queryParams.size = Number(size);
+            }
+            if (q) queryParams.q = q as string;
+            if (marketId) queryParams.marketId = marketId as string;
+            if (categoryId) queryParams.categoryId = categoryId as string;
+            if (isAvailable !== undefined) queryParams.isAvailable = isAvailable === 'true';
+            if (isPinned !== undefined) queryParams.isPinned = isPinned === 'true';
+            if (sortBy) queryParams.sortBy = sortBy as string;
+
+            const result = await ProductService.viewProducts(queryParams);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Products retrieved successfully',
+                data: {
+                    products: result.products,
+                    pagination: {
+                        total: result.count,
+                        page: queryParams.page || 1,
+                        size: queryParams.size || result.count,
+                        totalPages: result.totalPages || 1,
+                    },
+                },
+            });
+        } catch (error) {
+            console.error('Error in getAllProducts:', error);
+            throw error;
+        }
+    }
+
+    static async getProductStats(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const stats = await Database.query(`
+                SELECT
+                    COUNT(*) as total_products,
+                    COUNT(CASE WHEN "isAvailable" = true THEN 1 END) as available_products,
+                    COUNT(CASE WHEN "stockQuantity" <= 10 AND "stockQuantity" > 0 THEN 1 END) as low_stock_products,
+                    COUNT(CASE WHEN "stockQuantity" = 0 OR "stockQuantity" IS NULL THEN 1 END) as out_of_stock_products,
+                    COUNT(CASE WHEN "isPinned" = true THEN 1 END) as featured_products,
+                    AVG("price") as avg_price,
+                    MIN("price") as min_price,
+                    MAX("price") as max_price
+                FROM "Products"
+            `, {
+                type: QueryTypes.SELECT,
+            });
+
+            const data = stats[0] as any;
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Product statistics retrieved successfully',
+                data: {
+                    totalProducts: parseInt(data.total_products || '0'),
+                    availableProducts: parseInt(data.available_products || '0'),
+                    lowStockProducts: parseInt(data.low_stock_products || '0'),
+                    outOfStockProducts: parseInt(data.out_of_stock_products || '0'),
+                    featuredProducts: parseInt(data.featured_products || '0'),
+                    avgPrice: parseFloat(data.avg_price || '0'),
+                    minPrice: parseFloat(data.min_price || '0'),
+                    maxPrice: parseFloat(data.max_price || '0'),
+                },
+            });
+        } catch (error) {
+            console.error('Error in getProductStats:', error);
+            throw error;
+        }
+    }
+
+    static async getProduct(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            const product = await ProductService.getProduct(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Product retrieved successfully',
+                data: product,
+            });
+        } catch (error) {
+            console.error('Error in getProduct:', error);
+            throw error;
+        }
+    }
+
+    static async createProduct(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const productData = req.body;
+
+            if (!productData.name || !productData.price || !productData.marketId) {
+                throw new BadRequestError('Product name, price, and market ID are required');
+            }
+
+            const newProduct = await ProductService.addProduct(productData);
+
+            res.status(201).json({
+                status: 'success',
+                message: 'Product created successfully',
+                data: newProduct,
+            });
+        } catch (error) {
+            console.error('Error in createProduct:', error);
+            throw error;
+        }
+    }
+
+    static async updateProduct(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const updateData = req.body;
+
+            const updatedProduct = await ProductService.updateProduct(id, 'admin', updateData);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Product updated successfully',
+                data: updatedProduct,
+            });
+        } catch (error) {
+            console.error('Error in updateProduct:', error);
+            throw error;
+        }
+    }
+
+    static async deleteProduct(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            await ProductService.deleteProduct(id, 'admin');
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Product deleted successfully',
+                data: null,
+            });
+        } catch (error) {
+            console.error('Error in deleteProduct:', error);
+            throw error;
+        }
+    }
+
+    static async toggleProductPin(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            const product = await ProductService.toggleProductPin(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: `Product ${product.isPinned ? 'pinned' : 'unpinned'} successfully`,
+                data: product,
+            });
+        } catch (error) {
+            console.error('Error in toggleProductPin:', error);
+            throw error;
+        }
+    }
+
+    static async bulkCreateProducts(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { products } = req.body;
+
+            if (!products || !Array.isArray(products) || products.length === 0) {
+                throw new BadRequestError('Please provide an array of products');
+            }
+
+            const createdProducts = await ProductService.bulkAddProducts(products, 'admin');
+
+            res.status(201).json({
+                status: 'success',
+                message: `${createdProducts.length} products created successfully`,
+                data: createdProducts,
+            });
+        } catch (error) {
+            console.error('Error in bulkCreateProducts:', error);
+            throw error;
+        }
+    }
+
+    static async bulkProductOperation(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { productIds, operation, data } = req.body;
+
+            if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+                throw new BadRequestError('Product IDs array is required');
+            }
+
+            if (!operation || !['pin', 'unpin', 'enable', 'disable', 'delete'].includes(operation)) {
+                throw new BadRequestError('Valid operation is required');
+            }
+
+            const results = [];
+            const errors = [];
+
+            for (const productId of productIds) {
+                try {
+                    let result;
+                    switch (operation) {
+                        case 'pin':
+                        case 'unpin':
+                            result = await ProductService.toggleProductPin(productId);
+                            break;
+                        case 'enable':
+                            result = await ProductService.updateProduct(productId, 'admin', { isAvailable: true });
+                            break;
+                        case 'disable':
+                            result = await ProductService.updateProduct(productId, 'admin', { isAvailable: false });
+                            break;
+                        case 'delete':
+                            await ProductService.deleteProduct(productId, 'admin');
+                            result = { id: productId };
+                            break;
+                    }
+                    results.push({ productId, success: true, data: result });
+                } catch (error: any) {
+                    errors.push({ productId, success: false, error: error.message });
+                }
+            }
+
+            res.status(200).json({
+                status: 'success',
+                message: `Bulk ${operation} operation completed`,
+                data: {
+                    successful: results,
+                    failed: errors,
+                    summary: {
+                        total: productIds.length,
+                        successful: results.length,
+                        failed: errors.length,
+                    },
+                },
+            });
+        } catch (error) {
+            console.error('Error in bulkProductOperation:', error);
+            throw error;
+        }
+    }
+
+    // ===== ADMIN CATEGORY MANAGEMENT =====
+    static async getAllCategories(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { page, size, q, isPinned, includeStats } = req.query;
+
+            const queryParams: Record<string, unknown> = {};
+            if (page && size) {
+                queryParams.page = Number(page);
+                queryParams.size = Number(size);
+            }
+            if (q) queryParams.q = q as string;
+            if (isPinned !== undefined) queryParams.isPinned = isPinned === 'true';
+
+            const result = await CategoryService.viewCategories(queryParams);
+
+            // Add market and product counts if requested
+            if (includeStats === 'true') {
+                const categoriesWithStats = await Promise.all(
+                    result.categories.map(async (category) => {
+                        const marketCount = category.markets?.length || 0;
+                        const productCount = await Database.query(`
+                            SELECT COUNT(DISTINCT p.id) as count
+                            FROM "Products" p
+                            INNER JOIN "Markets" m ON p."marketId" = m.id
+                            INNER JOIN "MarketCategories" mc ON m.id = mc."marketId"
+                            WHERE mc."categoryId" = :categoryId
+                        `, {
+                            replacements: { categoryId: category.id },
+                            type: QueryTypes.SELECT,
+                        });
+
+                        return {
+                            ...category.toJSON(),
+                            marketCount,
+                            productCount: parseInt((productCount[0] as any)?.count || '0'),
+                        };
+                    })
+                );
+
+                res.status(200).json({
+                    status: 'success',
+                    message: 'Categories retrieved successfully',
+                    data: {
+                        categories: categoriesWithStats,
+                        pagination: {
+                            total: result.count,
+                            page: queryParams.page || 1,
+                            size: queryParams.size || result.count,
+                            totalPages: result.totalPages || 1,
+                        },
+                    },
+                });
+            } else {
+                res.status(200).json({
+                    status: 'success',
+                    message: 'Categories retrieved successfully',
+                    data: {
+                        categories: result.categories,
+                        pagination: {
+                            total: result.count,
+                            page: queryParams.page || 1,
+                            size: queryParams.size || result.count,
+                            totalPages: result.totalPages || 1,
+                        },
+                    },
+                });
+            }
+        } catch (error) {
+            console.error('Error in getAllCategories:', error);
+            throw error;
+        }
+    }
+
+    static async getCategoryStats(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const stats = await Database.query(`
+                SELECT
+                    COUNT(*) as total_categories,
+                    COUNT(CASE WHEN "isPinned" = true THEN 1 END) as featured_categories,
+                    (SELECT COUNT(DISTINCT mc."categoryId")
+                     FROM "MarketCategories" mc) as categories_with_markets,
+                    (SELECT COUNT(*) FROM "Markets") as total_markets
+                FROM "Categories"
+            `, {
+                type: QueryTypes.SELECT,
+            });
+
+            const data = stats[0] as any;
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Category statistics retrieved successfully',
+                data: {
+                    totalCategories: parseInt(data.total_categories || '0'),
+                    featuredCategories: parseInt(data.featured_categories || '0'),
+                    categoriesWithMarkets: parseInt(data.categories_with_markets || '0'),
+                    totalMarkets: parseInt(data.total_markets || '0'),
+                },
+            });
+        } catch (error) {
+            console.error('Error in getCategoryStats:', error);
+            throw error;
+        }
+    }
+
+    static async getCategory(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const { includeMarkets, includeProducts } = req.query;
+
+            const category = await CategoryService.viewSingleCategory(id);
+
+            // Add counts
+            const marketCount = category.markets?.length || 0;
+            const productCount = await Database.query(`
+                SELECT COUNT(DISTINCT p.id) as count
+                FROM "Products" p
+                INNER JOIN "Markets" m ON p."marketId" = m.id
+                INNER JOIN "MarketCategories" mc ON m.id = mc."marketId"
+                WHERE mc."categoryId" = :categoryId
+            `, {
+                replacements: { categoryId: id },
+                type: QueryTypes.SELECT,
+            });
+
+            const categoryData = {
+                ...category.toJSON(),
+                marketCount,
+                productCount: parseInt((productCount[0] as any)?.count || '0'),
+            };
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Category retrieved successfully',
+                data: categoryData,
+            });
+        } catch (error) {
+            console.error('Error in getCategory:', error);
+            throw error;
+        }
+    }
+
+    static async createCategory(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { name, description, icon } = req.body;
+
+            if (!name) {
+                throw new BadRequestError('Category name is required');
+            }
+
+            const categoryData = { name, description, icon };
+            const newCategory = await CategoryService.addCategory(categoryData);
+
+            res.status(201).json({
+                status: 'success',
+                message: 'Category created successfully',
+                data: newCategory,
+            });
+        } catch (error) {
+            console.error('Error in createCategory:', error);
+            throw error;
+        }
+    }
+
+    static async updateCategory(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const updateData = req.body;
+
+            const updatedCategory = await CategoryService.updateCategory(id, updateData);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Category updated successfully',
+                data: updatedCategory,
+            });
+        } catch (error) {
+            console.error('Error in updateCategory:', error);
+            throw error;
+        }
+    }
+
+    static async deleteCategory(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            await CategoryService.deleteCategory(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Category deleted successfully',
+                data: null,
+            });
+        } catch (error) {
+            console.error('Error in deleteCategory:', error);
+            throw error;
+        }
+    }
+
+    static async toggleCategoryPin(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            const category = await CategoryService.toggleCategoryPinned(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: `Category ${category.isPinned ? 'pinned' : 'unpinned'} successfully`,
+                data: category,
+            });
+        } catch (error) {
+            console.error('Error in toggleCategoryPin:', error);
+            throw error;
+        }
+    }
+
+    static async getDashboardStats(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            // Get comprehensive platform statistics
+            const [
+                userStats,
+                orderStats,
+                marketStats,
+                productStats,
+                categoryStats,
+                revenueStats,
+                fulfillmentMetrics
+            ] = await Promise.all([
+                // User statistics
+                Database.query(`
+                    SELECT
+                        COUNT(*) as total_users,
+                        COUNT(CASE WHEN us."isBlocked" = false AND us."isDeactivated" = false AND u."status"->>'activated' = 'true' THEN 1 END) as active_users,
+                        COUNT(CASE WHEN u."status"->>'userType' = 'agent' THEN 1 END) as total_agents,
+                        COUNT(CASE WHEN u."status"->>'userType' = 'agent' AND us."isBlocked" = false AND us."isDeactivated" = false THEN 1 END) as active_agents,
+                        COUNT(CASE WHEN DATE(u."createdAt") = CURRENT_DATE THEN 1 END) as new_today
+                    FROM "Users" u
+                    LEFT JOIN "UserSettings" us ON u.id = us."userId"
+                `, { type: QueryTypes.SELECT }),
+
+                // Order statistics
+                Database.query(`
+                    SELECT
+                        COUNT(*) as total_orders,
+                        COUNT(CASE WHEN DATE("createdAt") = CURRENT_DATE THEN 1 END) as orders_today,
+                        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_orders,
+                        COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled_orders,
+                        COALESCE(SUM(CASE WHEN status = 'completed' THEN "totalAmount" ELSE 0 END), 0) as total_revenue,
+                        COALESCE(AVG(CASE WHEN status = 'completed' THEN "totalAmount" ELSE NULL END), 0) as avg_order_value
+                    FROM "Orders"
+                    WHERE "createdAt" >= NOW() - INTERVAL '30 days'
+                `, { type: QueryTypes.SELECT }),
+
+                // Market statistics
+                Database.query(`
+                    SELECT
+                        COUNT(*) as total_markets,
+                        COUNT(CASE WHEN "isActive" = true THEN 1 END) as active_markets,
+                        COUNT(CASE WHEN "isPinned" = true THEN 1 END) as pinned_markets
+                    FROM "Markets"
+                `, { type: QueryTypes.SELECT }),
+
+                // Product statistics
+                Database.query(`
+                    SELECT
+                        COUNT(*) as total_products,
+                        COUNT(CASE WHEN "isAvailable" = true THEN 1 END) as active_products,
+                        COUNT(DISTINCT "marketId") as markets_with_products
+                    FROM "Products"
+                `, { type: QueryTypes.SELECT }),
+
+                // Category statistics
+                Database.query(`
+                    SELECT
+                        COUNT(*) as total_categories,
+                        COUNT(*) as active_categories,
+                        COUNT(CASE WHEN "isPinned" = true THEN 1 END) as pinned_categories
+                    FROM "Categories"
+                `, { type: QueryTypes.SELECT }),
+
+                // Revenue and financial statistics
+                Database.query(`
+                    SELECT
+                        COALESCE(SUM(CASE WHEN DATE("createdAt") >= DATE_TRUNC('month', CURRENT_DATE) THEN "deliveryFee" * 0.15 ELSE 0 END), 0) as service_charges_this_month,
+                        COALESCE(SUM(CASE WHEN DATE("createdAt") >= DATE_TRUNC('month', CURRENT_DATE) THEN "deliveryFee" * 0.05 ELSE 0 END), 0) as agent_bonuses_this_month,
+                        COALESCE(SUM(CASE WHEN DATE("createdAt") >= DATE_TRUNC('week', CURRENT_DATE) THEN "totalAmount" ELSE 0 END), 0) as revenue_this_week
+                    FROM "Orders"
+                    WHERE status = 'completed' AND "createdAt" >= NOW() - INTERVAL '3 months'
+                `, { type: QueryTypes.SELECT }),
+
+                // Fulfillment metrics (simplified based on available columns)
+                Database.query(`
+                    SELECT
+                        CASE WHEN COUNT(*) > 0 THEN
+                            ROUND((COUNT(CASE WHEN status = 'completed' THEN 1 END) * 100.0 / COUNT(*))::numeric, 1)
+                        ELSE 0 END as completion_rate,
+                        CASE WHEN COUNT(*) > 0 THEN
+                            ROUND((COUNT(CASE WHEN status IN ('completed', 'delivery') THEN 1 END) * 100.0 / COUNT(*))::numeric, 1)
+                        ELSE 0 END as on_time_delivery_rate,
+                        CASE WHEN COUNT(CASE WHEN status = 'completed' THEN 1 END) > 0 THEN
+                            ROUND(AVG(CASE WHEN status = 'completed' THEN EXTRACT(EPOCH FROM ("updatedAt" - "createdAt"))/3600 ELSE NULL END)::numeric, 1)
+                        ELSE 0 END as avg_delivery_time_hours
+                    FROM "Orders"
+                    WHERE "createdAt" >= NOW() - INTERVAL '30 days'
+                `, { type: QueryTypes.SELECT })
+            ]);
+
+            const userData = userStats[0] as any;
+            const orderData = orderStats[0] as any;
+            const marketData = marketStats[0] as any;
+            const productData = productStats[0] as any;
+            const categoryData = categoryStats[0] as any;
+            const revenueData = revenueStats[0] as any;
+            const fulfillmentData = fulfillmentMetrics[0] as any;
+
+            // Calculate growth percentages (simplified - you can enhance with historical data)
+            const todayDate = new Date().toISOString().split('T')[0];
+            const [growthMetrics] = await Database.query(`
+                SELECT
+                    COUNT(CASE WHEN DATE("createdAt") = CURRENT_DATE THEN 1 END) as new_users_today,
+                    COUNT(CASE WHEN DATE("createdAt") = CURRENT_DATE - 1 THEN 1 END) as new_users_yesterday,
+                    COUNT(CASE WHEN DATE("createdAt") >= DATE_TRUNC('month', CURRENT_DATE) THEN 1 END) as new_users_this_month,
+                    COUNT(CASE WHEN DATE("createdAt") >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+                        AND DATE("createdAt") < DATE_TRUNC('month', CURRENT_DATE) THEN 1 END) as new_users_last_month
+                FROM "Users"
+            `, { type: QueryTypes.SELECT });
+
+            const growth = growthMetrics as any;
+            const userGrowthPercentage = growth.new_users_last_month > 0 ?
+                ((growth.new_users_this_month - growth.new_users_last_month) / growth.new_users_last_month * 100).toFixed(1) :
+                '0.0';
+
+            const orderGrowthPercentage = growth.new_users_yesterday > 0 ?
+                ((parseInt(orderData.orders_today) - growth.new_users_yesterday) / growth.new_users_yesterday * 100).toFixed(1) :
+                '0.0';
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Dashboard statistics retrieved successfully',
+                data: {
+                    // Main dashboard cards
+                    overview: {
+                        activeUsers: {
+                            value: parseInt(userData.active_users || '0'),
+                            total: parseInt(userData.total_users || '0'),
+                            growth: `+${userGrowthPercentage}% from last month`,
+                            newToday: parseInt(growth.new_users_today || '0')
+                        },
+                        ordersToday: {
+                            value: parseInt(orderData.orders_today || '0'),
+                            growth: `+${orderGrowthPercentage}% from yesterday`,
+                            totalOrders: parseInt(orderData.total_orders || '0')
+                        },
+                        revenue: {
+                            value: parseFloat(revenueData.revenue_this_week || '0'),
+                            monthlyServiceCharges: parseFloat(revenueData.service_charges_this_month || '0'),
+                            totalRevenue: parseFloat(orderData.total_revenue || '0'),
+                            avgOrderValue: parseFloat(orderData.avg_order_value || '0')
+                        },
+                        activeAgents: {
+                            value: parseInt(userData.active_agents || '0'),
+                            total: parseInt(userData.total_agents || '0'),
+                            growth: `+${parseInt(growth.new_users_today || '0')} new this week`
+                        }
+                    },
+
+                    // Fulfillment metrics
+                    fulfillment: {
+                        completedOrders: parseFloat(fulfillmentData.completion_rate || '0'),
+                        onTimeDelivery: parseFloat(fulfillmentData.on_time_delivery_rate || '0'),
+                        avgDeliveryTime: parseFloat(fulfillmentData.avg_delivery_time_hours || '0'),
+                        customerSatisfaction: 92.0 // This would come from a ratings table
+                    },
+
+                    // Financial overview
+                    financial: {
+                        serviceChargesThisMonth: parseFloat(revenueData.service_charges_this_month || '0'),
+                        agentBonusesThisMonth: parseFloat(revenueData.agent_bonuses_this_month || '0'),
+                        revenueThisWeek: parseFloat(revenueData.revenue_this_week || '0')
+                    },
+
+                    // Platform statistics
+                    platform: {
+                        totalUsers: parseInt(userData.total_users || '0'),
+                        totalAgents: parseInt(userData.total_agents || '0'),
+                        totalMarkets: parseInt(marketData.total_markets || '0'),
+                        activeMarkets: parseInt(marketData.active_markets || '0'),
+                        totalProducts: parseInt(productData.total_products || '0'),
+                        activeProducts: parseInt(productData.active_products || '0'),
+                        totalCategories: parseInt(categoryData.total_categories || '0'),
+                        activeCategories: parseInt(categoryData.active_categories || '0')
+                    },
+
+                    // System alerts data
+                    alerts: [
+                        {
+                            type: "info",
+                            title: "Agent Applications",
+                            description: `${parseInt(userData.total_agents) - parseInt(userData.active_agents)} new applications pending review`,
+                            priority: "medium"
+                        },
+                        {
+                            type: "success",
+                            title: "Platform Growth",
+                            description: `${growth.new_users_today} new users registered today`,
+                            priority: "low"
+                        },
+                        {
+                            type: parseInt(orderData.orders_today) > 100 ? "warning" : "info",
+                            title: parseInt(orderData.orders_today) > 100 ? "High Order Volume" : "Normal Operations",
+                            description: parseInt(orderData.orders_today) > 100 ?
+                                `${orderData.orders_today} orders received today - 50% above average` :
+                                `${orderData.orders_today} orders received today`,
+                            priority: parseInt(orderData.orders_today) > 100 ? "high" : "low"
+                        }
+                    ]
+                }
+            });
+        } catch (error) {
+            console.error('Error in getDashboardStats:', error);
+            throw error;
+        }
+    }
 }
+

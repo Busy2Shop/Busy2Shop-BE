@@ -28,10 +28,18 @@ export default class Admin extends Model<Admin | IAdmin> {
 
     @Column({ type: DataType.BOOLEAN, defaultValue: false })
     isSuperAdmin: boolean;
+
+    @Column({ type: DataType.BOOLEAN, defaultValue: true })
+    isActive: boolean;
+
+    @Column({ type: DataType.DATE, allowNull: true })
+    lastLoginAt: Date;
 }
 
 export interface IAdmin {
     name: string;
     email: string;
     isSuperAdmin?: boolean;
+    isActive?: boolean;
+    lastLoginAt?: Date;
 }

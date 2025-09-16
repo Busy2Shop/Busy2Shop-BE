@@ -101,6 +101,16 @@ export default class AdminService {
         await admin.destroy();
     }
 
+    static async updateAdminStatus(adminId: string, isActive: boolean): Promise<Admin> {
+        const admin = await Admin.findByPk(adminId);
+        if (!admin) {
+            throw new NotFoundError('Admin not found');
+        }
+
+        await admin.update({ isActive });
+        return admin;
+    }
+
     static async blockUser(id: string, status: boolean, reason: string): Promise<UserSettings> {
         const userSettings = await UserSettings.findOne({ where: { userId: id } });
 
