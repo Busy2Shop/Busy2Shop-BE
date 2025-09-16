@@ -33,6 +33,7 @@ const corsOptions = {
             'http://localhost:3000',
             'http://localhost:3001',
             'https://busy2shop.vercel.app',
+            'https://busy2shop-admin.vercel.app',
             'https://busy2shop.com',
         ];
 
