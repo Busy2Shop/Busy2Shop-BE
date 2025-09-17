@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { BadRequestError, NotFoundError, ForbiddenError } from '../utils/customErrors';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import DiscountCampaignService from '../services/discountCampaign.service';
+import PriceCalculatorService from '../services/priceCalculator.service';
+import SystemSettingsService from '../services/systemSettings.service';
 import { IDiscountCampaign, DiscountType, DiscountTargetType, CampaignStatus } from '../models/discountCampaign.model';
 
 export default class DiscountCampaignController {
@@ -208,9 +210,10 @@ export default class DiscountCampaignController {
             throw new BadRequestError('Discount code is required');
         }
         
-        // Security check: Minimum order amount
-        if (orderAmount < 100) {
-            throw new BadRequestError('Minimum order amount of ₦100 required for discount codes');
+        // Enhanced security validation using centralized constraints
+        const minOrderValidation = await SystemSettingsService.validateDiscountConstraints(orderAmount, 0);
+        if (!minOrderValidation.valid) {
+            throw new BadRequestError(minOrderValidation.error || 'Order does not meet minimum requirements for discounts');
         }
 
         const validation = await DiscountCampaignService.validateDiscountCode({
@@ -220,12 +223,33 @@ export default class DiscountCampaignController {
             marketId,
             productIds: productIds || [],
         });
-        
-        // Additional security check on validation result
+
+        // Comprehensive security validation using centralized constraints
         if (validation.isValid && validation.discountAmount) {
-            const discountPercentage = (validation.discountAmount / orderAmount) * 100;
-            if (discountPercentage > 40) {
-                throw new BadRequestError('Discount amount exceeds maximum allowed percentage');
+            const discountValidation = await SystemSettingsService.validateDiscountConstraints(
+                orderAmount,
+                validation.discountAmount
+            );
+
+            if (!discountValidation.valid) {
+                // Apply cap if available, otherwise reject
+                if (discountValidation.cappedAmount) {
+                    validation.discountAmount = discountValidation.cappedAmount;
+                    (validation as any).warnings = (validation as any).warnings || [];
+                    (validation as any).warnings.push(`Discount capped to ₦${discountValidation.cappedAmount}`);
+                } else {
+                    throw new BadRequestError(discountValidation.error || 'Discount amount exceeds maximum allowed');
+                }
+            }
+
+            // Additional PriceCalculator validation for consistency
+            const priceCalculatorValidation = PriceCalculatorService.validateDiscountConstraints(
+                orderAmount,
+                validation.discountAmount
+            );
+
+            if (!priceCalculatorValidation.valid) {
+                throw new BadRequestError(priceCalculatorValidation.error || 'Discount validation failed');
             }
         }
         
@@ -305,9 +329,10 @@ export default class DiscountCampaignController {
             throw new BadRequestError('Campaign ID and order total are required');
         }
         
-        // Security check: Minimum order amount
-        if (orderTotal < 100) {
-            throw new BadRequestError('Minimum order amount of ₦100 required for discounts');
+        // Comprehensive security validation using centralized constraints
+        const minOrderValidation = await SystemSettingsService.validateDiscountConstraints(orderTotal, 0);
+        if (!minOrderValidation.valid) {
+            throw new BadRequestError(minOrderValidation.error || 'Order does not meet minimum requirements for discounts');
         }
 
         const preview = await DiscountCampaignService.calculateDiscountPreview({
@@ -317,13 +342,40 @@ export default class DiscountCampaignController {
             items: items || [],
             marketId,
         });
-        
-        // Additional security validation
+
+        // Enhanced security validation with proper constraints
         if (preview.isEligible && preview.discountAmount) {
-            const discountPercentage = (preview.discountAmount / orderTotal) * 100;
-            if (discountPercentage > 40) {
-                preview.discountAmount = orderTotal * 0.4; // Cap at 40%
-                preview.finalTotal = orderTotal - preview.discountAmount;
+            const discountValidation = await SystemSettingsService.validateDiscountConstraints(
+                orderTotal,
+                preview.discountAmount
+            );
+
+            if (!discountValidation.valid) {
+                // Apply system-defined caps rather than hardcoded values
+                if (discountValidation.cappedAmount) {
+                    preview.discountAmount = discountValidation.cappedAmount;
+                    preview.finalTotal = orderTotal - preview.discountAmount;
+                    (preview as any).warnings = (preview as any).warnings || [];
+                    (preview as any).warnings.push(`Discount capped to ₦${discountValidation.cappedAmount} due to system limits`);
+                } else {
+                    preview.isEligible = false;
+                    preview.discountAmount = 0;
+                    preview.finalTotal = orderTotal;
+                    (preview as any).error = discountValidation.error;
+                }
+            }
+
+            // Double-check with PriceCalculator constraints
+            const priceCalculatorValidation = PriceCalculatorService.validateDiscountConstraints(
+                orderTotal,
+                preview.discountAmount
+            );
+
+            if (!priceCalculatorValidation.valid) {
+                preview.isEligible = false;
+                preview.discountAmount = 0;
+                preview.finalTotal = orderTotal;
+                (preview as any).error = priceCalculatorValidation.error;
             }
         }
         

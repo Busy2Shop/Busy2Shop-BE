@@ -67,11 +67,11 @@ export default class OrderController {
             );
         }
 
-        // Calculate totals for the order
-        const { totalAmount, serviceFee, deliveryFee } =
+        // Calculate totals for the order with discount consideration
+        const { totalAmount, serviceFee, deliveryFee, originalSubtotal, discountAmount } =
             await OrderService.calculateTotals(shoppingListId);
 
-        // Create the order
+        // Create the order with audit trail fields
         const order = await OrderService.createOrder({
             shoppingListId,
             customerId: req.user.id,
@@ -79,6 +79,9 @@ export default class OrderController {
             totalAmount,
             serviceFee,
             deliveryFee,
+            originalSubtotal,
+            discountAmount,
+            appliedDiscounts: [], // Will be populated if discounts were applied
             deliveryAddress,
             customerNotes,
         });

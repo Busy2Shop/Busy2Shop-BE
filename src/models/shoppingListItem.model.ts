@@ -53,8 +53,28 @@ export default class ShoppingListItem extends Model<ShoppingListItem | IShopping
     @Column({
         type: DataType.DECIMAL(10, 2),
         allowNull: true, // User-provided price when product has no preset price
+        validate: {
+            min: 10,
+            max: 100000,
+        },
     })
     userProvidedPrice: number | null;
+
+    @Column({
+        type: DataType.DECIMAL(10, 2),
+        allowNull: true, // User manually set price (takes precedence over all)
+        validate: {
+            min: 10,
+            max: 100000,
+        },
+    })
+    userSetPrice: number | null;
+
+    @Column({
+        type: DataType.DECIMAL(10, 2),
+        allowNull: true, // System-calculated price after discounts
+    })
+    discountedPrice: number | null;
 
     @Column({
         type: DataType.DECIMAL(10, 2),
@@ -99,6 +119,8 @@ export interface IShoppingListItem {
     notes?: string | null;
     estimatedPrice?: number | null;
     userProvidedPrice?: number | null;
+    userSetPrice?: number | null;
+    discountedPrice?: number | null;
     actualPrice?: number | null;
     shoppingListId: string;
     productId?: string | null;

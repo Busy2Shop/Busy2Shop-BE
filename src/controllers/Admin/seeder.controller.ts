@@ -65,7 +65,6 @@ interface SeedData {
         name: string;
         description?: string;
         price: number;
-        discountPrice?: number;
         images: string[];
         barcode?: string;
         sku?: string;
@@ -230,7 +229,6 @@ class SeederController {
                                     name: productData.name,
                                     description: productData.description,
                                     price: productData.price,
-                                    discountPrice: productData.discountPrice,
                                     images: productData.images,
                                     barcode: productData.barcode,
                                     sku: productData.sku,

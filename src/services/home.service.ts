@@ -654,7 +654,7 @@ export class HomeService {
                         isAvailable: true,
                     },
                     attributes: [
-                        'id', 'name', 'price', 'discountPrice', 'images',
+                        'id', 'name', 'price', 'images',
                         'stockQuantity', 'isPinned', 'createdAt',
                     ],
                     order: [
@@ -728,11 +728,8 @@ export class HomeService {
                         // Boost for pinned products
                         if (product.isPinned) productScore += 15;
                         
-                        // Boost for discounted products
-                        if (product.discountPrice && product.discountPrice < product.price) {
-                            const discountPercent = ((product.price - product.discountPrice) / product.price) * 100;
-                            productScore += Math.min(discountPercent * 0.5, 10);
-                        }
+                        // Product discount boosts are now handled through the centralized discount system
+                        // Products no longer have individual discount prices
                         
                         // Penalty for duplicates
                         if (product.isDuplicate) productScore *= 0.5;

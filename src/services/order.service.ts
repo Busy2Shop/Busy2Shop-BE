@@ -13,6 +13,8 @@ import Market from '../models/market.model';
 import { logger } from '../utils/logger';
 import OrderNumberGenerator from '../utils/orderNumberGenerator';
 import OrderTrailService from './orderTrail.service';
+import PriceCalculatorService from './priceCalculator.service';
+import SystemSettingsService from './systemSettings.service';
 
 export interface IViewOrdersQuery {
     page?: number;
@@ -919,6 +921,8 @@ export default class OrderService {
         totalAmount: number;
         serviceFee: number;
         deliveryFee: number;
+        originalSubtotal: number;
+        discountAmount: number;
     }> {
         const shoppingList = await ShoppingList.findByPk(shoppingListId, {
             include: [
@@ -933,27 +937,33 @@ export default class OrderService {
             throw new NotFoundError('Shopping list not found');
         }
 
-        // Calculate the base total from items' actual prices if available, otherwise estimated prices
-        let subtotal = 0;
-        for (const item of shoppingList.items) {
-            const itemPrice = item.actualPrice || item.estimatedPrice || 0;
-            const quantity = item.quantity || 1;
-            subtotal += itemPrice * quantity;
-        }
+        // Calculate subtotal using standardized price calculation (includes discount consideration)
+        const originalSubtotal = PriceCalculatorService.calculateSubtotal(
+            shoppingList.items,
+            true // includeActualPrice for completed orders
+        );
 
-        // Calculate service fee (e.g., 5% of subtotal)
-        const serviceFee = Math.round(subtotal * 0.05 * 100) / 100;
+        // For orders, we should also consider if discounts were applied during shopping list validation
+        // This would come from shopping list's stored discount information if available
+        let appliedDiscountAmount = 0;
 
-        // Calculate delivery fee (could be based on distance, fixed amount, etc.)
-        const deliveryFee = 5.0; // Fixed delivery fee for simplicity
+        // If this is from a shopping list that had discounts applied, we should preserve that
+        // For now, we'll calculate a clean subtotal and let the order creation handle discount audit trail
+        const subtotal = originalSubtotal - appliedDiscountAmount;
+
+        // Use SystemSettings service for consistent fee calculation
+        const serviceFee = await SystemSettingsService.calculateServiceFee(subtotal);
+        const deliveryFee = await SystemSettingsService.getDeliveryFee();
 
         // Calculate total amount
-        const totalAmount = subtotal + serviceFee + deliveryFee;
+        const totalAmount = Math.max(0, subtotal + serviceFee + deliveryFee);
 
         return {
-            totalAmount,
-            serviceFee,
-            deliveryFee,
+            totalAmount: PriceCalculatorService.roundPrice(totalAmount),
+            serviceFee: PriceCalculatorService.roundPrice(serviceFee),
+            deliveryFee: PriceCalculatorService.roundPrice(deliveryFee),
+            originalSubtotal: PriceCalculatorService.roundPrice(originalSubtotal),
+            discountAmount: PriceCalculatorService.roundPrice(appliedDiscountAmount),
         };
     }
 

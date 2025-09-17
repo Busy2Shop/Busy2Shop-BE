@@ -59,7 +59,7 @@ export default class CategoryService {
                         {
                             model: Product,
                             as: 'products',
-                            attributes: ['id', 'name', 'description', 'price', 'discountPrice', 'images', 'isAvailable', 'isPinned'],
+                            attributes: ['id', 'name', 'description', 'price', 'images', 'isAvailable', 'isPinned'],
                             where: { isAvailable: true }, // Only include available products
                             required: false, // LEFT JOIN to include markets even without products
                             limit: 10, // Limit products per market to avoid large responses

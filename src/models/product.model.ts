@@ -35,15 +35,11 @@ export default class Product extends Model<Product | IProduct> {
 
     @Column({
         type: DataType.DECIMAL(10, 2),
-        allowNull: true,
+        allowNull: false,
+        defaultValue: 0,
     })
-    price: number | null;
+    price: number;
 
-    @Column({
-        type: DataType.DECIMAL(10, 2),
-        allowNull: true,
-    })
-    discountPrice: number;
 
     @Column({
         type: DataType.ARRAY(DataType.STRING),
@@ -103,8 +99,7 @@ export interface IProduct {
     id?: string;
     name: string;
     description?: string;
-    price: number | null;
-    discountPrice?: number;
+    price: number;
     images?: string[];
     barcode?: string;
     sku?: string;

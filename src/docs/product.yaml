@@ -27,10 +27,6 @@ components:
           type: number
           format: float
           description: The price of the product
-        discountPrice:
-          type: number
-          format: float
-          description: The discount price of the product
         images:
           type: array
           items:
@@ -78,10 +74,6 @@ components:
           type: number
           format: float
           description: The price of the product
-        discountPrice:
-          type: number
-          format: float
-          description: The discount price of the product
         images:
           type: array
           items:

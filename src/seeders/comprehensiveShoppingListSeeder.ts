@@ -270,8 +270,8 @@ export class ComprehensiveShoppingListSeeder {
 
                 if (product) {
                     if (product.price !== null) {
-                        // Product has a preset price
-                        estimatedPrice = product.discountPrice || product.price;
+                        // Product has a preset price (discounts now handled through centralized system)
+                        estimatedPrice = product.price;
                     } else if (itemTemplate.userProvidedPrice) {
                         // Product has no price, use user-provided price
                         userProvidedPrice = itemTemplate.userProvidedPrice;

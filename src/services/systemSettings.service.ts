@@ -268,13 +268,16 @@ export default class SystemSettingsService {
         try {
             const serviceAmount = await this.getSetting(SYSTEM_SETTING_KEYS.SERVICE_FEE_AMOUNT);
             if (serviceAmount && serviceAmount > 0) {
-                return Math.round(serviceAmount * 100) / 100;
+                // Use fixed service fee for orders >= ₦4,000
+                if (subtotal >= 4000) {
+                    return Math.round(serviceAmount * 100) / 100;
+                }
             }
         } catch (error) {
             // Fall back to percentage if SERVICE_FEE_AMOUNT is not available
         }
-        
-        // Fallback to percentage calculation for backward compatibility
+
+        // For orders < ₦4,000 or as fallback, use percentage calculation
         const percentage = await this.getSetting(SYSTEM_SETTING_KEYS.SERVICE_FEE_PERCENTAGE);
         return Math.round(subtotal * (percentage / 100) * 100) / 100;
     }
@@ -306,7 +309,15 @@ export default class SystemSettingsService {
     static async validateDiscountConstraints(
         subtotal: number,
         discountAmount: number
-    ): Promise<{ valid: boolean; error?: string }> {
+    ): Promise<{ valid: boolean; error?: string; cappedAmount?: number }> {
+        if (subtotal <= 0) {
+            return { valid: false, error: 'Invalid subtotal amount' };
+        }
+
+        if (discountAmount < 0) {
+            return { valid: false, error: 'Discount amount cannot be negative' };
+        }
+
         const [minOrder, maxPercentage, maxAmount] = await Promise.all([
             this.getSetting(SYSTEM_SETTING_KEYS.MINIMUM_ORDER_FOR_DISCOUNT),
             this.getSetting(SYSTEM_SETTING_KEYS.MAXIMUM_DISCOUNT_PERCENTAGE),
@@ -322,9 +333,11 @@ export default class SystemSettingsService {
 
         const discountPercentage = (discountAmount / subtotal) * 100;
         if (discountPercentage > maxPercentage) {
+            const cappedAmount = Math.round(subtotal * (maxPercentage / 100) * 100) / 100;
             return {
                 valid: false,
                 error: `Discount cannot exceed ${maxPercentage}% of order value`,
+                cappedAmount
             };
         }
 
@@ -332,6 +345,17 @@ export default class SystemSettingsService {
             return {
                 valid: false,
                 error: `Single discount cannot exceed ₦${maxAmount}`,
+                cappedAmount: maxAmount
+            };
+        }
+
+        // Security check: discount cannot exceed 70% of order value
+        if (discountAmount >= subtotal * 0.7) {
+            const cappedAmount = Math.round(subtotal * 0.7 * 100) / 100;
+            return {
+                valid: false,
+                error: 'Discount cannot exceed 70% of order value',
+                cappedAmount
             };
         }
 

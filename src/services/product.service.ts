@@ -724,7 +724,7 @@ export default class ProductService {
                     [fn('AVG', col('price')), 'averagePrice'],
                     [fn('SUM', literal('price * "Product"."stockQuantity"')), 'totalValue'],
                 ],
-                where: { price: { [Op.not]: null } },
+                where: { price: { [Op.gt]: 0 } },
                 raw: true,
             }),
         ]);

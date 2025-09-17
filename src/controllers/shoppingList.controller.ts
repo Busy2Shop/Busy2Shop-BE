@@ -4,8 +4,11 @@ import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import ShoppingListService from '../services/shoppingList.service';
 import DiscountCampaignService from '../services/discountCampaign.service';
 import SystemSettingsService from '../services/systemSettings.service';
+import PriceCalculatorService from '../services/priceCalculator.service';
 import { SYSTEM_SETTING_KEYS } from '../models/systemSettings.model';
-import { BadRequestError, ForbiddenError } from '../utils/customErrors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/customErrors';
+import ShoppingListItem from '../models/shoppingListItem.model';
+import Product from '../models/product.model';
 
 export default class ShoppingListController {
     static async createShoppingList(req: AuthenticatedRequest, res: Response) {
@@ -392,15 +395,51 @@ export default class ShoppingListController {
     }
 
     /**
-     * Update item with user-provided price
+     * Update item with user-provided price (only for items without estimated price)
      */
     static async updateItemPrice(req: AuthenticatedRequest, res: Response) {
         const { id, itemId } = req.params;
         const { userProvidedPrice, quantity } = req.body;
 
         const updateData: Partial<any> = {};
-        if (userProvidedPrice !== undefined) updateData.userProvidedPrice = userProvidedPrice;
-        if (quantity !== undefined) updateData.quantity = quantity;
+
+        // Find the item to check if price editing is allowed
+        const item = await ShoppingListItem.findOne({
+            where: { id: itemId, shoppingListId: id },
+            include: [{
+                model: Product,
+                as: 'product',
+                attributes: ['price']
+            }]
+        });
+
+        if (!item) {
+            throw new NotFoundError('Shopping list item not found');
+        }
+
+        // Check if user can edit price (only for items without product price or estimated price)
+        const productPrice = item.product?.price || 0;
+        const estimatedPrice = item.estimatedPrice || 0;
+
+        if (productPrice > 0 || estimatedPrice > 0) {
+            throw new BadRequestError('Cannot edit price for items that already have a catalog price or estimated price');
+        }
+
+        // Validate price if provided
+        if (userProvidedPrice !== undefined) {
+            const validation = PriceCalculatorService.validatePrice(userProvidedPrice);
+            if (!validation.valid) {
+                throw new BadRequestError(validation.error || 'Invalid price provided');
+            }
+            updateData.userProvidedPrice = PriceCalculatorService.roundPrice(userProvidedPrice);
+        }
+
+        if (quantity !== undefined) {
+            if (quantity < 0) {
+                throw new BadRequestError('Quantity cannot be negative');
+            }
+            updateData.quantity = quantity;
+        }
 
         const updatedItem = await ShoppingListService.updateListItem(
             id,
@@ -409,10 +448,18 @@ export default class ShoppingListController {
             updateData,
         );
 
+        // Add price source information to response
+        const effectivePrice = PriceCalculatorService.getEffectivePrice(updatedItem);
+        const priceSource = PriceCalculatorService.getPriceSource(updatedItem);
+
         res.status(200).json({
             status: 'success',
             message: 'Item updated successfully',
-            data: updatedItem,
+            data: {
+                ...updatedItem.toJSON(),
+                effectivePrice,
+                priceSource,
+            },
         });
     }
 
@@ -549,27 +596,40 @@ export default class ShoppingListController {
             let subtotal = 0;
 
             for (const item of listData.items) {
-                // Handle user provided pricing properly
-                const currentPrice = item.userSetPrice || item.userProvidedPrice || item.estimatedPrice || 0;
-                
+                // Use standardized price calculation
+                const currentPrice = PriceCalculatorService.getEffectivePrice(item);
+
+                // Validate price
+                const priceValidation = PriceCalculatorService.validatePrice(currentPrice);
+                if (!priceValidation.valid && currentPrice > 0) {
+                    // Log validation error but continue with corrected price
+                    console.warn(`Price validation failed for item ${item.name}: ${priceValidation.error}`);
+                }
+
                 // Apply product-specific discounts to the item price
-                const itemProductDiscounts = productDiscounts.filter(discount => 
+                const itemProductDiscounts = productDiscounts.filter(discount =>
                     discount.targetProductIds?.includes(item.productId)
                 );
-                
+
                 let discountedPrice = currentPrice;
                 for (const discount of itemProductDiscounts) {
-                    if (discount.type === 'percentage') {
-                        const discountAmount = (currentPrice * discount.value) / 100;
-                        const maxDiscount = discount.maximumDiscountAmount ? 
-                            Math.min(discountAmount, discount.maximumDiscountAmount) : discountAmount;
-                        discountedPrice = Math.max(0, discountedPrice - maxDiscount);
-                    } else if (discount.type === 'fixed_amount') {
-                        discountedPrice = Math.max(0, discountedPrice - discount.value);
-                    }
+                    discountedPrice = PriceCalculatorService.applyDiscount(
+                        discountedPrice,
+                        discount.type as 'percentage' | 'fixed_amount',
+                        discount.value,
+                        discount.maximumDiscountAmount
+                    );
                 }
-                
-                subtotal += discountedPrice * item.quantity;
+
+                // Store discounted price for transparency
+                if (discountedPrice !== currentPrice) {
+                    item.discountedPrice = discountedPrice;
+                }
+
+                subtotal += PriceCalculatorService.calculateItemTotal(
+                    { ...item, discountedPrice },
+                    item.quantity
+                );
 
                 const validationResult: {
                     originalItem: any;
@@ -636,65 +696,52 @@ export default class ShoppingListController {
                 productIds: listData.items.map((item: any) => item.productId).filter(Boolean),
             });
 
-            // Get system settings for validation and security filters
+            // Enhanced discount validation with system constraints
             const [MAX_DISCOUNT_PERCENTAGE, MIN_ORDER_FOR_DISCOUNT, MAX_SINGLE_DISCOUNT_AMOUNT] = await Promise.all([
                 SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MAXIMUM_DISCOUNT_PERCENTAGE),
                 SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MINIMUM_ORDER_FOR_DISCOUNT),
                 SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MAXIMUM_SINGLE_DISCOUNT_AMOUNT),
             ]);
-            const MAX_DISCOUNT_AMOUNT = subtotal * (MAX_DISCOUNT_PERCENTAGE / 100);
-            const MAX_GENERAL_DISCOUNTS = 3; // Maximum 3 general discounts to show
 
             let secureDiscounts: any[] = [];
-            
-            // Don't allow any discounts if order is too small
-            if (subtotal < MIN_ORDER_FOR_DISCOUNT) {
-                console.log('Order too small for discounts:', subtotal);
+
+            // Validate against minimum order requirement
+            const minOrderValidation = await SystemSettingsService.validateDiscountConstraints(subtotal, 0);
+            if (!minOrderValidation.valid) {
+                console.log('Order too small for discounts:', minOrderValidation.error);
                 secureDiscounts = [];
             } else {
-                // Filter and validate discounts
+                // Filter discounts with enhanced security validation
                 secureDiscounts = updatedRawDiscounts.filter(discount => {
                     // Calculate potential discount amount
                     let potentialDiscountAmount = 0;
-                    
+
                     if (discount.type === 'percentage') {
-                        potentialDiscountAmount = (subtotal * discount.value) / 100;
-                        // Cap percentage discounts
-                        if (discount.maximumDiscountAmount) {
-                            potentialDiscountAmount = Math.min(potentialDiscountAmount, discount.maximumDiscountAmount);
-                        }
+                        potentialDiscountAmount = PriceCalculatorService.applyDiscount(
+                            subtotal, 'percentage', discount.value, discount.maximumDiscountAmount
+                        ) - subtotal;
+                        potentialDiscountAmount = Math.abs(potentialDiscountAmount);
                     } else if (discount.type === 'fixed_amount') {
-                        potentialDiscountAmount = discount.value;
+                        potentialDiscountAmount = Math.min(discount.value, subtotal);
                     }
 
-                    // Enhanced security checks
-                    const discountPercentage = (potentialDiscountAmount / subtotal) * 100;
-                    
-                    // Filter out discounts that are too large
-                    if (discountPercentage > MAX_DISCOUNT_PERCENTAGE) return false;
-                    if (potentialDiscountAmount > MAX_DISCOUNT_AMOUNT) return false;
-                    if (potentialDiscountAmount > MAX_SINGLE_DISCOUNT_AMOUNT) return false;
-                    
-                    // Filter out discounts where the discount amount is greater than 70% of the order
-                    if (potentialDiscountAmount >= subtotal * 0.7) return false;
-                    
-                    // Check minimum order amount eligibility with additional buffer
-                    if (discount.minimumOrderAmount && subtotal < discount.minimumOrderAmount * 1.1) return false;
-                    
-                    // Additional security: Cap fixed amount discounts to reasonable values
-                    if (discount.type === 'fixed_amount') {
-                        // More restrictive limits for fixed amount discounts
-                        if (discount.value > 1000 && subtotal < discount.value * 3) return false;
-                        if (discount.value > 2000) return false; // Hard cap at ₦2000
+                    // Use centralized discount validation
+                    const discountValidation = PriceCalculatorService.validateDiscountConstraints(
+                        subtotal,
+                        potentialDiscountAmount,
+                        MAX_DISCOUNT_PERCENTAGE,
+                        MAX_SINGLE_DISCOUNT_AMOUNT
+                    );
+
+                    if (!discountValidation.valid) {
+                        return false;
                     }
-                    
-                    // Security: Ensure percentage discounts don't exceed reasonable bounds
-                    if (discount.type === 'percentage' && discount.value > 25) return false;
-                    
-                    // Security: Validate discount is not expired or inactive
+
+                    // Additional business rules
+                    if (discount.minimumOrderAmount && subtotal < discount.minimumOrderAmount * 1.1) return false;
                     if (discount.endDate && new Date(discount.endDate) < new Date()) return false;
                     if (discount.isActive === false) return false;
-                    
+
                     return true;
                 });
             }
@@ -712,6 +759,7 @@ export default class ShoppingListController {
             );
 
             // Limit general discounts to maximum 3, prioritizing by potential savings and priority
+            const MAX_GENERAL_DISCOUNTS = 3;
             const limitedGeneralDiscounts = generalDiscounts
                 .sort((a, b) => {
                     // Calculate potential savings for sorting
@@ -722,7 +770,7 @@ export default class ShoppingListController {
                         }
                         return disc.value;
                     };
-                    
+
                     // Sort by priority (higher first) then by savings (higher first)
                     if (a.priority !== b.priority) return b.priority - a.priority;
                     return getSavings(b) - getSavings(a);
@@ -774,7 +822,7 @@ export default class ShoppingListController {
 
             // Calculate the total amount saved from product discounts
             for (const item of listData.items) {
-                const originalPrice = item.userSetPrice || item.userProvidedPrice || item.estimatedPrice || 0;
+                const originalPrice = item.userProvidedPrice || item.estimatedPrice || 0;
                 const itemValidation = itemValidationResults.find(v => v.originalItem.id === item.id);
                 
                 if (itemValidation && itemValidation.finalPrice < originalPrice) {
@@ -792,7 +840,7 @@ export default class ShoppingListController {
                 
                 let discountAmount = 0;
                 for (const item of applicableItems) {
-                    const originalPrice = item.userSetPrice || item.userProvidedPrice || item.estimatedPrice || 0;
+                    const originalPrice = item.userProvidedPrice || item.estimatedPrice || 0;
                     const itemValidation = itemValidationResults.find(v => v.originalItem.id === item.id);
                     
                     if (itemValidation && itemValidation.finalPrice < originalPrice) {
@@ -844,7 +892,7 @@ export default class ShoppingListController {
                     },
                     securityLimits: {
                         maxDiscountPercentage: MAX_DISCOUNT_PERCENTAGE,
-                        maxDiscountAmount: MAX_DISCOUNT_AMOUNT,
+                        maxDiscountAmount: subtotal * (MAX_DISCOUNT_PERCENTAGE / 100),
                         maxSingleDiscountAmount: MAX_SINGLE_DISCOUNT_AMOUNT,
                         maxGeneralDiscounts: MAX_GENERAL_DISCOUNTS,
                         minOrderAmount: MIN_ORDER_FOR_DISCOUNT,

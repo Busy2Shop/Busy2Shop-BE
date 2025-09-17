@@ -75,8 +75,8 @@ async function initiateDB(): Promise<void> {
         logger.info(`Postgres Connection has been established successfully -- ${NODE_ENV}`);
 
         // Synchronize the database (you may want to add options like force: true to reset the database)
-        // await Database.sync({ alter: true });
-        await Database.sync();
+        await Database.sync({ alter: true });
+        // await Database.sync();
         logger.info('Database Sync Completed');
     } catch (error) {
         // console.log(error);

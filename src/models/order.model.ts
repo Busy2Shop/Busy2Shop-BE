@@ -75,6 +75,33 @@ export default class Order extends Model<Order | IOrder> {
     deliveryFee: number;
 
     @Column({
+        type: DataType.DECIMAL(10, 2),
+        allowNull: true,
+    })
+    originalSubtotal: number;
+
+    @Column({
+        type: DataType.DECIMAL(10, 2),
+        allowNull: true,
+        defaultValue: 0,
+    })
+    discountAmount: number;
+
+    @Column({
+        type: DataType.JSONB,
+        allowNull: true,
+        defaultValue: [],
+    })
+    appliedDiscounts: {
+        id: string;
+        name: string;
+        type: string;
+        value: number;
+        amount: number;
+        appliedAt: Date;
+    }[];
+
+    @Column({
         type: DataType.JSONB,
         allowNull: false,
     })
@@ -208,6 +235,16 @@ export interface IOrder {
     totalAmount: number;
     serviceFee: number;
     deliveryFee: number;
+    originalSubtotal?: number;
+    discountAmount?: number;
+    appliedDiscounts?: {
+        id: string;
+        name: string;
+        type: string;
+        value: number;
+        amount: number;
+        appliedAt: Date;
+    }[];
     deliveryAddress: {
         latitude: number;
         longitude: number;

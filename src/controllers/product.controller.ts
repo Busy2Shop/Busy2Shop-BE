@@ -14,7 +14,6 @@ export default class ProductController {
             name,
             description,
             price,
-            discountPrice,
             marketId,
             barcode,
             sku,
@@ -33,7 +32,6 @@ export default class ProductController {
             name,
             description,
             price: parseFloat(price),
-            discountPrice: discountPrice ? parseFloat(discountPrice) : undefined,
             marketId,
             barcode,
             sku,
@@ -91,7 +89,6 @@ export default class ProductController {
             name,
             description,
             price,
-            discountPrice,
             marketId,
             barcode,
             sku,
@@ -133,7 +130,6 @@ export default class ProductController {
             name,
             description,
             price: parseFloat(price),
-            discountPrice: discountPrice ? parseFloat(discountPrice) : undefined,
             marketId,
             barcode,
             sku,
@@ -315,7 +311,6 @@ export default class ProductController {
             name,
             description,
             price,
-            discountPrice,
             barcode,
             sku,
             stockQuantity,
@@ -346,9 +341,6 @@ export default class ProductController {
         if (name) updateData.name = name;
         if (description !== undefined) updateData.description = description;
         if (price) updateData.price = parseFloat(price);
-        if (discountPrice !== undefined) {
-            updateData.discountPrice = discountPrice ? parseFloat(discountPrice) : null;
-        }
         if (barcode !== undefined) updateData.barcode = barcode;
         if (sku !== undefined) updateData.sku = sku;
         if (stockQuantity !== undefined) updateData.stockQuantity = parseInt(stockQuantity);

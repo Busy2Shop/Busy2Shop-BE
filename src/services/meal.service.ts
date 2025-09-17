@@ -50,7 +50,7 @@ export default class MealService {
                         {
                             model: Product,
                             as: 'product',
-                            attributes: ['id', 'name', 'price', 'discountPrice', 'images'],
+                            attributes: ['id', 'name', 'price', 'images'],
                             required: false,
                         },
                     ],
@@ -87,7 +87,7 @@ export default class MealService {
                         {
                             model: Product,
                             as: 'product',
-                            attributes: ['id', 'name', 'price', 'discountPrice', 'images', 'description'],
+                            attributes: ['id', 'name', 'price', 'images', 'description'],
                             required: false,
                         },
                     ],
@@ -182,7 +182,7 @@ export default class MealService {
                         {
                             model: Product,
                             as: 'product',
-                            attributes: ['id', 'name', 'price', 'discountPrice', 'images'],
+                            attributes: ['id', 'name', 'price', 'images'],
                             required: false,
                         },
                     ],

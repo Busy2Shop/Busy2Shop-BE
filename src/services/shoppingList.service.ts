@@ -943,8 +943,8 @@ export default class ShoppingListService {
 
             // Handle pricing logic
             if (product.price !== null) {
-                // Product has a price, use it
-                finalEstimatedPrice = product.discountPrice || product.price;
+                // Product has a price, use it (discounts now handled through centralized system)
+                finalEstimatedPrice = product.price;
                 userProvidedPrice = null; // Clear user provided price
             } else {
                 // Product has no price, require user to provide one
