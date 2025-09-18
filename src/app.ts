@@ -86,6 +86,11 @@ app.options('*', cors(corsOptions));
 
 // Additional CORS headers middleware for extra safety
 app.use((req: Request, res: Response, next: NextFunction) => {
+    // Skip CORS processing for webhook endpoints
+    if (req.path.includes('/webhook')) {
+        return next();
+    }
+
     const origin = req.headers.origin;
 
     // Set CORS headers explicitly as backup

@@ -31,9 +31,14 @@ async function createSequelizeInstance(): Promise<Sequelize> {
             logging: false,
             dialect: 'postgres',
             pool: {
-                max: 5,
-                min: 1,
+                max: 10,
+                min: 2,
                 idle: 10000,
+                acquire: 30000,
+                evict: 1000,
+            },
+            retry: {
+                max: 3,
             },
         });
     }

@@ -151,45 +151,69 @@ export default class AlatPayController {
             if (shouldSync && alatPayStatus) {
                 try {
                     logger.info(`Auto-syncing payment status for transaction ${transactionId}`);
-                    
+
+                    // Prevent duplicate syncing by checking if order was already updated
+                    const recentOrder = await OrderService.getOrder(order.id, false, false);
+                    if (recentOrder.paymentStatus === 'completed') {
+                        logger.info(`Order ${order.id} already completed, skipping auto-sync`);
+                        actualPaymentStatus = 'completed';
+
+                        res.status(200).json({
+                            status: 'success',
+                            message: 'Payment status retrieved (already completed)',
+                            data: {
+                                status: recentOrder.paymentStatus,
+                                orderNumber: recentOrder.orderNumber,
+                                orderId: recentOrder.id,
+                                orderStatus: recentOrder.status,
+                                amount: recentOrder.totalAmount,
+                                createdAt: recentOrder.createdAt,
+                                paymentProcessedAt: recentOrder.paymentProcessedAt,
+                                agentId: recentOrder.agentId,
+                                shoppingListId: recentOrder.shoppingListId,
+                                autoSynced: false,
+                                alatPayStatus: alatPayStatus?.status,
+                                agent: recentOrder.agent ? {
+                                    id: recentOrder.agent.id,
+                                    firstName: recentOrder.agent.firstName,
+                                    lastName: recentOrder.agent.lastName,
+                                    phone: recentOrder.agent.phone,
+                                    displayImage: recentOrder.agent.displayImage,
+                                } : null,
+                            },
+                        });
+                        return;
+                    }
+
                     const result = await PaymentStatusSyncService.confirmPayment(
                         order.id,
                         transactionId,
                         'api_sync',
                         'system' // Auto-sync initiated by status check
                     );
-                    
+
                     if (result.success) {
                         actualPaymentStatus = 'completed';
                         logger.info(`Auto-sync successful for transaction ${transactionId}`, {
                             assignedAgentId: result.assignedAgentId,
                         });
-                        
-                        // Get fresh order data after sync
-                        const syncedOrder = await OrderService.getOrder(order.id, true, false);
-                        
+
                         res.status(200).json({
                             status: 'success',
                             message: 'Payment status retrieved and synced',
                             data: {
-                                status: syncedOrder.paymentStatus,
-                                orderNumber: syncedOrder.orderNumber,
-                                orderId: syncedOrder.id,
-                                orderStatus: syncedOrder.status,
-                                amount: syncedOrder.totalAmount,
-                                createdAt: syncedOrder.createdAt,
-                                paymentProcessedAt: syncedOrder.paymentProcessedAt,
-                                agentId: syncedOrder.agentId,
-                                shoppingListId: syncedOrder.shoppingListId,
+                                status: 'completed',
+                                orderNumber: order.orderNumber,
+                                orderId: order.id,
+                                orderStatus: 'pending',
+                                amount: order.totalAmount,
+                                createdAt: order.createdAt,
+                                paymentProcessedAt: new Date(),
+                                agentId: result.assignedAgentId,
+                                shoppingListId: order.shoppingListId,
                                 autoSynced: true,
                                 alatPayStatus: alatPayStatus?.status,
-                                agent: syncedOrder.agent ? {
-                                    id: syncedOrder.agent.id,
-                                    firstName: syncedOrder.agent.firstName,
-                                    lastName: syncedOrder.agent.lastName,
-                                    phone: syncedOrder.agent.phone,
-                                    displayImage: syncedOrder.agent.displayImage,
-                                } : null,
+                                agent: null, // Will be loaded later if needed
                             },
                         });
                         return;
