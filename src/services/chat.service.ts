@@ -385,6 +385,7 @@ export class ChatService {
 
     static async activateChat(data: ChatActivationType): Promise<boolean> {
         try {
+            console.log('Activating chat with data:', data);
             const { orderId, activatedBy } = data;
 
             // Store in Redis

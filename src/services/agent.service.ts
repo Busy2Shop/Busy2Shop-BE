@@ -588,7 +588,7 @@ export default class AgentService {
                     attributes: ['id', 'status'],
                 },
             ],
-            // transaction: txn,
+            transaction: txn,
         });
 
         console.log('fetched order for assignment', { order });
@@ -604,7 +604,7 @@ export default class AgentService {
                 status: 'accepted', // Order is now assigned to agent
                 acceptedAt: new Date(),
             },
-            // { transaction: txn },
+            { transaction: txn },
         );
 
         // Update agent status to busy (not accepting new orders)
@@ -615,6 +615,7 @@ export default class AgentService {
             // Get agent details for chat activation
             const agent = await User.findByPk(agentId, {
                 attributes: ['id', 'firstName', 'lastName'],
+                transaction: txn,
             });
 
             if (agent) {

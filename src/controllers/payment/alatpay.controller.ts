@@ -9,6 +9,7 @@ import ShoppingListService from '../../services/shoppingList.service';
 import SystemSettingsService from '../../services/systemSettings.service';
 import ShoppingListItem from '../../models/shoppingListItem.model';
 import PaymentStatusSyncService from '../../services/paymentStatusSync.service';
+import { redisClient } from '../../utils/redis';
 
 // Interface for calculated fees
 interface CalculatedFees {
@@ -149,7 +150,40 @@ export default class AlatPayController {
 
             // Perform automatic sync if status mismatch detected
             if (shouldSync && alatPayStatus) {
+                const syncLockKey = `payment_sync_lock:${transactionId}`;
+
                 try {
+                    // Check if sync is already in progress using Redis lock
+                    const lockExists = await redisClient.get(syncLockKey);
+
+                    if (lockExists) {
+                        logger.info(`Sync already in progress for transaction ${transactionId}, skipping duplicate sync`);
+
+                        // Return a response indicating sync is in progress
+                        res.status(200).json({
+                            status: 'success',
+                            message: 'Payment sync in progress',
+                            data: {
+                                status: 'pending',
+                                orderNumber: order.orderNumber,
+                                orderId: order.id,
+                                orderStatus: order.status,
+                                amount: order.totalAmount,
+                                createdAt: order.createdAt,
+                                paymentProcessedAt: order.paymentProcessedAt,
+                                agentId: order.agentId,
+                                shoppingListId: order.shoppingListId,
+                                syncInProgress: true,
+                                alatPayStatus: alatPayStatus?.status,
+                                agent: null,
+                            },
+                        });
+                        return;
+                    }
+
+                    // Set sync lock with 60 second expiration
+                    await redisClient.setex(syncLockKey, 60, 'locked');
+
                     logger.info(`Auto-syncing payment status for transaction ${transactionId}`);
 
                     // Prevent duplicate syncing by checking if order was already updated
@@ -157,6 +191,9 @@ export default class AlatPayController {
                     if (recentOrder.paymentStatus === 'completed') {
                         logger.info(`Order ${order.id} already completed, skipping auto-sync`);
                         actualPaymentStatus = 'completed';
+
+                        // Release lock
+                        await redisClient.del(syncLockKey);
 
                         res.status(200).json({
                             status: 'success',
@@ -185,18 +222,31 @@ export default class AlatPayController {
                         return;
                     }
 
-                    const result = await PaymentStatusSyncService.confirmPayment(
+                    // Add timeout to prevent hanging
+                    const syncTimeout = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('Payment sync timeout after 30 seconds')), 30000)
+                    );
+
+                    const syncOperation = PaymentStatusSyncService.confirmPayment(
                         order.id,
                         transactionId,
                         'api_sync',
                         'system' // Auto-sync initiated by status check
                     );
 
+                    const result = await Promise.race([syncOperation, syncTimeout]) as any;
+
+                    // Release lock after sync completion
+                    await redisClient.del(syncLockKey);
+
                     if (result.success) {
                         actualPaymentStatus = 'completed';
                         logger.info(`Auto-sync successful for transaction ${transactionId}`, {
                             assignedAgentId: result.assignedAgentId,
                         });
+
+                        // Get the updated order with agent details
+                        const updatedOrder = await OrderService.getOrder(order.id, true, false);
 
                         res.status(200).json({
                             status: 'success',
@@ -205,7 +255,7 @@ export default class AlatPayController {
                                 status: 'completed',
                                 orderNumber: order.orderNumber,
                                 orderId: order.id,
-                                orderStatus: 'pending',
+                                orderStatus: updatedOrder.status,
                                 amount: order.totalAmount,
                                 createdAt: order.createdAt,
                                 paymentProcessedAt: new Date(),
@@ -213,28 +263,75 @@ export default class AlatPayController {
                                 shoppingListId: order.shoppingListId,
                                 autoSynced: true,
                                 alatPayStatus: alatPayStatus?.status,
-                                agent: null, // Will be loaded later if needed
+                                agent: updatedOrder.agent ? {
+                                    id: updatedOrder.agent.id,
+                                    firstName: updatedOrder.agent.firstName,
+                                    lastName: updatedOrder.agent.lastName,
+                                    phone: updatedOrder.agent.phone,
+                                    displayImage: updatedOrder.agent.displayImage,
+                                } : null,
                             },
                         });
                         return;
                     } else {
                         logger.error(`Auto-sync failed for transaction ${transactionId}:`, result.error);
                     }
-                } catch (syncError) {
+                } catch (syncError: any) {
                     logger.error(`Failed to auto-sync payment for transaction ${transactionId}:`, syncError);
-                    // Continue with original status
+
+                    // Always release lock on error
+                    try {
+                        await redisClient.del(syncLockKey);
+                    } catch (lockReleaseError) {
+                        logger.error(`Failed to release sync lock for transaction ${transactionId}:`, lockReleaseError);
+                    }
+
+                    // If it's a timeout error, return immediately
+                    if (syncError.message && syncError.message.includes('timeout')) {
+                        res.status(200).json({
+                            status: 'success',
+                            message: 'Payment sync timed out, will retry automatically',
+                            data: {
+                                status: 'pending',
+                                orderNumber: order.orderNumber,
+                                orderId: order.id,
+                                orderStatus: order.status,
+                                amount: order.totalAmount,
+                                createdAt: order.createdAt,
+                                paymentProcessedAt: order.paymentProcessedAt,
+                                agentId: order.agentId,
+                                shoppingListId: order.shoppingListId,
+                                syncTimeout: true,
+                                alatPayStatus: alatPayStatus?.status,
+                                agent: null,
+                            },
+                        });
+                        return;
+                    }
+
+                    // Continue with original status for other errors
                 }
             }
 
-            // Get order with agent info if needed
-            const orderWithAgent = await OrderService.getOrder(order.id, true, false);
-            
+            // Get order with agent info if needed (with timeout)
+            let orderWithAgent: any = order;
+            try {
+                const orderTimeout = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Order fetch timeout')), 5000)
+                );
+                const orderOperation = OrderService.getOrder(order.id, true, false);
+                orderWithAgent = await Promise.race([orderOperation, orderTimeout]);
+            } catch (fetchError) {
+                logger.warn(`Failed to fetch order details for ${order.id}:`, fetchError);
+                // Continue with basic order data
+            }
+
             // Determine appropriate message based on payment status
             let responseMessage = 'Payment status retrieved';
             if (actualPaymentStatus === 'failed') {
                 responseMessage = 'Payment has failed - transaction exceeded timeout period';
             }
-            
+
             // Return current order status (with potential ALATPay verification info)
             res.status(200).json({
                 status: 'success',

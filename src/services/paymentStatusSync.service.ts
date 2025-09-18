@@ -106,10 +106,9 @@ export default class PaymentStatusSyncService {
                     if (order.shoppingListId) {
                         const unparsedavailableAgents = await AgentService.getAvailableAgentsForOrder(order.shoppingListId);
                         const availableAgents = JSON.parse(JSON.stringify(unparsedavailableAgents));
-                        console.log({ availableAgents });
                         if (availableAgents.length > 0) {
                             const selectedAgent = availableAgents[0];
-                            await AgentService.assignOrderToAgent(orderId, selectedAgent.id);
+                            await AgentService.assignOrderToAgent(orderId, selectedAgent.id, transaction);
                             assignedAgentId = selectedAgent.id;
                             
                             logger.info(`Agent ${selectedAgent.id} automatically assigned to order ${order.orderNumber}`);

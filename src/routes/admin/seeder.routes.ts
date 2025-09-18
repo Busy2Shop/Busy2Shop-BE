@@ -30,4 +30,8 @@ router.get('/system-settings/status', SeederController.getSystemSettingsStatus);
 // Seeding route for development/testing
 router.get('/seed-campaigns', SeederController.seedDiscountCampaigns);
 
+// Drop all orders and related data (for development/testing)
+router.delete('/orders', SeederController.dropOrders);
+router.get('/orders/drop', SeederController.dropOrders); // GET alternative for browser testing
+
 export default router;

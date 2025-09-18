@@ -12,6 +12,9 @@ import * as fs from 'fs';
 import ShoppingList from '../../models/shoppingList.model';
 import ShoppingListItem from '../../models/shoppingListItem.model';
 import User from '../../models/user.model';
+import Order from '../../models/order.model';
+import OrderTrail from '../../models/orderTrail.model';
+import ChatMessage from '../../models/chatMessage.model';
 import MealSeeder from '../../seeders/mealSeeder';
 import DiscountCampaignService from '../../services/discountCampaign.service';
 import { IDiscountCampaign, DiscountType, DiscountTargetType, CampaignStatus } from '../../models/discountCampaign.model';
@@ -1332,7 +1335,7 @@ class SeederController {
             const allSettings = await SystemSettingsService.getAllSettings();
             const publicSettings = await SystemSettingsService.getPublicSettings();
             const activeSettings = allSettings.filter(setting => setting.isActive);
-            
+
             // Group settings by category
             const settingsByCategory = activeSettings.reduce((acc, setting) => {
                 const category = setting.value.category || 'general';
@@ -1356,8 +1359,8 @@ class SeederController {
                     },
                     settingsByCategory,
                     publicSettings,
-                    lastUpdated: activeSettings.length > 0 ? 
-                        Math.max(...activeSettings.map(s => new Date(s.updatedAt).getTime())) : 
+                    lastUpdated: activeSettings.length > 0 ?
+                        Math.max(...activeSettings.map(s => new Date(s.updatedAt).getTime())) :
                         null,
                 },
             });
@@ -1365,6 +1368,75 @@ class SeederController {
         } catch (error) {
             logger.error('Error getting system settings status:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Drop all orders and related data (order trails, chat messages)
+     */
+    async dropOrders(req: Request, res: Response) {
+        try {
+            logger.info('🗑️ Starting orders cleanup process...');
+
+            const results = await Database.transaction(async (transaction: Transaction) => {
+                const deletedCounts = {
+                    chatMessages: 0,
+                    orderTrails: 0,
+                    orders: 0,
+                };
+
+                // Delete in reverse order to respect foreign key constraints
+
+                // 1. Delete Chat Messages related to orders
+                const deletedChatMessages = await ChatMessage.destroy({
+                    where: {},
+                    transaction,
+                    force: true, // Hard delete
+                });
+                deletedCounts.chatMessages = deletedChatMessages;
+                logger.info(`🗑️ Deleted ${deletedChatMessages} chat messages`);
+
+                // 2. Delete Order Trails
+                const deletedOrderTrails = await OrderTrail.destroy({
+                    where: {},
+                    transaction,
+                    force: true,
+                });
+                deletedCounts.orderTrails = deletedOrderTrails;
+                logger.info(`🗑️ Deleted ${deletedOrderTrails} order trails`);
+
+                // 3. Delete Orders
+                const deletedOrders = await Order.destroy({
+                    where: {},
+                    transaction,
+                    force: true,
+                });
+                deletedCounts.orders = deletedOrders;
+                logger.info(`🗑️ Deleted ${deletedOrders} orders`);
+
+                return deletedCounts;
+            });
+
+            logger.info('✅ Orders cleanup completed successfully');
+
+            res.status(200).json({
+                status: 'success',
+                message: 'All orders and related data dropped successfully',
+                data: {
+                    deletedCounts: results,
+                    totalDeleted: results.chatMessages + results.orderTrails + results.orders,
+                    completedAt: new Date().toISOString(),
+                },
+            });
+
+        } catch (error: any) {
+            logger.error('❌ Orders cleanup failed:', error);
+
+            res.status(error.statusCode || 500).json({
+                status: 'error',
+                message: error.message || 'Orders cleanup failed',
+                error: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+            });
         }
     }
 

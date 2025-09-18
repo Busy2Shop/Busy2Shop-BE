@@ -201,6 +201,13 @@ export default class Order extends Model<Order | IOrder> {
     shoppingList: ShoppingList;
 
     @Column({
+        type: DataType.ENUM('ALATPAY', 'PAYSTACK'),
+        allowNull: true,
+        defaultValue: 'ALATPAY',
+    })
+    paymentMethod: 'ALATPAY' | 'PAYSTACK';
+
+    @Column({
         type: DataType.STRING,
         allowNull: true,
     })
@@ -270,6 +277,7 @@ export interface IOrder {
     customerId: string;
     agentId?: string;
     shoppingListId: string;
+    paymentMethod?: 'ALATPAY' | 'PAYSTACK';
     paymentId?: string;
     paymentStatus?: 'pending' | 'completed' | 'failed' | 'expired';
     paymentProcessedAt?: Date;
