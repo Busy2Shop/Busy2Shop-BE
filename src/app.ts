@@ -30,27 +30,80 @@ const corsOptions = {
 
         const allowedOrigins = [
             process.env.FRONTEND_URL,
+            process.env.ADMIN_FRONTEND_URL,
             'http://localhost:3000',
             'http://localhost:3001',
             'https://busy2shop.vercel.app',
             'https://busy2shop-admin.vercel.app',
             'https://busy2shop.com',
-        ];
+            'https://www.busy2shop.com',
+            // Add wildcard support for Vercel preview deployments
+            ...(NODE_ENV === 'production' ? [] : ['http://localhost:3002', 'http://localhost:3003']),
+        ].filter(Boolean); // Remove undefined values
+
+        // In production, be more lenient with Vercel deployments
+        if (NODE_ENV === 'production' && origin) {
+            // Allow all Vercel deployments for Busy2Shop
+            if (origin.includes('busy2shop') && (origin.includes('.vercel.app') || origin.includes('busy2shop.com'))) {
+                return callback(null, true);
+            }
+        }
 
         if (allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            callback(new Error('Not allowed by CORS'));
+            console.warn(`CORS: Origin ${origin} not allowed`);
+            // In development, be more permissive
+            if (NODE_ENV === 'development') {
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
         }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Cookie'],
+    allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'Accept',
+        'Cookie',
+        'Origin',
+        'X-API-Key',
+        'Cache-Control',
+    ],
     exposedHeaders: ['Set-Cookie'],
     maxAge: 86400, // 24 hours
+    preflightContinue: false,
+    optionsSuccessStatus: 200,
 };
 
 app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
+
+// Additional CORS headers middleware for extra safety
+app.use((req: Request, res: Response, next: NextFunction) => {
+    const origin = req.headers.origin;
+
+    // Set CORS headers explicitly as backup
+    if (origin && (
+        origin.includes('busy2shop') ||
+        origin.includes('localhost') ||
+        origin === process.env.FRONTEND_URL ||
+        origin === process.env.ADMIN_FRONTEND_URL
+    )) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept,Cookie,Origin,X-API-Key,Cache-Control');
+        res.header('Access-Control-Expose-Headers', 'Set-Cookie');
+    }
+
+    next();
+});
 
 // Security middleware
 app.use(
