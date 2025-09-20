@@ -1840,6 +1840,203 @@ export default class AdminController {
         }
     }
 
+    static async getAvailableAgentsForOrder(req: AdminAuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+
+        if (!id) {
+            throw new BadRequestError('Order ID is required');
+        }
+
+        try {
+            // Check if order exists first
+            const order = await Order.findByPk(id, {
+                include: [{
+                    model: ShoppingList,
+                    as: 'shoppingList',
+                    attributes: ['id', 'marketId'],
+                }]
+            });
+
+            if (!order) {
+                throw new NotFoundError('Order not found');
+            }
+
+            if (!order.shoppingList?.id) {
+                throw new BadRequestError('Order has no associated shopping list');
+            }
+
+            // Get available agents for this order using the same logic as automatic assignment
+            const AgentService = require('../../services/agent.service').default;
+            const availableAgents = await AgentService.getAvailableAgentsForOrder(order.shoppingList.id);
+
+            // Format agent data for admin consumption
+            const formattedAgents = availableAgents.map((agent: any) => ({
+                id: agent.id,
+                firstName: agent.firstName,
+                lastName: agent.lastName,
+                email: agent.email,
+                phone: agent.phone,
+                displayImage: agent.displayImage,
+                currentStatus: agent.settings?.agentMetaData?.currentStatus || 'offline',
+                isAcceptingOrders: agent.settings?.agentMetaData?.isAcceptingOrders || false,
+                isKycVerified: agent.settings?.isKycVerified || false,
+                activeOrdersCount: agent.activeOrdersCount || 0,
+                locations: agent.locations?.map((loc: any) => ({
+                    id: loc.id,
+                    name: loc.name,
+                    address: loc.address,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                })) || [],
+                score: agent.score || 0,
+            }));
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Available agents retrieved successfully',
+                data: {
+                    orderId: id,
+                    orderNumber: order.orderNumber,
+                    shoppingListId: order.shoppingList.id,
+                    marketId: order.shoppingList.marketId,
+                    availableAgents: formattedAgents,
+                    totalAgents: formattedAgents.length,
+                },
+            });
+        } catch (error) {
+            console.error('Error in getAvailableAgentsForOrder:', error);
+            throw error;
+        }
+    }
+
+    static async assignAgentToOrder(req: AdminAuthenticatedRequest, res: Response) {
+        const { id } = req.params;
+        const { agentId, notes } = req.body;
+
+        if (!id) {
+            throw new BadRequestError('Order ID is required');
+        }
+
+        if (!agentId) {
+            throw new BadRequestError('Agent ID is required');
+        }
+
+        try {
+            // Check if order exists and is eligible for agent assignment
+            const order = await Order.findByPk(id, {
+                include: [{
+                    model: require('../../models/user.model').default,
+                    as: 'customer',
+                    attributes: ['id', 'firstName', 'lastName', 'email'],
+                }]
+            });
+
+            if (!order) {
+                throw new NotFoundError('Order not found');
+            }
+
+            // Verify payment is completed
+            if (order.paymentStatus !== 'completed') {
+                throw new BadRequestError('Cannot assign agent to order with incomplete payment');
+            }
+
+            // Check if order already has an agent
+            if (order.agentId) {
+                throw new BadRequestError(`Order already assigned to agent ${order.agentId}`);
+            }
+
+            // Verify agent exists and is eligible
+            const UserService = require('../../services/user.service').default;
+            const agent = await UserService.viewSingleUser(agentId);
+
+            if (agent.status?.userType !== 'agent') {
+                throw new BadRequestError('Invalid agent ID - user is not an agent');
+            }
+
+            if (!agent.settings?.isKycVerified) {
+                throw new BadRequestError('Cannot assign unverified agent to order');
+            }
+
+            if (agent.settings?.isBlocked || agent.settings?.isDeactivated) {
+                throw new BadRequestError('Cannot assign blocked or deactivated agent to order');
+            }
+
+            // Perform the assignment using AgentService
+            const AgentService = require('../../services/agent.service').default;
+            await AgentService.assignOrderToAgent(id, agentId);
+
+            // Update order status to accepted
+            await order.update({
+                status: 'accepted',
+                acceptedAt: new Date(),
+            });
+
+            // Add to order trail
+            try {
+                const OrderTrailService = require('../../services/orderTrail.service').default;
+                await OrderTrailService.addTrailEntry(id, {
+                    action: 'agent_assigned_manually',
+                    description: `Agent ${agent.firstName} ${agent.lastName} manually assigned by admin`,
+                    performedBy: 'admin',
+                    performedByType: 'admin',
+                    metadata: {
+                        agentId,
+                        agentName: `${agent.firstName} ${agent.lastName}`,
+                        agentEmail: agent.email,
+                        adminNotes: notes,
+                        assignmentType: 'manual',
+                    },
+                });
+            } catch (trailError) {
+                console.warn('Could not add order trail entry:', trailError);
+            }
+
+            // Get updated order with agent details
+            const updatedOrder = await Order.findByPk(id, {
+                include: [
+                    {
+                        model: require('../../models/user.model').default,
+                        as: 'customer',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    },
+                    {
+                        model: require('../../models/user.model').default,
+                        as: 'agent',
+                        attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
+                    },
+                    {
+                        model: ShoppingList,
+                        as: 'shoppingList',
+                        attributes: ['id', 'name', 'status'],
+                    }
+                ]
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Agent assigned to order successfully',
+                data: {
+                    order: updatedOrder,
+                    assignedAgent: {
+                        id: agent.id,
+                        firstName: agent.firstName,
+                        lastName: agent.lastName,
+                        email: agent.email,
+                        phone: agent.phone,
+                    },
+                    assignmentDetails: {
+                        assignedAt: new Date().toISOString(),
+                        assignedBy: 'admin',
+                        notes: notes || null,
+                    },
+                },
+            });
+        } catch (error) {
+            console.error('Error in assignAgentToOrder:', error);
+            throw error;
+        }
+    }
+
     static async createUser(req: AdminAuthenticatedRequest, res: Response) {
         const { 
             firstName, 

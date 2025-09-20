@@ -205,59 +205,6 @@ export default class AgentController {
         });
     }
 
-    /**
-     * Send a chat message from agent to customer
-     * @param req AuthenticatedRequest
-     * @param res Response
-     */
-    static async sendChatMessage(req: AuthenticatedRequest, res: Response) {
-        const { orderId } = req.params;
-        const { message, imageUrl } = req.body;
-        const agentId = req.user.id;
-        
-        if (!agentId) {
-            throw new ForbiddenError('Agent authentication required');
-        }
-        
-        if (!message || message.trim().length === 0) {
-            throw new BadRequestError('Message content is required');
-        }
-        
-        const chatMessage = await AgentService.sendChatMessage(agentId, orderId, message.trim(), imageUrl);
-        
-        res.status(201).json({
-            status: 'success',
-            message: 'Chat message sent successfully',
-            data: chatMessage,
-        });
-    }
-
-    /**
-     * Get chat messages for an order (agent view)
-     * @param req AuthenticatedRequest
-     * @param res Response
-     */
-    static async getChatMessages(req: AuthenticatedRequest, res: Response) {
-        const { orderId } = req.params;
-        const { limit } = req.query;
-        const agentId = req.user.id;
-        
-        if (!agentId) {
-            throw new ForbiddenError('Agent authentication required');
-        }
-        
-        const messages = await AgentService.getChatMessages(
-            agentId,
-            orderId,
-            limit ? parseInt(limit as string) : undefined,
-        );
-        
-        res.status(200).json({
-            status: 'success',
-            message: 'Chat messages retrieved successfully',
-            data: { messages },
-        });
-    }
 
     /**
      * Get agent locations

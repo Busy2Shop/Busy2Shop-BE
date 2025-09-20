@@ -7,6 +7,7 @@ import { emailService } from '../utils/Email';
 import User from '../models/user.model';
 import { NotificationTypes } from '../utils/interface';
 import { logger } from '../utils/logger';
+import Order from '../models/order.model';
 
 interface IGroupedNotification extends INotification {
     count: number;
@@ -16,6 +17,9 @@ interface IGroupedNotification extends INotification {
 
 export default class NotificationService {
     // Adding this new method to handle email notifications
+    // Rate limiting for email notifications (max 1 per user per order per 30 seconds)
+    private static emailRateLimiter = new Map<string, number>();
+
     static async sendEmailNotification(notification: INotification): Promise<void> {
         try {
             // Only send emails for chat-related notifications
@@ -29,6 +33,27 @@ export default class NotificationService {
                 return; // Skip if not a chat notification
             }
 
+            // Rate limiting: max 1 email per user per order per 30 seconds for chat messages
+            if (notification.title === NotificationTypes.CHAT_MESSAGE_RECEIVED) {
+                const rateLimitKey = `${notification.userId}:${notification.resource}`;
+                const lastSent = this.emailRateLimiter.get(rateLimitKey) || 0;
+                const now = Date.now();
+
+                if (now - lastSent < 30000) { // 30 seconds
+                    logger.info(`Rate limiting email notification for user ${notification.userId} on order ${notification.resource}`);
+                    return;
+                }
+
+                this.emailRateLimiter.set(rateLimitKey, now);
+
+                // Clean up old entries (older than 5 minutes)
+                for (const [key, timestamp] of this.emailRateLimiter.entries()) {
+                    if (now - timestamp > 300000) {
+                        this.emailRateLimiter.delete(key);
+                    }
+                }
+            }
+
             // Get user details to send the email
             const user = await User.findByPk(notification.userId);
 
@@ -39,6 +64,11 @@ export default class NotificationService {
                 return;
             }
 
+            // Get order details for better email content
+            const order = await Order.findByPk(notification.resource, {
+                attributes: ['id', 'orderNumber', 'customerId', 'agentId'],
+            });
+
             // Get actor details (if applicable)
             let actorName = 'System';
             if (notification.actorId) {
@@ -48,13 +78,24 @@ export default class NotificationService {
                 }
             }
 
-            // Send email notification
+            // Determine recipient type for proper link generation
+            const isCustomer = order?.customerId === notification.userId;
+            const isAgent = order?.agentId === notification.userId;
+
+            let recipientType = 'user';
+            if (isCustomer) recipientType = 'customer';
+            else if (isAgent) recipientType = 'agent';
+
+            // Send enhanced email notification
             await emailService.sendChatNotificationEmail(user.email, {
                 recipientName: `${user.firstName} ${user.lastName}`.trim(),
                 senderName: actorName,
                 message: notification.message,
                 notificationType: notification.title,
                 resourceId: notification.resource ?? '',
+                orderNumber: order?.orderNumber || notification.resource,
+                recipientType,
+                metadata: (notification as any).metadata || {},
             });
         } catch (error) {
             logger.error('Error sending email notification:', error);

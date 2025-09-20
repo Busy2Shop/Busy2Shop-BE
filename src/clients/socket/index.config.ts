@@ -2,6 +2,7 @@ import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { redisPubClient, redisSubClient } from '../../utils/redis';
 import { ChatService } from '../../services/chat.service';
+import EnhancedChatService from '../../services/chat-enhanced.service';
 import { AuthUtil, TokenCacheUtil } from '../../utils/token';
 import { logger } from '../../utils/logger';
 import UserService from '../../services/user.service';
@@ -42,6 +43,9 @@ export default class SocketConfig {
 
         // Initialize Socket.IO configuration
         this.initialize();
+
+        // Set the socket server instance in the enhanced chat service
+        EnhancedChatService.setSocketServer(this.io);
     }
 
     private initialize() {
@@ -163,15 +167,20 @@ export default class SocketConfig {
                     // Join the room
                     socket.join(roomName);
 
-                    // Notify others in the room
-                    socket.to(roomName).emit('user-joined', user);
+                    // Handle user joining via enhanced chat service
+                    await EnhancedChatService.handleUserJoinChat(
+                        orderId,
+                        user.id,
+                        user.type,
+                        user.name
+                    );
 
                     // Send previous messages
-                    const messages = await ChatService.getMessagesByOrderId(orderId);
+                    const messages = await EnhancedChatService.getMessagesByOrderId(orderId);
                     socket.emit('previous-messages', messages);
 
                     // Mark messages as read
-                    await ChatService.markMessagesAsRead(orderId, user.id);
+                    await EnhancedChatService.markMessagesAsRead(orderId, user.id);
 
                     logger.info(`User ${user.id} joined chat for order ${orderId}`);
                 } catch (error) {
@@ -187,10 +196,14 @@ export default class SocketConfig {
                     const roomName = `order:${orderId}`;
 
                     socket.leave(roomName);
-                    socket.to(roomName).emit('user-left', socket.data.user);
 
-                    // Notify other participants that this user left the chat
-                    await ChatService.notifyUserLeftChat(orderId, user);
+                    // Handle user leaving via enhanced chat service
+                    await EnhancedChatService.handleUserLeaveChat(
+                        orderId,
+                        user.id,
+                        user.type,
+                        user.name
+                    );
 
                     logger.info(`User ${user.id} left chat for order ${orderId}`);
                 } catch (error) {
@@ -204,26 +217,15 @@ export default class SocketConfig {
                 try {
                     const { orderId, message, imageUrl } = data;
                     const user = socket.data.user;
-                    const roomName = `order:${orderId}`;
 
-                    // Check if the chat is active
-                    const isChatActive = await ChatService.isChatActive(orderId);
-                    if (!isChatActive) {
-                        socket.emit('error', { message: 'Chat is not active for this order' });
-                        return;
-                    }
-
-                    // Save a message to the database (now handles notification creation)
-                    const savedMessage = await ChatService.saveMessage({
+                    // Send message via enhanced chat service (handles all logic including socket broadcast)
+                    await EnhancedChatService.sendMessage(
+                        user.id,
+                        user.type,
                         orderId,
-                        senderId: user.id,
-                        senderType: user.type,
                         message,
-                        imageUrl,
-                    });
-
-                    // Broadcast to all in the room including sender
-                    this.io.to(roomName).emit('new-message', savedMessage);
+                        imageUrl
+                    );
 
                     logger.info(`Message sent in order ${orderId} by ${user.id}`);
                 } catch (error) {
@@ -233,27 +235,29 @@ export default class SocketConfig {
             });
 
             // Handle typing indicator
-            socket.on('typing', data => {
-                const { orderId, isTyping } = data;
-                const user = socket.data.user;
-                const roomName = `order:${orderId}`;
+            socket.on('typing', async data => {
+                try {
+                    const { orderId, isTyping } = data;
+                    const user = socket.data.user;
 
-                socket.to(roomName).emit('user-typing', {
-                    user: {
-                        id: user.id,
-                        name: user.name,
-                    },
-                    isTyping,
-                });
+                    // Handle typing via enhanced chat service
+                    await EnhancedChatService.handleTypingIndicator(
+                        orderId,
+                        user.id,
+                        user.name,
+                        isTyping
+                    );
+                } catch (error) {
+                    logger.error('Error handling typing indicator:', error);
+                }
             });
 
             // Handle chat activation
             socket.on('activate-chat', async orderId => {
                 try {
                     const user = socket.data.user;
-                    const roomName = `order:${orderId}`;
 
-                    // Activate chat (now handles notification creation)
+                    // Activate chat via enhanced chat service (handles all logic including socket broadcast)
                     const activationData = {
                         orderId,
                         activatedBy: {
@@ -263,11 +267,9 @@ export default class SocketConfig {
                         },
                     };
 
-                    const success = await ChatService.activateChat(activationData);
+                    const success = await EnhancedChatService.activateChat(activationData);
 
                     if (success) {
-                        // Notify all users in the room
-                        this.io.to(roomName).emit('chat-activated', activationData);
                         logger.info(`Chat activated for order ${orderId} by ${user.id}`);
                     } else {
                         socket.emit('error', { message: 'Failed to activate chat' });
@@ -282,7 +284,7 @@ export default class SocketConfig {
             socket.on('mark-messages-read', async orderId => {
                 try {
                     const user = socket.data.user;
-                    await ChatService.markMessagesAsRead(orderId, user.id);
+                    await EnhancedChatService.markMessagesAsRead(orderId, user.id);
                     logger.info(`Messages marked as read for order ${orderId} by ${user.id}`);
                 } catch (error) {
                     logger.error('Error marking messages as read:', error);

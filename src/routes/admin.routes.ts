@@ -107,6 +107,10 @@ router.post('/orders/:id/cancel', adminAuth('admin'), AdminAuthenticatedControll
 router.patch('/orders/:id/reassign', adminAuth('admin'), AdminAuthenticatedController(AdminController.reassignOrder));
 router.get('/orders/:id/trail', adminAuth('admin'), AdminAuthenticatedController(AdminController.getOrderTrail));
 
+// Agent Assignment Routes for Orders
+router.get('/orders/:id/available-agents', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAvailableAgentsForOrder));
+router.post('/orders/:id/assign-agent', adminAuth('admin'), AdminAuthenticatedController(AdminController.assignAgentToOrder));
+
 // Suggested Lists Management
 router.use('/shopping-lists', adminAuth('admin'), suggestedListsRoutes);
 

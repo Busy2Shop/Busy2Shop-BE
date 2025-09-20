@@ -130,6 +130,9 @@ export default class EmailService {
             message: string;
             notificationType: string;
             resourceId: string;
+            orderNumber?: string;
+            recipientType?: string;
+            metadata?: any;
         },
     ): Promise<boolean> {
         try {

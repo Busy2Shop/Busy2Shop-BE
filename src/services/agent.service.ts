@@ -1118,6 +1118,7 @@ export default class AgentService {
 
     /**
      * Set agent as busy with a specific order
+     * Only sets isAcceptingOrders to false if agent reaches max capacity (3 orders)
      */
     static async setAgentBusy(
         agentId: string,
@@ -1125,12 +1126,32 @@ export default class AgentService {
         transaction?: Transaction,
     ): Promise<void> {
         console.log(`Setting agent ${agentId} as busy for order ${orderId}`);
-        // Update agent status to busy using SQL literal for JSON update
+
+        // Get current active orders count for this agent
+        const activeOrdersCount = await Order.count({
+            where: {
+                agentId: agentId,
+                status: {
+                    [Op.in]: ['accepted', 'in_progress', 'shopping', 'shopping_completed', 'delivery'],
+                },
+            },
+            transaction,
+        });
+
+        console.log(`Agent ${agentId} now has ${activeOrdersCount} active orders (including new assignment)`);
+
+        // Determine if agent should still accept orders (max 3 orders)
+        const shouldAcceptOrders = activeOrdersCount < 3;
+        const currentStatus = activeOrdersCount >= 3 ? 'busy' : 'available';
+
+        console.log(`Agent ${agentId} status: ${currentStatus}, accepting orders: ${shouldAcceptOrders}`);
+
+        // Update agent status based on current workload
         await UserSettings.update(
             {
                 agentMetaData: Sequelize.literal(`
-                    COALESCE("agentMetaData", '{}') || 
-                    '{"currentStatus": "busy", "isAcceptingOrders": false, "lastStatusUpdate": "${new Date().toISOString()}"}'
+                    COALESCE("agentMetaData", '{}') ||
+                    '{"currentStatus": "${currentStatus}", "isAcceptingOrders": ${shouldAcceptOrders}, "lastStatusUpdate": "${new Date().toISOString()}"}'
                 `),
             },
             {
@@ -2225,15 +2246,35 @@ export default class AgentService {
 
     /**
      * Set agent as available (opposite of setBusy)
+     * Checks current active order count to determine proper status
      * @param agentId Agent ID
      * @param transaction Optional transaction
      */
     static async setAgentAvailable(agentId: string, transaction?: Transaction): Promise<void> {
+        // Get current active orders count for this agent (after order completion/cancellation)
+        const activeOrdersCount = await Order.count({
+            where: {
+                agentId: agentId,
+                status: {
+                    [Op.in]: ['accepted', 'in_progress', 'shopping', 'shopping_completed', 'delivery'],
+                },
+            },
+            transaction,
+        });
+
+        console.log(`Agent ${agentId} now has ${activeOrdersCount} active orders after order completion/cancellation`);
+
+        // Determine status based on remaining workload
+        const shouldAcceptOrders = activeOrdersCount < 3;
+        const currentStatus = activeOrdersCount === 0 ? 'available' : (activeOrdersCount >= 3 ? 'busy' : 'available');
+
+        console.log(`Agent ${agentId} updated status: ${currentStatus}, accepting orders: ${shouldAcceptOrders}`);
+
         await UserSettings.update(
             {
                 agentMetaData: Sequelize.literal(`
-                    COALESCE("agentMetaData", '{}') || 
-                    '{"currentStatus": "available", "isAcceptingOrders": true, "lastStatusUpdate": "${new Date().toISOString()}"}'
+                    COALESCE("agentMetaData", '{}') ||
+                    '{"currentStatus": "${currentStatus}", "isAcceptingOrders": ${shouldAcceptOrders}, "lastStatusUpdate": "${new Date().toISOString()}"}'
                 `),
             },
             {
@@ -2583,55 +2624,4 @@ export default class AgentService {
      * @param imageUrl Optional image URL
      * @returns Chat message
      */
-    static async sendChatMessage(
-        agentId: string,
-        orderId: string,
-        message: string,
-        imageUrl?: string
-    ): Promise<any> {
-        // Verify agent has access to this order
-        const order = await Order.findOne({
-            where: {
-                id: orderId,
-                agentId: agentId,
-            },
-        });
-
-        if (!order) {
-            throw new NotFoundError('Order not found or not assigned to this agent');
-        }
-
-        const messageData = {
-            orderId,
-            senderId: agentId,
-            senderType: 'agent' as const,
-            message,
-            imageUrl,
-        };
-
-        return await ChatService.saveMessage(messageData);
-    }
-
-    /**
-     * Get chat messages for an order (agent view)
-     * @param agentId The agent ID
-     * @param orderId The order ID
-     * @param limit Number of messages to retrieve
-     * @returns Chat messages
-     */
-    static async getChatMessages(agentId: string, orderId: string, limit: number = 50): Promise<any[]> {
-        // Verify agent has access to this order
-        const order = await Order.findOne({
-            where: {
-                id: orderId,
-                agentId: agentId,
-            },
-        });
-
-        if (!order) {
-            throw new NotFoundError('Order not found or not assigned to this agent');
-        }
-
-        return await ChatService.getMessagesByOrderId(orderId);
-    }
 }

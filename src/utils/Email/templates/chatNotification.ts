@@ -7,8 +7,11 @@ export const chatNotificationTemplate = (data: {
     notificationType: string;
     resourceId: string;
     websiteUrl: string;
+    orderNumber?: string;
+    recipientType?: string;
+    metadata?: any;
 }): string => {
-    const { recipientName, senderName, message, notificationType, resourceId, websiteUrl } = data;
+    const { recipientName, senderName, message, notificationType, resourceId, websiteUrl, orderNumber, recipientType } = data;
 
     let subject: string;
     let notificationHeading: string;
@@ -18,20 +21,40 @@ export const chatNotificationTemplate = (data: {
     switch (notificationType) {
         case NotificationTypes.CHAT_MESSAGE_RECEIVED:
             subject = 'New Chat Message';
-            notificationHeading = 'You have a new message';
+            notificationHeading = orderNumber
+                ? `You have a new message for order #${orderNumber}`
+                : 'You have a new message';
             break;
         case NotificationTypes.CHAT_ACTIVATED:
             subject = 'Chat Activated';
-            notificationHeading = 'Chat has been activated';
+            notificationHeading = orderNumber
+                ? `Chat has been activated for order #${orderNumber}`
+                : 'Chat has been activated';
             break;
         case NotificationTypes.USER_LEFT_CHAT:
             subject = 'User Left Chat';
-            notificationHeading = 'A user has left the chat';
+            notificationHeading = orderNumber
+                ? `A user has left the chat for order #${orderNumber}`
+                : 'A user has left the chat';
             break;
         default:
             subject = 'Chat Notification';
             notificationHeading = 'You have a new notification';
     }
+
+    // Generate proper links based on user type
+    const generateChatLink = (baseUrl: string, orderId: string, userType: string): string => {
+        switch (userType) {
+            case 'customer':
+                return `${baseUrl}/customer/orders/${orderId}`;
+            case 'agent':
+                return `${baseUrl}/agent/orders/${orderId}`;
+            default:
+                return `${baseUrl}/order/${orderId}/chat`;
+        }
+    };
+
+    const chatLink = generateChatLink(websiteUrl, resourceId, recipientType || 'user');
 
     return `
 <table style="width: 95%; max-width: 670px; margin: 0 auto; background: #fff; border-radius: 3px; text-align: center; box-shadow: 0 6px 18px 0 rgba(0,0,0,.06);">
@@ -53,14 +76,14 @@ export const chatNotificationTemplate = (data: {
             </div>
             
             <div style="margin-top: 25px;">
-                <a href="${websiteUrl}/order/${resourceId}/chat" style="text-decoration: none; display: inline-block; background: #F04950; color: #fff; font-weight: 800; text-transform: uppercase; font-size: 16px; padding: 10px 24px; border-radius: 5px;">
+                <a href="${chatLink}" style="text-decoration: none; display: inline-block; background: #F04950; color: #fff; font-weight: 800; text-transform: uppercase; font-size: 16px; padding: 10px 24px; border-radius: 5px;">
                     ${actionText}
                 </a>
             </div>
-            
+
             <p style="color: #1e1e2d; font-size: 16px; margin: 30px 0 0;">If you can't click the button, copy and paste the following link into your browser:</p>
             <div style="background: #eee; padding: 10px; border-radius: 5px; word-wrap: break-word; margin-top: 10px; text-align: left;">
-                <code style="font-size: 14px;">${websiteUrl}/order/${resourceId}/chat</code>
+                <code style="font-size: 14px;">${chatLink}</code>
             </div>
             
             <p style="color: #1e1e2d; font-size: 16px; margin: 30px 0 10px;">Thank you for using our platform!</p>
