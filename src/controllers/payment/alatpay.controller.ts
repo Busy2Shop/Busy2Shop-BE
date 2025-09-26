@@ -580,6 +580,7 @@ export default class AlatPayController {
 
             // Check for existing order with ALATPay verification
             const existingOrder = await OrderService.findOrderByShoppingListId(shoppingListId, req.user.id);
+            const alatpayLogoUrl = 'https://res.cloudinary.com/drc6omjqc/image/upload/v1758889965/Base/wema_logo_bffoct.png';
             
             if (existingOrder) {
                 logger.info(`Found existing order ${existingOrder.orderNumber} for shopping list ${shoppingListId}`);
@@ -610,6 +611,7 @@ export default class AlatPayController {
                             },
                             isExistingOrder: true,
                             paymentCompleted: true,
+                            alatpayLogoUrl,
                         },
                     });
                     return;
@@ -679,6 +681,7 @@ export default class AlatPayController {
                                         isExistingOrder: true,
                                         paymentCompleted: true,
                                         autoSynced: true,
+                                        alatpayLogoUrl,
                                     },
                                 });
                                 return;
@@ -718,6 +721,7 @@ export default class AlatPayController {
                                 timeRemaining: Math.max(0, timeoutMs - orderAge),
                                 paymentCompleted: false,
                                 alatPayStatus: alatPayStatus?.status || 'not_checked',
+                                alatpayLogoUrl,
                             },
                         });
                         return;
@@ -795,6 +799,7 @@ export default class AlatPayController {
                     accountNumber: responseData.virtualBankAccountNumber || '8880164235',
                     fees: calculatedFees,
                     isExistingOrder: false,
+                    alatpayLogoUrl,
                 },
             });
         } catch (error) {
