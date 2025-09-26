@@ -207,7 +207,7 @@ export default class OrderService {
             shopping_completed: ['delivery', 'cancelled'],
             delivery: ['completed', 'cancelled'],
             completed: [],
-            cancelled: [],
+            cancelled: ['cancelled'], // Allow cancelled -> cancelled for concurrent cancellation handling
         };
 
         return validTransitions[currentStatus]?.includes(newStatus) || false;
@@ -840,10 +840,10 @@ export default class OrderService {
                 case 'cancelled':
                     updateData.cancelledAt = now;
                     // Update shopping list status
-                    await ShoppingList.update(
-                        { status: 'cancelled' },
-                        { where: { id: order.shoppingListId }, transaction },
-                    );
+                    // await ShoppingList.update(
+                    //     { status: 'cancelled' },
+                    //     { where: { id: order.shoppingListId }, transaction },
+                    // );
                     // Update agent status back to available
                     if (order.agentId) {
                         await AgentService.updateAgentStatus(order.agentId, 'available');

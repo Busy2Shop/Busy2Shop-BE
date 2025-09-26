@@ -25,6 +25,13 @@ router.get(
     AuthenticatedController(PaystackController.getPaymentStatus),
 );
 
+// Cancel payment
+router.post(
+    '/cancel/:reference',
+    basicAuth('access'),
+    AuthenticatedController(PaystackController.cancelPayment),
+);
+
 // Get public key for frontend
 router.get(
     '/public-key',

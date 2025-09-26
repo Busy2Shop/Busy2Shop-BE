@@ -30,6 +30,13 @@ router.post(
     AuthenticatedController(AlatPayController.generatePaymentDetails),
 );
 
+// Cancel payment route
+router.post(
+    '/transaction/:transactionId/cancel',
+    basicAuth('access'),
+    AuthenticatedController(AlatPayController.cancelPayment),
+);
+
 // Removed: Complex order status endpoints - using simple transaction status check instead
 
 // Webhook route - this doesn't require authentication as it's called by ALATPay

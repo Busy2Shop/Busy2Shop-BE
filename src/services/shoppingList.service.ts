@@ -9,6 +9,7 @@ import Pagination, { IPaging } from '../utils/pagination';
 import Order, { IOrder } from '../models/order.model';
 import { Database } from '../models';
 import AgentService from './agent.service';
+import { logger } from '../utils/logger';
 
 export interface IViewShoppingListsQuery {
     page?: number;
@@ -354,6 +355,39 @@ export default class ShoppingListService {
         // Can only delete lists in draft status
         if (list.status !== 'draft') {
             throw new BadRequestError('Cannot delete a shopping list that has been submitted');
+        }
+
+        // Check for existing orders and handle expired/cancelled ones
+        const existingOrder = await Order.findOne({
+            where: {
+                shoppingListId: id,
+                customerId: customerId,
+            },
+            order: [['createdAt', 'DESC']],
+        });
+
+        if (existingOrder) {
+            // Check if order is completed
+            if (existingOrder.paymentStatus === 'completed') {
+                throw new BadRequestError('Cannot delete shopping list with completed payment. Please contact support if you need assistance.');
+            }
+
+            // Check if order is expired (30+ minutes old with pending payment)
+            const orderAge = Date.now() - new Date(existingOrder.createdAt).getTime();
+            const thirtyMinutes = 30 * 60 * 1000;
+
+            if (existingOrder.paymentStatus === 'pending' && orderAge < thirtyMinutes) {
+                throw new BadRequestError(`Cannot delete shopping list with active payment. Please wait ${Math.ceil((thirtyMinutes - orderAge) / 60000)} minutes or cancel the payment first.`);
+            }
+
+            // If order is expired or failed, update its status
+            if (existingOrder.paymentStatus === 'pending' && orderAge >= thirtyMinutes) {
+                await existingOrder.update({
+                    paymentStatus: 'expired',
+                    status: 'cancelled',
+                });
+                logger.info(`Expired old order ${existingOrder.orderNumber} before deleting shopping list ${id}`);
+            }
         }
 
         await Database.transaction(async (transaction: Transaction) => {

@@ -9,6 +9,7 @@ import ShoppingListService from '../../services/shoppingList.service';
 import SystemSettingsService from '../../services/systemSettings.service';
 import ShoppingListItem from '../../models/shoppingListItem.model';
 import PaymentStatusSyncService from '../../services/paymentStatusSync.service';
+import OrderTrailService from '../../services/orderTrail.service';
 import { redisClient } from '../../utils/redis';
 
 // Interface for calculated fees
@@ -862,6 +863,105 @@ export default class AlatPayController {
             });
 
 
+    }
+
+    /**
+     * Cancel a pending payment
+     */
+    static async cancelPayment(req: AuthenticatedRequest, res: Response) {
+        const { transactionId } = req.params;
+
+        if (!transactionId) {
+            throw new BadRequestError('Transaction ID is required');
+        }
+
+        try {
+            // Find order by transaction ID
+            const order = await OrderService.getOrderByPaymentId(transactionId);
+
+            if (!order) {
+                res.status(404).json({
+                    status: 'error',
+                    message: 'Order not found for this transaction',
+                    data: null,
+                });
+                return;
+            }
+
+            // Verify user authorization
+            if (order.customerId !== req.user.id) {
+                throw new BadRequestError('Not authorized to cancel this payment');
+            }
+
+            // Check if payment is already failed or order already cancelled
+            if (order.paymentStatus === 'failed' || order.status === 'cancelled') {
+                // Return success if already cancelled/failed instead of throwing error
+                res.status(200).json({
+                    status: 'success',
+                    message: 'Payment already cancelled',
+                    data: {
+                        orderId: order.id,
+                        orderNumber: order.orderNumber,
+                        transactionId,
+                        status: 'cancelled',
+                    },
+                });
+                return;
+            }
+
+            // Only allow canceling pending payments
+            if (order.paymentStatus !== 'pending') {
+                throw new BadRequestError(`Cannot cancel payment with status: ${order.paymentStatus}`);
+            }
+
+            // Update order payment status to failed (cancelled by user)
+            await OrderService.updateOrderPaymentStatus(order.id, 'failed');
+
+            // Try to update order status to cancelled, handle gracefully if already cancelled
+            try {
+                await OrderService.updateOrderStatus(order.id, req.user.id, 'cancelled');
+            } catch (statusError: any) {
+                // If the error is about status transition, it's likely already cancelled - that's fine
+                if (statusError.message && statusError.message.includes('Cannot change status from cancelled to cancelled')) {
+                    // Order already cancelled by another process, continue normally
+                } else {
+                    // Re-throw if it's a different error
+                    throw statusError;
+                }
+            }
+
+            // Log the cancellation
+            await OrderTrailService.logOrderEvent(order.id, {
+                action: 'payment_cancelled',
+                description: 'Payment cancelled by customer',
+                performedBy: req.user.id,
+                metadata: {
+                    transactionId,
+                    cancelledAt: new Date().toISOString(),
+                },
+            });
+
+            logger.info(`Payment cancelled for order ${order.orderNumber}`, {
+                orderId: order.id,
+                transactionId,
+                userId: req.user.id,
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Payment cancelled successfully',
+                data: {
+                    orderId: order.id,
+                    orderNumber: order.orderNumber,
+                    transactionId,
+                    status: 'cancelled',
+                },
+            });
+
+        } catch (error) {
+            logger.error('Error cancelling payment:', error);
+            throw error;
+        }
     }
 
     // Removed: Complex order status endpoints - webhook handles all order updates
