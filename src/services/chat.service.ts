@@ -233,33 +233,38 @@ export class ChatService {
                 nest: true, // Nest the joined models
             });
 
-            try {
-                // Validate the order data with our helper function
-                const order = validateOrderWithRelations(orderData);
-
-                const participants = [];
-
-                // Add a customer if not excluded and exists
-                if (order.customer && order.customer.id !== excludeUserId) {
-                    participants.push({
-                        id: order.customer.id,
-                        type: 'customer',
-                    });
-                }
-
-                // Add agent if not excluded and exists
-                if (order.agent && order.agent.id !== excludeUserId) {
-                    participants.push({
-                        id: order.agent.id,
-                        type: 'agent',
-                    });
-                }
-
-                return participants;
-            } catch (validationError) {
-                console.error('Order validation failed:', validationError);
+            if (!orderData) {
+                console.warn(`Order ${orderId} not found for chat participants`);
                 return [];
             }
+
+            const participants = [];
+
+            // Add customer if not excluded and exists
+            if (orderData.customer?.id && orderData.customer.id !== excludeUserId) {
+                participants.push({
+                    id: orderData.customer.id,
+                    type: 'customer',
+                });
+            }
+
+            // Add agent if not excluded and exists
+            if (orderData.agent?.id && orderData.agent.id !== excludeUserId) {
+                participants.push({
+                    id: orderData.agent.id,
+                    type: 'agent',
+                });
+            }
+
+            // Fallback: if no agent in relationship but agentId exists, try to get agent ID directly
+            if (!orderData.agent?.id && orderData.agentId && orderData.agentId !== excludeUserId) {
+                participants.push({
+                    id: orderData.agentId,
+                    type: 'agent',
+                });
+            }
+
+            return participants;
         } catch (error) {
             console.error('Error getting order participants:', error);
             return [];

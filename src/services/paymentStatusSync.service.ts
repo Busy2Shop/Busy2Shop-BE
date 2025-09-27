@@ -115,7 +115,7 @@ export default class PaymentStatusSyncService {
                             
                             // 7. Update order status to 'accepted' after agent assignment (not in_progress yet)
                             // Agent still needs to accept the order in their dashboard
-                            await OrderService.updateOrderStatus(orderId, order.customerId, 'accepted', transaction);
+                            await OrderService.updateOrderStatusSystem(orderId, 'accepted', transaction);
                             logger.info(`Order ${order.orderNumber} status updated to accepted after agent assignment`);
                             
                             // 8. Shopping list remains 'accepted' until agent starts working

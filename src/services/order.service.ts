@@ -502,48 +502,42 @@ export default class OrderService {
         includeAgent: boolean = true,
         includeCustomer: boolean = true,
     ): Promise<Order> {
-        // Initialize includes array
+        // Initialize includes array with optimized shopping list query
         const includes: Includeable[] = [
             {
                 model: ShoppingList,
                 as: 'shoppingList',
+                attributes: ['id', 'name', 'status', 'paymentStatus', 'category', 'marketId'], // Only essential fields
                 include: [
                     {
                         model: ShoppingListItem,
                         as: 'items',
+                        attributes: ['id', 'name', 'quantity', 'unit', 'estimatedPrice', 'userProvidedPrice', 'actualPrice'], // Only essential fields
+                        limit: 50, // Prevent massive item lists from slowing down queries
                     },
                 ],
             },
         ];
 
-        // Add the agent include if requested
+        // Add the agent include if requested (optimized)
         if (includeAgent) {
             includes.push({
                 model: User,
                 as: 'agent',
                 attributes: [
-                    'id', 
-                    'firstName', 
-                    'lastName', 
-                    'email', 
-                    'phone', 
+                    'id',
+                    'firstName',
+                    'lastName',
+                    'email',
+                    'phone',
                     'displayImage',
-                    'status',
-                    'createdAt',
                 ],
                 required: false,
-                include: [
-                    {
-                        model: UserSettings,
-                        as: 'settings',
-                        attributes: ['agentMetaData'],
-                        required: false,
-                    },
-                ],
+                // Remove UserSettings join for faster queries - can be fetched separately if needed
             });
         }
 
-        // Add customer include if requested
+        // Add customer include if requested (optimized)
         if (includeCustomer) {
             includes.push({
                 model: User,
@@ -555,6 +549,14 @@ export default class OrderService {
         const queryOptions: FindAndCountOptions<Order> = {
             where: { id },
             include: includes,
+            // Add query optimization
+            attributes: [
+                'id', 'orderNumber', 'status', 'totalAmount', 'serviceFee', 'deliveryFee',
+                'deliveryAddress', 'customerNotes', 'agentNotes', 'paymentStatus', 'paymentMethod',
+                'acceptedAt', 'shoppingStartedAt', 'shoppingCompletedAt', 'deliveryStartedAt',
+                'completedAt', 'cancelledAt', 'createdAt', 'updatedAt',
+                'customerId', 'agentId', 'shoppingListId', 'paymentId'
+            ],
         };
 
         const order = await Order.findOne(queryOptions);
@@ -878,6 +880,74 @@ export default class OrderService {
         
         if (externalTransaction) {
             return await executeInTransaction(externalTransaction);
+        } else {
+            return await Database.transaction(executeInTransaction);
+        }
+    }
+
+    /**
+     * System-level method to update order status without user permission checks
+     * This should only be used for automated system processes like payment confirmation
+     *
+     * @param id - Order ID
+     * @param status - New status
+     * @param transaction - Optional transaction
+     * @returns Updated order
+     */
+    static async updateOrderStatusSystem(
+        id: string,
+        status: 'pending' | 'accepted' | 'in_progress' | 'shopping' | 'shopping_completed' | 'delivery' | 'completed' | 'cancelled',
+        transaction?: Transaction
+    ): Promise<Order> {
+        const executeInTransaction = async (txn: Transaction) => {
+            const order = await this.getOrderById(id);
+
+            // Validate status transition
+            if (!this.isValidStatusTransition(order.status, status)) {
+                throw new BadRequestError(`Cannot change status from ${order.status} to ${status}`);
+            }
+
+            // Update order status with appropriate timestamps
+            const updateData: Partial<IOrder> = { status };
+            const now = new Date();
+
+            switch (status) {
+                case 'accepted':
+                    if (!order.acceptedAt) {
+                        updateData.acceptedAt = now;
+                    }
+                    break;
+                case 'in_progress':
+                    if (!order.shoppingStartedAt) {
+                        updateData.shoppingStartedAt = now;
+                    }
+                    break;
+                case 'completed':
+                    if (!order.completedAt) {
+                        updateData.completedAt = now;
+                    }
+                    break;
+                case 'cancelled':
+                    if (!order.cancelledAt) {
+                        updateData.cancelledAt = now;
+                    }
+                    break;
+            }
+
+            const previousStatus = order.status;
+
+            // Update the order
+            await order.update(updateData, { transaction: txn });
+
+            // Log the status change in the trail (skip logging for system operations to avoid FK issues)
+            // System operations are already logged in the unified payment confirmation trail
+            console.log(`System status change: ${order.id} from ${previousStatus} to ${status}`);
+
+            return await this.getOrderById(order.id);
+        };
+
+        if (transaction) {
+            return await executeInTransaction(transaction);
         } else {
             return await Database.transaction(executeInTransaction);
         }

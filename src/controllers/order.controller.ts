@@ -144,6 +144,12 @@ export default class OrderController {
             //     throw new ForbiddenError('Not authorized to view this order');
             // }
 
+            // Add cache headers for better performance (cache for 30 seconds)
+            res.set({
+                'Cache-Control': 'public, max-age=30, s-maxage=30',
+                'ETag': `"order-${order.id}-${order.updatedAt?.getTime()}"`,
+            });
+
             res.status(200).json({
                 status: 'success',
                 message: 'Order retrieved successfully',
