@@ -12,7 +12,7 @@ import { Database } from '../models';
 import AgentLocation, { IAgentLocation } from '../models/agentLocation.model';
 import { GoogleMapsService } from '../utils/googleMaps';
 import { logger } from '../utils/logger';
-import { ChatService } from './chat.service';
+import EnhancedChatService from './chat-enhanced.service';
 
 export interface IViewAgentsQuery {
     page?: number;
@@ -619,15 +619,21 @@ export default class AgentService {
             });
 
             if (agent) {
-                await ChatService.activateChat({
-                    orderId: orderId,
-                    activatedBy: {
-                        id: agentId,
-                        type: 'agent',
-                        name: `${agent.firstName} ${agent.lastName}`.trim(),
-                    },
-                });
-                logger.info(`Chat activated for order ${orderId} by agent ${agentId}`);
+                // Check if chat is already active (should be activated during payment confirmation)
+                const isChatActive = await EnhancedChatService.isChatActive(orderId);
+                if (!isChatActive) {
+                    logger.info(`Chat not yet active for order ${orderId}, activating now during agent assignment`);
+                    await EnhancedChatService.activateChat({
+                        orderId: orderId,
+                        activatedBy: {
+                            id: agentId,
+                            type: 'agent',
+                            name: `${agent.firstName} ${agent.lastName}`.trim(),
+                        },
+                    });
+                } else {
+                    logger.info(`Chat already active for order ${orderId}, skipping activation`);
+                }
             }
         } catch (chatError) {
             logger.warn(`Failed to activate chat for order ${orderId}:`, chatError);
@@ -2597,7 +2603,14 @@ export default class AgentService {
                 },
             };
 
-            await ChatService.activateChat(chatActivation);
+            // Check if chat is already active before activating
+            const isChatActive = await EnhancedChatService.isChatActive(orderId);
+            if (!isChatActive) {
+                logger.info(`Chat not yet active for order ${orderId}, activating now during agent acceptance`);
+                await EnhancedChatService.activateChat(chatActivation);
+            } else {
+                logger.info(`Chat already active for order ${orderId}, skipping activation`);
+            }
 
             // Send initial message to establish connection
             const welcomeMessage = {
@@ -2607,7 +2620,7 @@ export default class AgentService {
                 message: `Hi ${order.customer.firstName}! I'm ${agent.firstName}, your personal shopping agent. I've started working on your order and I'm here to help with any questions or updates you need. Let's get shopping! 🛒`,
             };
 
-            await ChatService.saveMessage(welcomeMessage);
+            await EnhancedChatService.sendMessage(agentId, 'agent', orderId, welcomeMessage.message);
 
             logger.info(`Chat channel activated for order ${orderId} between agent ${agentId} and customer ${order.customerId}`);
         } catch (error) {

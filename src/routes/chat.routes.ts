@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import ChatController from '../controllers/chat.controller';
 import EnhancedChatController from '../controllers/chat-enhanced.controller';
 import { basicAuth, AuthenticatedController } from '../middlewares/authMiddleware';
 import { uploadMiddleware, UploadType } from '../middlewares/uploadMiddleware';

@@ -426,12 +426,27 @@ export class EnhancedChatService {
     }
 
     /**
+     * Helper method to find order by UUID or order number
+     */
+    private async findOrderByIdentifier(identifier: string): Promise<any> {
+        // Try finding by UUID first (primary key)
+        let order = await Order.findByPk(identifier);
+
+        // If not found, try finding by order number
+        if (!order) {
+            order = await Order.findOne({
+                where: { orderNumber: identifier }
+            });
+        }
+
+        return order;
+    }
+
+    /**
      * Verify if a user has access to an order's chat
      */
     async verifyOrderAccess(orderId: string, userId: string, userType: SenderType): Promise<boolean> {
-        const order = await Order.findByPk(orderId, {
-            attributes: ['id', 'customerId', 'agentId'],
-        });
+        const order = await this.findOrderByIdentifier(orderId);
 
         if (!order) {
             throw new NotFoundError('Order not found');
@@ -471,10 +486,7 @@ export class EnhancedChatService {
                     : 'User';
 
                 // Get order details for better notification
-                const order = await Order.findByPk(orderId, {
-                    attributes: ['id', 'orderNumber', 'customerId', 'agentId'],
-                    transaction,
-                });
+                const order = await this.findOrderByIdentifier(orderId);
 
                 if (!order) {
                     logger.error(`Order ${orderId} not found for notification`);
@@ -606,7 +618,15 @@ export class EnhancedChatService {
         transaction?: Transaction
     ): Promise<{ id: string; type: string }[]> {
         try {
-            const orderData = await Order.findByPk(orderId, {
+            const orderData = await this.findOrderByIdentifier(orderId);
+
+            if (!orderData) {
+                logger.error(`Order ${orderId} not found in getOrderParticipantsExcept`);
+                return [];
+            }
+
+            // Get full order data with relations
+            const fullOrderData = await Order.findByPk(orderData.id, {
                 include: [
                     { model: User, as: 'customer' },
                     { model: User, as: 'agent' },
@@ -616,7 +636,7 @@ export class EnhancedChatService {
                 nest: true,
             });
 
-            const order = this.validateOrderWithRelations(orderData);
+            const order = this.validateOrderWithRelations(fullOrderData);
             const participants = [];
 
             if (order.customer && order.customer.id !== excludeUserId) {

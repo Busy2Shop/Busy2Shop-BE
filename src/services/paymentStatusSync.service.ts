@@ -4,6 +4,7 @@ import OrderService from './order.service';
 import ShoppingListService from './shoppingList.service';
 import AgentService from './agent.service';
 import OrderTrailService from './orderTrail.service';
+import EnhancedChatService from './chat-enhanced.service';
 import { logger } from '../utils/logger';
 import { Database } from '../models';
 import Order from '../models/order.model';
@@ -131,7 +132,29 @@ export default class PaymentStatusSyncService {
                     // Continue - payment confirmation succeeded even if agent assignment failed
                 }
                 
-                // 9. Log comprehensive trail entry
+                // 9. Activate chat for the order to enable communication
+                try {
+                    const chatActivationData = {
+                        orderId,
+                        activatedBy: {
+                            id: 'system',
+                            type: 'admin' as const,
+                            name: 'Payment System',
+                        },
+                    };
+
+                    const chatActivated = await EnhancedChatService.activateChat(chatActivationData);
+                    if (chatActivated) {
+                        logger.info(`Chat activated for order ${order.orderNumber} after payment confirmation`);
+                    } else {
+                        logger.warn(`Failed to activate chat for order ${order.orderNumber}`);
+                    }
+                } catch (chatError) {
+                    logger.error(`Error activating chat for order ${order.orderNumber}:`, chatError);
+                    // Don't fail the payment confirmation if chat activation fails
+                }
+
+                // 10. Log comprehensive trail entry
                 await OrderTrailService.logOrderEvent(orderId, {
                     action: 'payment_confirmed',
                     description: `Payment confirmed via ${source} - Order ready for shopping`,
@@ -143,15 +166,16 @@ export default class PaymentStatusSyncService {
                         assignedAgentId,
                         shoppingListId: order.shoppingListId,
                         processedAt: new Date().toISOString(),
+                        chatActivated: true,
                     },
                 });
-                
+
                 logger.info(`Unified payment confirmation completed for order ${order.orderNumber}`, {
                     orderId,
                     assignedAgentId,
                     source,
                 });
-                
+
                 return { success: true, assignedAgentId };
                 
             } catch (error) {

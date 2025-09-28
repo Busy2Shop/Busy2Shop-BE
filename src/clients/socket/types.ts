@@ -51,6 +51,8 @@ export interface ServerToClientEvents {
     'user-joined': (user: SocketUser) => void;
     'user-left': (user: SocketUser) => void;
     'chat-activated': (data: ChatActivationType) => void;
+    'connection-status': (data: { status: string; userId: string; userType: string }) => void;
+    'messages-read': (data: { orderId: string; userId: string }) => void;
     error: (error: { message: string }) => void;
 }
 
@@ -64,14 +66,3 @@ export type CustomSocket = Socket<
     InterServerEvents,
     SocketData
 >;
-export interface ChatMessageType {
-    id: string;
-    orderId: string;
-    senderId: string;
-    senderType: SenderType;
-    message: string;
-    imageUrl?: string;
-    isRead: boolean;
-    createdAt: Date | string;
-    updatedAt: Date | string;
-}

@@ -1,7 +1,6 @@
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { redisPubClient, redisSubClient } from '../../utils/redis';
-import { ChatService } from '../../services/chat.service';
 import EnhancedChatService from '../../services/chat-enhanced.service';
 import { AuthUtil, TokenCacheUtil } from '../../utils/token';
 import { logger } from '../../utils/logger';
@@ -55,13 +54,30 @@ export default class SocketConfig {
         // Middleware for authentication
         this.io.use(async (socket: CustomSocket, next) => {
             try {
+                logger.info('🔗 Socket connection attempt from:', {
+                    socketId: socket.id,
+                    userAgent: socket.handshake.headers['user-agent'],
+                    origin: socket.handshake.headers.origin,
+                    authProvided: !!socket.handshake.auth.token
+                });
+
                 const authHeader = socket.handshake.auth.token;
                 if (!authHeader?.startsWith('Bearer')) {
+                    logger.error('🚫 Socket auth failed - Invalid authorization token format:', {
+                        authHeader: authHeader ? 'Provided but invalid format' : 'Not provided',
+                        socketId: socket.id
+                    });
                     return next(new Error('Invalid authorization token'));
                 }
 
                 const jwtToken = authHeader.split(' ')[1];
                 const isAdmin = socket.handshake.auth['x-iadmin-access'] === 'true';
+
+                logger.info('🔐 Socket auth token received:', {
+                    tokenLength: jwtToken?.length || 0,
+                    isAdmin,
+                    socketId: socket.id
+                });
 
                 if (isAdmin) {
                     // Admin authentication flow
@@ -146,23 +162,53 @@ export default class SocketConfig {
                     socket.data.token = jwtToken;
                 }
 
-                logger.authorized('Socket user authorized');
+                logger.authorized('✅ Socket user authorized successfully:', {
+                    userId: socket.data.user.id,
+                    userType: socket.data.user.type,
+                    userName: socket.data.user.name,
+                    socketId: socket.id
+                });
                 next();
             } catch (error) {
-                logger.error('Socket authentication error:', error);
+                logger.error('🚫 Socket authentication error:', {
+                    error: error instanceof Error ? error.message : String(error),
+                    socketId: socket.id,
+                    stack: error instanceof Error ? error.stack : undefined
+                });
                 next(new Error('Authentication error'));
             }
         });
 
         // Handle connections
         this.io.on('connection', (socket: CustomSocket) => {
-            logger.info(`User connected: ${socket.data.user.id} (${socket.data.user.type})`);
+            logger.info('🎉 Socket connection established:', {
+                userId: socket.data.user.id,
+                userType: socket.data.user.type,
+                userName: socket.data.user.name,
+                socketId: socket.id,
+                totalConnections: this.io.engine.clientsCount
+            });
+
+            // Emit connection success to client
+            socket.emit('connection-status', {
+                status: 'connected',
+                userId: socket.data.user.id,
+                userType: socket.data.user.type
+            });
 
             // Join order chat room
             socket.on('join-order-chat', async orderId => {
                 try {
                     const user = socket.data.user;
                     const roomName = `order:${orderId}`;
+
+                    logger.info('🚪 User attempting to join order chat:', {
+                        userId: user.id,
+                        userType: user.type,
+                        orderId,
+                        roomName,
+                        socketId: socket.id
+                    });
 
                     // Join the room
                     socket.join(roomName);
@@ -182,9 +228,20 @@ export default class SocketConfig {
                     // Mark messages as read
                     await EnhancedChatService.markMessagesAsRead(orderId, user.id);
 
-                    logger.info(`User ${user.id} joined chat for order ${orderId}`);
+                    logger.info('✅ User successfully joined order chat:', {
+                        userId: user.id,
+                        userType: user.type,
+                        orderId,
+                        messagesCount: messages.length,
+                        socketId: socket.id
+                    });
                 } catch (error) {
-                    logger.error('Error joining order chat:', error);
+                    logger.error('❌ Error joining order chat:', {
+                        error: error instanceof Error ? error.message : String(error),
+                        userId: socket.data.user.id,
+                        orderId,
+                        socketId: socket.id
+                    });
                     socket.emit('error', { message: 'Failed to join chat' });
                 }
             });
@@ -293,8 +350,14 @@ export default class SocketConfig {
             });
 
             // Handle disconnection
-            socket.on('disconnect', () => {
-                logger.info(`User disconnected: ${socket.data.user.id}`);
+            socket.on('disconnect', (reason) => {
+                logger.info('👋 Socket disconnected:', {
+                    userId: socket.data.user.id,
+                    userType: socket.data.user.type,
+                    reason,
+                    socketId: socket.id,
+                    totalConnections: this.io.engine.clientsCount - 1
+                });
             });
         });
     }
