@@ -7,6 +7,8 @@ import http from 'http';
 import SocketConfig from './clients/socket/index.config';
 import { NODE_ENV, PORT } from './utils/constants';
 import queues, { gracefulShutdown as shutdownQueues } from './queues';
+import UserPresenceService from './services/user-presence.service';
+import SmartNotificationDispatcher from './services/smart-notification.dispatcher';
 
 // Create the HTTP server
 const server = http.createServer(app);
@@ -39,6 +41,11 @@ async function startServer(): Promise<void> {
         // Initialize Socket.IO
         new SocketConfig(server);
         logger.info('Chat Client initialized');
+
+        // Initialize smart notification services
+        UserPresenceService.initialize();
+        SmartNotificationDispatcher.initialize();
+        logger.info('📧 Smart notification system initialized');
 
         // Initialize queue system and recurring jobs
         queues.initializeRecurringJobs(app);
@@ -74,6 +81,11 @@ async function startServer(): Promise<void> {
             // First, close the HTTP server to stop accepting new connections
             server.close(async () => {
                 try {
+                    // Shut down smart notification services
+                    UserPresenceService.shutdown();
+                    SmartNotificationDispatcher.shutdown();
+                    logger.info('📧 Smart notification system shut down successfully');
+
                     // Then shut down queues gracefully
                     await shutdownQueues();
                     logger.info('Queue system shut down successfully');

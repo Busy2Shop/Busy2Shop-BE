@@ -41,8 +41,10 @@ router.delete('/preferred-locations/:id', AuthenticatedController(AgentControlle
 // Earnings endpoints
 router.get('/earnings', AuthenticatedController(AgentController.getEarnings));
 
-// Agent notifications
+// Agent notifications - Agent-specific endpoints for better separation
 router.get('/notifications', AuthenticatedController(AgentController.getNotifications));
+router.get('/notifications/single', AuthenticatedController(AgentController.getSingleNotification));
+router.patch('/notifications/read', AuthenticatedController(AgentController.markNotificationAsRead));
 
 // Agent order management routes (static paths)
 router.get('/orders', AuthenticatedController(AgentController.getAgentOrders)); // Generic orders endpoint with status filtering

@@ -8,6 +8,7 @@ import User from '../models/user.model';
 import { NotificationTypes } from '../utils/interface';
 import { logger } from '../utils/logger';
 import Order from '../models/order.model';
+import SmartNotificationDispatcher from './smart-notification.dispatcher';
 
 interface IGroupedNotification extends INotification {
     count: number;
@@ -16,9 +17,32 @@ interface IGroupedNotification extends INotification {
 }
 
 export default class NotificationService {
-    // Adding this new method to handle email notifications
-    // Rate limiting for email notifications (max 1 per user per order per 30 seconds)
+    // Rate limiting for email notifications (max 1 per user per order per 30 seconds) - DEPRECATED
+    // Now handled by SmartNotificationDispatcher
     private static emailRateLimiter = new Map<string, number>();
+
+    /**
+     * Get notification priority based on type
+     */
+    private static getNotificationPriority(notificationType: NotificationTypes): 'low' | 'normal' | 'high' | 'urgent' {
+        switch (notificationType) {
+            case NotificationTypes.CHAT_MESSAGE_RECEIVED:
+                return 'normal';
+            case NotificationTypes.CHAT_ACTIVATED:
+                return 'low';
+            case NotificationTypes.USER_LEFT_CHAT:
+                return 'low';
+            case NotificationTypes.PAYMENT_SUCCESSFUL:
+            case NotificationTypes.ORDER_COMPLETED:
+            case NotificationTypes.ORDER_ACCEPTED:
+                return 'high';
+            case NotificationTypes.ORDER_REJECTED:
+            case NotificationTypes.PAYMENT_FAILED:
+                return 'urgent';
+            default:
+                return 'normal';
+        }
+    }
 
     static async sendEmailNotification(notification: INotification): Promise<void> {
         try {
@@ -123,23 +147,34 @@ export default class NotificationService {
 
         if (created) {
             try {
-                const userIds = [notificationData.userId];
+                // Use smart notification dispatcher for intelligent routing
+                const notificationPriority = this.getNotificationPriority(notificationData.title as NotificationTypes);
 
-                const result = await NotificationUtil.sendNotificationToUser(
-                    userIds,
+                const result = await SmartNotificationDispatcher.dispatchNotification(
                     notificationData,
+                    { priority: notificationPriority }
                 );
 
-                if (result === 'success') {
-                    console.log('Push notification sent successfully');
-                } else {
-                    console.error('Failed to send push notification');
-                }
+                logger.info('Smart notification dispatched:', {
+                    userId: notificationData.userId,
+                    type: notificationData.title,
+                    priority: notificationPriority,
+                    pushSent: result.pushSent,
+                    emailScheduled: result.emailScheduled,
+                    emailSent: result.emailSent,
+                });
 
-                // Added this line to send an email notification
-                await this.sendEmailNotification(notificationData);
             } catch (error) {
-                console.error('Error sending push notification:', error);
+                logger.error('Error dispatching smart notification:', error);
+
+                // Fallback to old method if smart dispatcher fails
+                try {
+                    const userIds = [notificationData.userId];
+                    await NotificationUtil.sendNotificationToUser(userIds, notificationData);
+                    logger.info('Fallback push notification sent');
+                } catch (fallbackError) {
+                    logger.error('Fallback notification also failed:', fallbackError);
+                }
             }
         }
 
@@ -193,43 +228,71 @@ export default class NotificationService {
                     notificationsByUser.set(notification.userId, userNotifications);
                 });
 
-                // Process in batches of 2000 users (OneSignal limit)
-                const BATCH_SIZE = 2000;
+                // Process notifications using smart dispatcher
                 const uniqueUserIds = [...notificationsByUser.keys()];
+                const dispatchPromises = uniqueUserIds.map(async userId => {
+                    const userNotifications = notificationsByUser.get(userId);
+                    if (!userNotifications?.length) return null;
 
-                for (let i = 0; i < uniqueUserIds.length; i += BATCH_SIZE) {
-                    const batchUserIds = uniqueUserIds.slice(i, i + BATCH_SIZE);
-                    const batchPromises = batchUserIds.map(async userId => {
-                        const userNotifications = notificationsByUser.get(userId);
-                        if (!userNotifications?.length) return;
+                    // Use the most recent notification for this user
+                    const latestNotification = userNotifications[userNotifications.length - 1];
+                    const notificationPriority = this.getNotificationPriority(latestNotification.title as NotificationTypes);
 
-                        // Use the most recent notification for this user
-                        const latestNotification = userNotifications[userNotifications.length - 1];
-
-                        // Added this: Send email notification for the latest notification
-                        await this.sendEmailNotification(latestNotification);
-
-                        return NotificationUtil.sendNotificationToUser(
-                            [userId],
+                    try {
+                        const result = await SmartNotificationDispatcher.dispatchNotification(
                             latestNotification,
+                            { priority: notificationPriority }
                         );
-                    });
 
-                    const results = await Promise.all(batchPromises);
+                        return {
+                            userId,
+                            success: result.pushSent,
+                            emailScheduled: result.emailScheduled,
+                            emailSent: result.emailSent,
+                        };
+                    } catch (error) {
+                        logger.error(`Smart dispatch failed for user ${userId}, falling back to push only:`, error);
 
-                    // Log results
-                    const successCount = results.filter(r => r === 'success').length;
-                    const failCount = batchUserIds.length - successCount;
-
-                    if (successCount > 0) {
-                        logger.info(`Successfully sent ${successCount} notifications in batch`);
+                        // Fallback to push notification only
+                        try {
+                            const pushResult = await NotificationUtil.sendNotificationToUser([userId], latestNotification);
+                            return {
+                                userId,
+                                success: pushResult === 'success',
+                                emailScheduled: false,
+                                emailSent: false,
+                            };
+                        } catch (fallbackError) {
+                            logger.error(`Fallback notification also failed for user ${userId}:`, fallbackError);
+                            return { userId, success: false, emailScheduled: false, emailSent: false };
+                        }
                     }
-                    if (failCount > 0) {
-                        logger.error(`Failed to send ${failCount} notifications in batch`);
-                    }
-                }
+                });
+
+                const results = await Promise.all(dispatchPromises);
+                const validResults = results.filter(r => r !== null) as Array<{
+                    userId: string;
+                    success: boolean;
+                    emailScheduled: boolean;
+                    emailSent: boolean;
+                }>;
+
+                // Log aggregate results
+                const successCount = validResults.filter(r => r.success).length;
+                const emailsSentCount = validResults.filter(r => r.emailSent).length;
+                const emailsScheduledCount = validResults.filter(r => r.emailScheduled).length;
+                const failCount = validResults.length - successCount;
+
+                logger.info('Bulk smart notification dispatch completed:', {
+                    totalProcessed: validResults.length,
+                    pushSuccessCount: successCount,
+                    pushFailCount: failCount,
+                    emailsSent: emailsSentCount,
+                    emailsScheduled: emailsScheduledCount,
+                });
+
             } catch (error) {
-                logger.error('Error sending push notifications:', error);
+                logger.error('Error in bulk smart notification dispatch:', error);
             }
         }
 

@@ -9,6 +9,11 @@ import {
 import {
     agentAssignmentQueue,
 } from './agent.queue';
+import {
+    emailNotificationQueue,
+    pushNotificationQueue,
+    bulkNotificationQueue,
+} from './notification.queue';
 
 // Export all queues for use throughout the application
 export const queues = {
@@ -18,6 +23,11 @@ export const queues = {
     },
     agent: {
         agentAssignmentQueue,
+    },
+    notification: {
+        emailNotificationQueue,
+        pushNotificationQueue,
+        bulkNotificationQueue,
     },
 };
 
@@ -33,6 +43,11 @@ export const initializeRecurringJobs = async (app: Express) => {
             // Agent queues
             agentAssignmentQueue,
 
+            // Notification queues
+            emailNotificationQueue,
+            pushNotificationQueue,
+            bulkNotificationQueue,
+
             // Add other queues here as needed
         });
 
@@ -45,6 +60,7 @@ export const initializeRecurringJobs = async (app: Express) => {
         throw error;
     }
 };
+
 
 // Graceful shutdown function for queues
 export const gracefulShutdown = async () => {
@@ -60,6 +76,11 @@ export const gracefulShutdown = async () => {
             // Agent queues
             agentAssignmentQueue.close(),
 
+            // Notification queues
+            emailNotificationQueue.close(),
+            pushNotificationQueue.close(),
+            bulkNotificationQueue.close(),
+
             // Add other queues here
         ];
 
@@ -71,7 +92,14 @@ export const gracefulShutdown = async () => {
     }
 };
 
-export { paymentWebhookQueue, paymentExpiryCheckQueue, agentAssignmentQueue };
+export {
+    paymentWebhookQueue,
+    paymentExpiryCheckQueue,
+    agentAssignmentQueue,
+    emailNotificationQueue,
+    pushNotificationQueue,
+    bulkNotificationQueue,
+};
 
 export default {
     queues,

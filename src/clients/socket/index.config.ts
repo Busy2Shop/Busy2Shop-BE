@@ -4,6 +4,7 @@ import { redisPubClient, redisSubClient } from '../../utils/redis';
 import EnhancedChatService from '../../services/chat-enhanced.service';
 import { AuthUtil, TokenCacheUtil } from '../../utils/token';
 import { logger } from '../../utils/logger';
+import UserPresenceService from '../../services/user-presence.service';
 import UserService from '../../services/user.service';
 import {
     ClientToServerEvents,
@@ -189,6 +190,14 @@ export default class SocketConfig {
                 totalConnections: this.io.engine.clientsCount
             });
 
+            // Update user presence when they connect
+            UserPresenceService.updateUserPresence(
+                socket.data.user.id,
+                'web',
+                socket.handshake.headers['user-agent'],
+                socket.id
+            );
+
             // Emit connection success to client
             socket.emit('connection-status', {
                 status: 'connected',
@@ -358,6 +367,14 @@ export default class SocketConfig {
                     socketId: socket.id,
                     totalConnections: this.io.engine.clientsCount - 1
                 });
+
+                // Mark user as offline when they disconnect
+                UserPresenceService.markUserOffline(socket.data.user.id);
+            });
+
+            // Handle heartbeat for presence tracking
+            socket.on('heartbeat', () => {
+                UserPresenceService.heartbeat(socket.data.user.id, 'web');
             });
         });
     }

@@ -3,7 +3,8 @@ import { AuthenticatedRequest } from '../middlewares/authMiddleware';
 import { BadRequestError, ForbiddenError } from '../utils/customErrors';
 import UserService from '../services/user.service';
 import AgentService, { IViewAgentsQuery } from '../services/agent.service';
-import { QueryTypes } from 'sequelize';
+import NotificationService from '../services/notification.service';
+import { QueryTypes, Transaction } from 'sequelize';
 import { Database } from '../models';
 import { logger } from '../utils/logger';
 
@@ -751,15 +752,159 @@ export default class AgentController {
     }
 
     /**
-     * Get notifications (placeholder - implement based on notification service)
+     * Get agent notifications with pagination and filtering
      * @param req AuthenticatedRequest
      * @param res Response
      */
     static async getNotifications(req: AuthenticatedRequest, res: Response) {
+        const profile = req.user;
+        const { read, page, size } = req.query;
+
+        // Verify user is an agent
+        if (profile.status?.userType !== 'agent') {
+            throw new ForbiddenError('Access denied. Agent only endpoint.');
+        }
+
+        // Validate the 'read' query parameter
+        if (read && read !== 'true' && read !== 'false') {
+            throw new BadRequestError('Invalid read query parameter');
+        }
+
+        await Database.transaction(async (transaction: Transaction) => {
+            let paginationQuery: { q?: string; page?: number; size?: number } = {
+                ...(read && { q: read }),
+            };
+
+            let paginate = false;
+            if (page && size) {
+                paginationQuery = {
+                    ...paginationQuery,
+                    page: Number(page),
+                    size: Number(size),
+                };
+                paginate = !!(
+                    paginationQuery.page &&
+                    paginationQuery.size &&
+                    paginationQuery.page > 0 &&
+                    paginationQuery.size > 0
+                );
+            }
+
+            // Fetch notifications for agent
+            const notifications = await NotificationService.viewNotifications(
+                profile.id,
+                paginationQuery,
+                transaction,
+            );
+
+            const stats = await NotificationService.getNotificationStats(
+                profile.id,
+                transaction,
+            );
+
+            let totalPages = {};
+            if (paginate && notifications.length > 0) {
+                const Pagination = (await import('../utils/pagination')).default;
+                totalPages = Pagination.estimateTotalPage({
+                    count: stats.total,
+                    page: Number(page),
+                    size: Number(size),
+                    limit: Number(size),
+                });
+            }
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Agent notifications retrieved successfully',
+                data: {
+                    notifications,
+                    stats: {
+                        ...stats,
+                        ...totalPages,
+                    },
+                },
+            });
+        });
+    }
+
+    /**
+     * Mark agent notification(s) as read
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async markNotificationAsRead(req: AuthenticatedRequest, res: Response) {
+        const { notificationId, all } = req.query;
+        const profile = req.user;
+
+        // Verify user is an agent
+        if (profile.status?.userType !== 'agent') {
+            throw new ForbiddenError('Access denied. Agent only endpoint.');
+        }
+
+        if (all === 'true') {
+            const updatedCount = await NotificationService.markAllNotificationsAsRead(profile.id);
+            res.status(200).json({
+                status: 'success',
+                message: `${updatedCount} agent notifications marked as read`,
+                data: { updatedCount },
+            });
+        } else {
+            if (!notificationId) {
+                throw new BadRequestError('Notification ID is required');
+            }
+
+            // Verify notification belongs to agent
+            const notification = await NotificationService.viewSingleNotificationById(
+                notificationId as string
+            );
+
+            if (notification.userId !== profile.id) {
+                throw new ForbiddenError('Access denied. This notification does not belong to you.');
+            }
+
+            await NotificationService.updateSingleNotification(
+                notificationId as string,
+                { read: true },
+            );
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Agent notification marked as read'
+            });
+        }
+    }
+
+    /**
+     * Get single agent notification
+     * @param req AuthenticatedRequest
+     * @param res Response
+     */
+    static async getSingleNotification(req: AuthenticatedRequest, res: Response) {
+        const { notificationId } = req.query;
+        const profile = req.user;
+
+        // Verify user is an agent
+        if (profile.status?.userType !== 'agent') {
+            throw new ForbiddenError('Access denied. Agent only endpoint.');
+        }
+
+        if (!notificationId) {
+            throw new BadRequestError('Notification ID is required');
+        }
+
+        const notification = await NotificationService.viewSingleNotificationById(
+            notificationId as string
+        );
+
+        // Verify notification belongs to agent
+        if (notification.userId !== profile.id) {
+            throw new ForbiddenError('Access denied. This notification does not belong to you.');
+        }
+
         res.status(200).json({
             status: 'success',
-            message: 'Notifications retrieved successfully',
-            data: [],
+            message: 'Agent notification retrieved successfully',
+            data: notification,
         });
     }
 

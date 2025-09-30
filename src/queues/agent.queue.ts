@@ -23,8 +23,8 @@ export const agentAssignmentQueue = new Queue<AgentAssignmentJobData>('agent-ass
             type: 'exponential',
             delay: 60000, // Start with 1 minute delay
         },
-        removeOnComplete: 10, // Keep only last 10 completed jobs
-        removeOnFail: 20, // Keep only last 20 failed jobs
+        removeOnComplete: { count: 10 }, // Keep only last 10 completed jobs
+        removeOnFail: { count: 20 }, // Keep only last 20 failed jobs
     },
 });
 

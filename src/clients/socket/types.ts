@@ -42,6 +42,7 @@ export interface ClientToServerEvents {
     'activate-chat': (orderId: string) => void;
     'mark-messages-read': (orderId: string) => void;
     'leave-order-chat': (orderId: string) => void;
+    heartbeat: () => void;
 }
 
 export interface ServerToClientEvents {
