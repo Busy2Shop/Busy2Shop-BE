@@ -143,5 +143,16 @@ router.put('/categories/:id', adminAuth('admin'), AdminAuthenticatedController(A
 router.delete('/categories/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteCategory));
 router.patch('/categories/:id/toggle-pin', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleCategoryPin));
 
+// Admin Featured Promotions Management Routes
+router.get('/featured-promotions', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllFeaturedPromotions));
+router.get('/featured-promotions/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getFeaturedPromotion));
+router.get('/featured-promotions/:id/analytics', adminAuth('admin'), AdminAuthenticatedController(AdminController.getPromotionAnalytics));
+router.post('/featured-promotions', adminAuth('admin'), AdminAuthenticatedController(AdminController.createFeaturedPromotion));
+router.put('/featured-promotions/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateFeaturedPromotion));
+router.delete('/featured-promotions/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteFeaturedPromotion));
+router.patch('/featured-promotions/:id/toggle-status', adminAuth('admin'), AdminAuthenticatedController(AdminController.togglePromotionStatus));
+router.post('/featured-promotions/reorder', adminAuth('admin'), AdminAuthenticatedController(AdminController.reorderPromotions));
+router.post('/featured-promotions/update-icon-urls', adminAuth('admin'), AdminAuthenticatedController(AdminController.updatePromotionsWithIconUrls));
+
 export default router;
 

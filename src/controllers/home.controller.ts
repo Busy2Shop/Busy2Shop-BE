@@ -6,6 +6,7 @@ import { logger } from '../utils/logger';
 import ShoppingList from '../models/shoppingList.model';
 import ShoppingListItem from '../models/shoppingListItem.model';
 import Market from '../models/market.model';
+import FeaturedPromotionService from '../services/featuredPromotion.service';
 
 export default class HomeController {
     /**
@@ -950,14 +951,24 @@ export default class HomeController {
                 throw new BadRequestError('Search query must be at least 2 characters long');
             }
 
-            const searchType = type as 'all' | 'products' | 'markets' | 'categories';
-            const limitNum = parseInt(limit as string) || 10;
+            const limitNum = parseInt(limit as string) || 30;
             const includeSuggestions = suggest === 'true';
 
-            const validTypes = ['all', 'products', 'markets', 'categories'];
-            if (!validTypes.includes(searchType)) {
-                throw new BadRequestError('Invalid search type. Must be one of: all, products, markets, categories');
-            }
+            // Enhanced type mapping to handle featured promotions search types
+            const typeMapping: Record<string, 'all' | 'products' | 'markets' | 'categories'> = {
+                'all': 'all',
+                'products': 'products',
+                'product': 'products',
+                'markets': 'markets',
+                'market': 'markets',
+                'location': 'markets', // Location searches -> search for markets
+                'categories': 'categories',
+                'category': 'categories',
+                'discount': 'all', // Discount searches -> search everything
+            };
+
+            const rawType = (type as string).toLowerCase();
+            const searchType = typeMapping[rawType] || 'all';
 
             if (limitNum < 1 || limitNum > 100) {
                 throw new BadRequestError('Limit must be between 1 and 100');
@@ -966,8 +977,11 @@ export default class HomeController {
             const context = HomeController.buildContext(req);
             const homeService = new HomeService();
 
+            // Enhanced query processing for better search results
+            const processedQuery = query.trim();
+
             const results = await homeService.search(
-                query.trim(),
+                processedQuery,
                 searchType,
                 limitNum,
                 context
@@ -981,8 +995,9 @@ export default class HomeController {
             const responseData: any = {
                 ...results,
                 totalResults,
-                searchQuery: query.trim(),
+                searchQuery: processedQuery,
                 searchType,
+                originalType: rawType,
                 performance: {
                     algorithm: 'relevance_scoring_v2',
                     processingTime: Date.now(),
@@ -1412,5 +1427,179 @@ export default class HomeController {
                 ['Consider products with discounts', 'Look for bulk options', 'Check alternative brands'] :
                 ['You have room for premium options', 'Consider adding complementary items'],
         };
+    }
+
+    /**
+     * Get active featured promotions for home page
+     */
+    static async getFeaturedPromotions(req: Request, res: Response) {
+        try {
+            const limit = parseInt(req.query.limit as string) || 6;
+
+            if (limit < 1 || limit > 20) {
+                throw new BadRequestError('Limit must be between 1 and 20');
+            }
+
+            const promotionService = new FeaturedPromotionService();
+            const promotions = await promotionService.getActivePromotions(limit);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Featured promotions retrieved successfully',
+                data: {
+                    promotions,
+                    count: promotions.length,
+                },
+                meta: {
+                    timestamp: new Date().toISOString(),
+                },
+            });
+
+        } catch (error) {
+            logger.error('Error in getFeaturedPromotions:', error);
+
+            if (error instanceof BadRequestError) {
+                throw error;
+            }
+
+            res.status(500).json({
+                status: 'error',
+                error: true,
+                message: 'Failed to retrieve featured promotions',
+                errorCode: 'FEATURED_PROMOTIONS_ERROR',
+            });
+        }
+    }
+
+    /**
+     * Track click on featured promotion
+     */
+    static async trackPromotionClick(req: Request, res: Response) {
+        try {
+            const { id } = req.params;
+
+            if (!id) {
+                throw new BadRequestError('Promotion ID is required');
+            }
+
+            const promotionService = new FeaturedPromotionService();
+            await promotionService.trackClick(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Click tracked successfully',
+            });
+
+        } catch (error) {
+            logger.error('Error in trackPromotionClick:', error);
+
+            // Don't throw error for analytics tracking - just log it
+            res.status(200).json({
+                status: 'success',
+                message: 'Request processed',
+            });
+        }
+    }
+
+    /**
+     * Seed default featured promotions
+     */
+    static async seedFeaturedPromotions(req: Request, res: Response) {
+        try {
+            const { defaultPromotions } = await import('../seeders/seed-featured-promotions');
+            const promotionService = new FeaturedPromotionService();
+            const force = req.query.force === 'true';
+
+            // Check if promotions already exist
+            const existing = await promotionService.getAllPromotions({ limit: 100 });
+            if (existing.length > 0 && !force) {
+                return res.status(200).json({
+                    status: 'success',
+                    message: 'Featured promotions already seeded',
+                    data: { count: existing.length },
+                });
+            }
+
+            // If force reseed, delete existing promotions
+            if (force && existing.length > 0) {
+                for (const promo of existing) {
+                    await promotionService.deletePromotion(promo.id);
+                }
+                logger.info(`🗑️  Deleted ${existing.length} existing promotions for reseed`);
+            }
+
+            const created = [];
+            for (const promotion of defaultPromotions) {
+                const result = await promotionService.createPromotion(promotion);
+                created.push(result);
+            }
+
+            logger.info('✅ Successfully seeded 6 featured promotions');
+
+            res.status(201).json({
+                status: 'success',
+                message: force ? 'Featured promotions reseeded successfully' : 'Featured promotions seeded successfully',
+                data: {
+                    promotions: created,
+                    count: created.length,
+                },
+            });
+
+        } catch (error) {
+            logger.error('Error seeding featured promotions:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to seed featured promotions',
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+        }
+    }
+
+    /**
+     * Update existing promotions with icon URLs
+     */
+    static async updatePromotionsIconUrls(req: Request, res: Response) {
+        try {
+            const { defaultPromotions } = await import('../seeders/seed-featured-promotions');
+            const promotionService = new FeaturedPromotionService();
+
+            // Get all existing promotions
+            const existing = await promotionService.getAllPromotions({ limit: 100 });
+
+            const updated = [];
+            for (const promo of existing) {
+                // Find matching default promotion by title
+                const defaultPromo = defaultPromotions.find(dp =>
+                    promo.title.toLowerCase().includes(dp.title.toLowerCase()) ||
+                    dp.title.toLowerCase().includes(promo.title.toLowerCase())
+                );
+
+                if (defaultPromo && defaultPromo.iconUrl) {
+                    await promotionService.updatePromotion(promo.id, {
+                        iconUrl: defaultPromo.iconUrl,
+                    });
+                    updated.push({
+                        id: promo.id,
+                        title: promo.title,
+                        iconUrl: defaultPromo.iconUrl,
+                    });
+                    logger.info(`✅ Updated ${promo.title} with icon URL: ${defaultPromo.iconUrl}`);
+                }
+            }
+
+            res.status(200).json({
+                status: 'success',
+                message: `Updated ${updated.length} promotions with icon URLs`,
+                data: { updated },
+            });
+
+        } catch (error) {
+            logger.error('Error updating promotions icon URLs:', error);
+            res.status(500).json({
+                status: 'error',
+                message: 'Failed to update promotions icon URLs',
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+        }
     }
 }

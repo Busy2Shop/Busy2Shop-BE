@@ -15,6 +15,8 @@ import OrderNumberGenerator from '../utils/orderNumberGenerator';
 import OrderTrailService from './orderTrail.service';
 import PriceCalculatorService from './priceCalculator.service';
 import SystemSettingsService from './systemSettings.service';
+import NotificationService from './notification.service';
+import { NotificationTypes } from '../utils/interface';
 
 export interface IViewOrdersQuery {
     page?: number;
@@ -373,6 +375,34 @@ export default class OrderService {
                     'accepted',
                 );
 
+                // Send notifications for agent assignment
+                try {
+                    // Notify customer about agent assignment
+                    await NotificationService.addNotification({
+                        userId: order.customerId,
+                        title: NotificationTypes.ORDER_ACCEPTED,
+                        heading: 'Agent Assigned',
+                        message: `${assignedAgent.firstName} ${assignedAgent.lastName} has been assigned to your order #${order.orderNumber}`,
+                        resource: order.id,
+                        actorId: assignedAgent.id,
+                    });
+
+                    // Notify agent about new order
+                    await NotificationService.addNotification({
+                        userId: assignedAgent.id,
+                        title: NotificationTypes.NEW_ORDER_ASSIGNED,
+                        heading: 'New Order Assigned',
+                        message: `You have been assigned order #${order.orderNumber}. Please start shopping soon.`,
+                        resource: order.id,
+                        actorId: order.customerId,
+                    });
+
+                    logger.info(`Agent assignment notifications sent for order ${order.orderNumber}`);
+                } catch (notificationError) {
+                    logger.error(`Failed to send agent assignment notifications for order ${order.orderNumber}:`, notificationError);
+                    // Don't fail the assignment if notification fails
+                }
+
                 logger.info(`Agent ${assignedAgent.id} assigned to order ${orderId} for shopping list ${shoppingListId}`);
             } else {
                 logger.warn(`No available agents found for order ${orderId} at market ${shoppingList.marketId}`);
@@ -555,7 +585,7 @@ export default class OrderService {
                 'deliveryAddress', 'customerNotes', 'agentNotes', 'paymentStatus', 'paymentMethod',
                 'acceptedAt', 'shoppingStartedAt', 'shoppingCompletedAt', 'deliveryStartedAt',
                 'completedAt', 'cancelledAt', 'createdAt', 'updatedAt',
-                'customerId', 'agentId', 'shoppingListId', 'paymentId'
+                'customerId', 'agentId', 'shoppingListId', 'paymentId',
             ],
         };
 
@@ -855,9 +885,9 @@ export default class OrderService {
 
             // Store previous status for logging
             const previousStatus = order.status;
-            
+
             await order.update(updateData, { transaction });
-            
+
             // Log status change
             await OrderTrailService.logStatusChange(
                 order.id,
@@ -873,6 +903,60 @@ export default class OrderService {
                     userId,
                     { completedAt: updateData.completedAt || new Date() },
                 );
+            }
+
+            // Get agent info for notifications
+            const agent = order.agentId ? await User.findByPk(order.agentId, { transaction }) : null;
+            const agentName = agent ? `${agent.firstName} ${agent.lastName}` : 'An agent';
+
+            // Send notifications based on status changes
+            try {
+                if (status === 'shopping') {
+                    // Notify customer when shopping starts
+                    await NotificationService.addNotification({
+                        userId: order.customerId,
+                        title: NotificationTypes.ORDER_IN_PROGRESS,
+                        heading: 'Shopping Started',
+                        message: `${agentName} has started shopping for your order #${order.orderNumber}`,
+                        resource: order.id,
+                        actorId: userId,
+                    });
+                } else if (status === 'shopping_completed') {
+                    // Notify customer when shopping is complete
+                    await NotificationService.addNotification({
+                        userId: order.customerId,
+                        title: NotificationTypes.ORDER_READY,
+                        heading: 'Shopping Complete',
+                        message: `Your order #${order.orderNumber} has been packed and is ready for delivery`,
+                        resource: order.id,
+                        actorId: userId,
+                    });
+                } else if (status === 'delivery') {
+                    // Notify customer when delivery starts
+                    await NotificationService.addNotification({
+                        userId: order.customerId,
+                        title: NotificationTypes.ORDER_DELIVERY_STARTED,
+                        heading: 'Out for Delivery',
+                        message: `Your order #${order.orderNumber} is on the way!`,
+                        resource: order.id,
+                        actorId: userId,
+                    });
+                } else if (status === 'completed') {
+                    // Notify customer when order is delivered
+                    await NotificationService.addNotification({
+                        userId: order.customerId,
+                        title: NotificationTypes.ORDER_COMPLETED,
+                        heading: 'Order Delivered',
+                        message: `Your order #${order.orderNumber} has been successfully delivered. Thank you!`,
+                        resource: order.id,
+                        actorId: userId,
+                    });
+                }
+
+                logger.info(`Order status notification sent for order ${order.orderNumber}: ${previousStatus} -> ${status}`);
+            } catch (notificationError) {
+                logger.error(`Failed to send status change notification for order ${order.orderNumber}:`, notificationError);
+                // Don't fail the status update if notification fails
             }
 
             return await this.getOrderById(order.id);
@@ -1015,7 +1099,7 @@ export default class OrderService {
 
         // For orders, we should also consider if discounts were applied during shopping list validation
         // This would come from shopping list's stored discount information if available
-        let appliedDiscountAmount = 0;
+        const appliedDiscountAmount = 0;
 
         // If this is from a shopping list that had discounts applied, we should preserve that
         // For now, we'll calculate a clean subtotal and let the order creation handle discount audit trail

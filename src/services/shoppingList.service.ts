@@ -7,6 +7,7 @@ import User from '../models/user.model';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../utils/customErrors';
 import Pagination, { IPaging } from '../utils/pagination';
 import Order, { IOrder } from '../models/order.model';
+import OrderTrail from '../models/orderTrail.model';
 import { Database } from '../models';
 import AgentService from './agent.service';
 import { logger } from '../utils/logger';
@@ -357,7 +358,7 @@ export default class ShoppingListService {
             throw new BadRequestError('Cannot delete a shopping list that has been submitted');
         }
 
-        // Check for existing orders and handle expired/cancelled ones
+        // Check for existing orders and validate deletion eligibility
         const existingOrder = await Order.findOne({
             where: {
                 shoppingListId: id,
@@ -366,39 +367,79 @@ export default class ShoppingListService {
             order: [['createdAt', 'DESC']],
         });
 
+        // Variable to track if we should delete the order along with the shopping list
+        let shouldDeleteOrder = false;
+
         if (existingOrder) {
-            // Check if order is completed
+            // CRITICAL: Never allow deletion if payment is completed
             if (existingOrder.paymentStatus === 'completed') {
                 throw new BadRequestError('Cannot delete shopping list with completed payment. Please contact support if you need assistance.');
             }
 
-            // Check if order is expired (30+ minutes old with pending payment)
-            const orderAge = Date.now() - new Date(existingOrder.createdAt).getTime();
-            const thirtyMinutes = 30 * 60 * 1000;
-
-            if (existingOrder.paymentStatus === 'pending' && orderAge < thirtyMinutes) {
-                throw new BadRequestError(`Cannot delete shopping list with active payment. Please wait ${Math.ceil((thirtyMinutes - orderAge) / 60000)} minutes or cancel the payment first.`);
+            // CRITICAL: Never allow deletion if order has been accepted/in progress
+            if (['accepted', 'in_progress', 'shopping', 'shopping_completed', 'delivery', 'completed'].includes(existingOrder.status)) {
+                throw new BadRequestError('Cannot delete shopping list for an order that is being processed or completed.');
             }
 
-            // If order is expired or failed, update its status
-            if (existingOrder.paymentStatus === 'pending' && orderAge >= thirtyMinutes) {
+            // Handle failed/expired payments - safe to delete
+            if (existingOrder.paymentStatus === 'failed' || existingOrder.paymentStatus === 'expired') {
+                shouldDeleteOrder = true;
+                logger.info(`Shopping list ${id} has ${existingOrder.paymentStatus} payment order ${existingOrder.orderNumber} - will be deleted`);
+            }
+            // Handle pending payments
+            else if (existingOrder.paymentStatus === 'pending') {
+                const orderAge = Date.now() - new Date(existingOrder.createdAt).getTime();
+                const thirtyMinutes = 30 * 60 * 1000;
+
+                // Block deletion for active pending payments (< 30 minutes)
+                if (orderAge < thirtyMinutes) {
+                    throw new BadRequestError(
+                        `Cannot delete shopping list with active pending payment. ` +
+                        `Please wait ${Math.ceil((thirtyMinutes - orderAge) / 60000)} minutes or cancel the payment first.`
+                    );
+                }
+
+                // If payment is pending for 30+ minutes, mark as expired and allow deletion
                 await existingOrder.update({
                     paymentStatus: 'expired',
                     status: 'cancelled',
                 });
-                logger.info(`Expired old order ${existingOrder.orderNumber} before deleting shopping list ${id}`);
+                shouldDeleteOrder = true;
+                logger.info(`Marked expired pending payment order ${existingOrder.orderNumber} as cancelled - will be deleted`);
             }
         }
 
+        // Execute deletion in a transaction
         await Database.transaction(async (transaction: Transaction) => {
-            // Delete all items first
-            await ShoppingListItem.destroy({
+            // Delete order and its trails if applicable
+            if (shouldDeleteOrder && existingOrder) {
+                // Step 1: Delete order trails first (foreign key constraint)
+                const deletedTrails = await OrderTrail.destroy({
+                    where: { orderId: existingOrder.id },
+                    transaction,
+                });
+                logger.info(`Deleted ${deletedTrails} order trail(s) for order ${existingOrder.orderNumber}`);
+
+                // Step 2: Delete the order
+                await existingOrder.destroy({ transaction });
+                logger.info(`Deleted order ${existingOrder.orderNumber} (ID: ${existingOrder.id})`);
+            }
+
+            // Step 3: Delete all shopping list items
+            const deletedItems = await ShoppingListItem.destroy({
                 where: { shoppingListId: id },
                 transaction,
             });
+            logger.info(`Deleted ${deletedItems} shopping list item(s) for list ${id}`);
 
-            // Then delete the list
+            // Step 4: Delete the shopping list
             await list.destroy({ transaction });
+            logger.info(`Deleted shopping list ${id} (Name: ${list.name})`);
+
+            logger.info(
+                `Successfully deleted shopping list ${id} and all associated records ` +
+                `(Order: ${shouldDeleteOrder ? 'Yes' : 'No'}, Items: ${deletedItems})`
+            );
         });
     }
 

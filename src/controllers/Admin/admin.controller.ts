@@ -20,6 +20,8 @@ import ProductService from '../../services/product.service';
 import CategoryService from '../../services/category.service';
 import Product from '../../models/product.model';
 import Category from '../../models/category.model';
+import FeaturedPromotionService from '../../services/featuredPromotion.service';
+import { logger } from '../../utils/logger';
 
 export default class AdminController {
     // static async getUserStats(req: Request, res: Response) {
@@ -3016,6 +3018,213 @@ export default class AdminController {
             });
         } catch (error) {
             console.error('Error in getDashboardStats:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all featured promotions (admin view)
+     */
+    static async getAllFeaturedPromotions(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const includeInactive = req.query.includeInactive === 'true';
+            const searchType = req.query.searchType as any;
+            const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+
+            const promotionService = new FeaturedPromotionService();
+            const promotions = await promotionService.getAllPromotions({
+                includeInactive,
+                searchType,
+                limit,
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Featured promotions retrieved successfully',
+                data: { promotions, count: promotions.length },
+            });
+        } catch (error) {
+            logger.error('Error getting featured promotions:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get single featured promotion by ID
+     */
+    static async getFeaturedPromotion(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const promotionService = new FeaturedPromotionService();
+            const promotion = await promotionService.getPromotionById(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Featured promotion retrieved successfully',
+                data: { promotion },
+            });
+        } catch (error) {
+            logger.error('Error getting featured promotion:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create new featured promotion
+     */
+    static async createFeaturedPromotion(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const promotionService = new FeaturedPromotionService();
+            const promotion = await promotionService.createPromotion(req.body);
+
+            res.status(201).json({
+                status: 'success',
+                message: 'Featured promotion created successfully',
+                data: { promotion },
+            });
+        } catch (error) {
+            logger.error('Error creating featured promotion:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update featured promotion
+     */
+    static async updateFeaturedPromotion(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const promotionService = new FeaturedPromotionService();
+            const promotion = await promotionService.updatePromotion(id, req.body);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Featured promotion updated successfully',
+                data: { promotion },
+            });
+        } catch (error) {
+            logger.error('Error updating featured promotion:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete featured promotion
+     */
+    static async deleteFeaturedPromotion(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const promotionService = new FeaturedPromotionService();
+            await promotionService.deletePromotion(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Featured promotion deleted successfully',
+            });
+        } catch (error) {
+            logger.error('Error deleting featured promotion:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Toggle promotion active status
+     */
+    static async togglePromotionStatus(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const promotionService = new FeaturedPromotionService();
+            const promotion = await promotionService.togglePromotionStatus(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Promotion status toggled successfully',
+                data: { promotion },
+            });
+        } catch (error) {
+            logger.error('Error toggling promotion status:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Reorder promotions
+     */
+    static async reorderPromotions(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { promotionOrders } = req.body;
+
+            if (!Array.isArray(promotionOrders)) {
+                throw new BadRequestError('promotionOrders must be an array');
+            }
+
+            const promotionService = new FeaturedPromotionService();
+            await promotionService.reorderPromotions(promotionOrders);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Promotions reordered successfully',
+            });
+        } catch (error) {
+            logger.error('Error reordering promotions:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get promotion analytics
+     */
+    static async getPromotionAnalytics(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const promotionService = new FeaturedPromotionService();
+            const analytics = await promotionService.getPromotionAnalytics(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Promotion analytics retrieved successfully',
+                data: analytics,
+            });
+        } catch (error) {
+            logger.error('Error getting promotion analytics:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update existing promotions with icon URLs (migration helper)
+     */
+    static async updatePromotionsWithIconUrls(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const iconUrlMap: Record<string, string> = {
+                'Computer Village': 'https://cdn-icons-png.flaticon.com/512/2972/2972351.png',
+                'Alaba International': 'https://cdn-icons-png.flaticon.com/512/2913/2913133.png',
+                'Balogun Market': 'https://cdn-icons-png.flaticon.com/512/2331/2331970.png',
+                'Trade Fair': 'https://cdn-icons-png.flaticon.com/512/3227/3227786.png',
+                'Laptops': 'https://cdn-icons-png.flaticon.com/512/3474/3474360.png',
+                'Food Items': 'https://cdn-icons-png.flaticon.com/512/1046/1046784.png',
+            };
+
+            const promotionService = new FeaturedPromotionService();
+            const allPromotions = await promotionService.getAllPromotions({ limit: 100 });
+
+            const updated: string[] = [];
+            for (const promo of allPromotions) {
+                const iconUrl = iconUrlMap[promo.title];
+                if (iconUrl && !promo.iconUrl) {
+                    await promotionService.updatePromotion(promo.id, { iconUrl });
+                    updated.push(promo.title);
+                    logger.info(`✅ Updated ${promo.title} with icon URL`);
+                }
+            }
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Promotions updated with icon URLs',
+                data: { updated, count: updated.length },
+            });
+        } catch (error) {
+            logger.error('Error updating promotions with icon URLs:', error);
             throw error;
         }
     }

@@ -35,7 +35,12 @@ export default class NotificationService {
             case NotificationTypes.PAYMENT_SUCCESSFUL:
             case NotificationTypes.ORDER_COMPLETED:
             case NotificationTypes.ORDER_ACCEPTED:
+            case NotificationTypes.NEW_ORDER_ASSIGNED:
                 return 'high';
+            case NotificationTypes.ORDER_IN_PROGRESS:
+            case NotificationTypes.ORDER_READY:
+            case NotificationTypes.ORDER_DELIVERY_STARTED:
+                return 'normal';
             case NotificationTypes.ORDER_REJECTED:
             case NotificationTypes.PAYMENT_FAILED:
                 return 'urgent';

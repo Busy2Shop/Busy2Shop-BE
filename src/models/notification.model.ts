@@ -60,11 +60,11 @@ export default class Notification extends Model<INotification | Notification> {
 }
 
 export interface INotification {
-    id: string;
-    title: string;
+    id?: string;
+    title: NotificationTypes;
     message: string;
     heading: string;
-    read: boolean;
+    read?: boolean;
     icon?: string;
     resource?: string;
     // pointer?: string;

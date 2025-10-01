@@ -46,4 +46,10 @@ router.get('/stats', HomeController.getDashboardStats);
 // Suggested shopping lists
 router.get('/suggested-lists', HomeController.getSuggestedShoppingLists);
 
+// Featured promotions
+router.get('/featured-promotions', HomeController.getFeaturedPromotions);
+router.post('/featured-promotions/:id/track-click', HomeController.trackPromotionClick);
+router.post('/featured-promotions/seed', HomeController.seedFeaturedPromotions);
+router.post('/featured-promotions/update-icon-urls', HomeController.updatePromotionsIconUrls);
+
 export default router;

@@ -5,10 +5,12 @@ import ShoppingListService from './shoppingList.service';
 import AgentService from './agent.service';
 import OrderTrailService from './orderTrail.service';
 import EnhancedChatService from './chat-enhanced.service';
+import NotificationService from './notification.service';
 import { logger } from '../utils/logger';
 import { Database } from '../models';
 import Order from '../models/order.model';
 import ShoppingList from '../models/shoppingList.model';
+import { NotificationTypes } from '../utils/interface';
 
 /**
  * Unified Payment Status Synchronization Service
@@ -111,18 +113,46 @@ export default class PaymentStatusSyncService {
                             const selectedAgent = availableAgents[0];
                             await AgentService.assignOrderToAgent(orderId, selectedAgent.id, transaction);
                             assignedAgentId = selectedAgent.id;
-                            
+
                             logger.info(`Agent ${selectedAgent.id} automatically assigned to order ${order.orderNumber}`);
-                            
+
                             // 7. Update order status to 'accepted' after agent assignment (not in_progress yet)
                             // Agent still needs to accept the order in their dashboard
                             await OrderService.updateOrderStatusSystem(orderId, 'accepted', transaction);
                             logger.info(`Order ${order.orderNumber} status updated to accepted after agent assignment`);
-                            
+
                             // 8. Shopping list remains 'accepted' until agent starts working
                             // It will be updated to 'processing' when agent accepts the order
                             logger.info(`Shopping list ${order.shoppingListId} remains accepted - waiting for agent to start`);
-                            
+
+                            // 9. Send notifications for agent assignment
+                            try {
+                                // Notify customer about agent assignment
+                                await NotificationService.addNotification({
+                                    userId: order.customerId,
+                                    title: NotificationTypes.ORDER_ACCEPTED,
+                                    heading: 'Agent Assigned',
+                                    message: `${selectedAgent.firstName} ${selectedAgent.lastName} has been assigned to your order #${order.orderNumber}`,
+                                    resource: order.id,
+                                    actorId: selectedAgent.id,
+                                });
+
+                                // Notify agent about new order
+                                await NotificationService.addNotification({
+                                    userId: selectedAgent.id,
+                                    title: NotificationTypes.NEW_ORDER_ASSIGNED,
+                                    heading: 'New Order Assigned',
+                                    message: `You have been assigned order #${order.orderNumber}. Please start shopping soon.`,
+                                    resource: order.id,
+                                    actorId: order.customerId,
+                                });
+
+                                logger.info(`Agent assignment notifications sent for order ${order.orderNumber}`);
+                            } catch (notificationError) {
+                                logger.error(`Failed to send agent assignment notifications for order ${order.orderNumber}:`, notificationError);
+                                // Don't fail the assignment if notification fails
+                            }
+
                         } else {
                             logger.warn(`No available agents found for order ${order.orderNumber} - order remains in accepted status`);
                         }
@@ -132,7 +162,7 @@ export default class PaymentStatusSyncService {
                     // Continue - payment confirmation succeeded even if agent assignment failed
                 }
                 
-                // 9. Activate chat for the order to enable communication
+                // 10. Activate chat for the order to enable communication
                 try {
                     const chatActivationData = {
                         orderId,
@@ -154,7 +184,7 @@ export default class PaymentStatusSyncService {
                     // Don't fail the payment confirmation if chat activation fails
                 }
 
-                // 10. Log comprehensive trail entry
+                // 11. Log comprehensive trail entry
                 await OrderTrailService.logOrderEvent(orderId, {
                     action: 'payment_confirmed',
                     description: `Payment confirmed via ${source} - Order ready for shopping`,
@@ -169,6 +199,22 @@ export default class PaymentStatusSyncService {
                         chatActivated: true,
                     },
                 });
+
+                // 12. Send payment successful notification to customer
+                try {
+                    await NotificationService.addNotification({
+                        userId: order.customerId,
+                        title: NotificationTypes.PAYMENT_SUCCESSFUL,
+                        heading: 'Payment Confirmed',
+                        message: `Your payment for order #${order.orderNumber} has been confirmed. ${assignedAgentId ? 'An agent has been assigned and will start shopping soon.' : 'An agent will be assigned soon.'}`,
+                        resource: order.id,
+                        actorId: order.customerId,
+                    });
+                    logger.info(`Payment successful notification sent for order ${order.orderNumber}`);
+                } catch (notificationError) {
+                    logger.error(`Failed to send payment notification for order ${order.orderNumber}:`, notificationError);
+                    // Don't fail the payment confirmation if notification fails
+                }
 
                 logger.info(`Unified payment confirmation completed for order ${order.orderNumber}`, {
                     orderId,

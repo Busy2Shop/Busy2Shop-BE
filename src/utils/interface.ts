@@ -121,6 +121,12 @@ export enum NotificationTypes {
     AGENT_UNASSIGNED = 'Agent Unassigned',
     AGENT_LOCATION_UPDATED = 'Agent Location Updated',
     AGENT_STATUS_CHANGED = 'Agent Status Changed',
+    NEW_ORDER_ASSIGNED = 'New Order Assigned',
+
+    // Order Status Notifications
+    ORDER_IN_PROGRESS = 'Order In Progress',
+    ORDER_READY = 'Order Ready',
+    ORDER_DELIVERY_STARTED = 'Order Delivery Started',
 
     // Chat Notifications
     CHAT_MESSAGE_RECEIVED = 'Chat Message Received',
