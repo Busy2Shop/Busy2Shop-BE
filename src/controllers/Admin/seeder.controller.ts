@@ -1440,6 +1440,461 @@ class SeederController {
         }
     }
 
+    /**
+     * Seed comprehensive products for all markets
+     * Ensures every market has at least 5 products
+     */
+    async seedMarketProducts(req: Request, res: Response) {
+        try {
+            logger.info('🚀 Starting comprehensive market products seeding...');
+
+            // Get all markets
+            const markets = await Market.findAll({
+                include: [
+                    {
+                        model: Product,
+                        as: 'products',
+                    },
+                ],
+            });
+
+            if (markets.length === 0) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'No markets found. Please seed markets first.',
+                });
+            }
+
+            logger.info(`Found ${markets.length} markets to process`);
+
+            // Product templates for different market types
+            const productTemplates = {
+                supermarket: [
+                    {
+                        name: 'Golden Penny Semovita 1kg',
+                        description: 'Premium quality semovita flour for making swallow',
+                        price: 850,
+                        images: ['https://images.unsplash.com/photo-1586201375761-83865001e8c3?w=600&h=400&fit=crop'],
+                        barcode: 'GP-SEMO-1KG',
+                        sku: 'GP001',
+                        stockQuantity: 150,
+                        attributes: { weight: '1kg', brand: 'Golden Penny', type: 'Semovita' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Peak Milk Powder 400g',
+                        description: 'Instant full cream milk powder, rich and creamy',
+                        price: 2150,
+                        images: ['https://images.unsplash.com/photo-1563636619-e9143da7973b?w=600&h=400&fit=crop'],
+                        barcode: 'PEAK-MILK-400G',
+                        sku: 'PEAK002',
+                        stockQuantity: 200,
+                        attributes: { weight: '400g', brand: 'Peak', type: 'Full Cream' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Indomie Instant Noodles (Chicken)',
+                        description: 'Quick and delicious chicken-flavored instant noodles',
+                        price: 150,
+                        images: ['https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=600&h=400&fit=crop'],
+                        barcode: 'INDO-CHICKEN-70G',
+                        sku: 'INDO003',
+                        stockQuantity: 500,
+                        attributes: { weight: '70g', brand: 'Indomie', flavor: 'Chicken' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Gino Tomato Paste 70g',
+                        description: 'Rich tomato paste for cooking soups and stews',
+                        price: 200,
+                        images: ['https://images.unsplash.com/photo-1546548970-71785318a17b?w=600&h=400&fit=crop'],
+                        barcode: 'GINO-TP-70G',
+                        sku: 'GINO004',
+                        stockQuantity: 300,
+                        attributes: { weight: '70g', brand: 'Gino', type: 'Tomato Paste' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Dangote Sugar 1kg',
+                        description: 'Pure refined granulated white sugar',
+                        price: 1100,
+                        images: ['https://images.unsplash.com/photo-1587735243615-c03f25aaff15?w=600&h=400&fit=crop'],
+                        barcode: 'DANG-SUGAR-1KG',
+                        sku: 'DANG005',
+                        stockQuantity: 180,
+                        attributes: { weight: '1kg', brand: 'Dangote', type: 'Granulated Sugar' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Maggi Star Cube Seasoning',
+                        description: 'Multi-purpose seasoning cubes for all Nigerian dishes',
+                        price: 50,
+                        images: ['https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=600&h=400&fit=crop'],
+                        barcode: 'MAGGI-STAR-4G',
+                        sku: 'MAG006',
+                        stockQuantity: 600,
+                        attributes: { pieces: '1 cube', brand: 'Maggi', type: 'Star Cube' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Honeywell Pasta 500g',
+                        description: 'Premium quality spaghetti pasta',
+                        price: 450,
+                        images: ['https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=600&h=400&fit=crop'],
+                        barcode: 'HON-PASTA-500G',
+                        sku: 'HON007',
+                        stockQuantity: 220,
+                        attributes: { weight: '500g', brand: 'Honeywell', type: 'Spaghetti' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Devon Kings Vegetable Oil 750ml',
+                        description: 'Pure vegetable cooking oil',
+                        price: 1350,
+                        images: ['https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=600&h=400&fit=crop'],
+                        barcode: 'DEV-OIL-750ML',
+                        sku: 'DEV008',
+                        stockQuantity: 150,
+                        attributes: { volume: '750ml', brand: 'Devon Kings', type: 'Vegetable Oil' },
+                        isAvailable: true,
+                    },
+                ],
+                local_market: [
+                    {
+                        name: 'Fresh Tomatoes (Big basket)',
+                        description: 'Fresh local tomatoes, perfect for Nigerian soups and stews',
+                        price: 3500,
+                        images: ['https://images.unsplash.com/photo-1546548970-71785318a17b?w=600&h=400&fit=crop'],
+                        stockQuantity: 50,
+                        attributes: { quantity: 'Big basket', freshness: 'Farm fresh', origin: 'Local' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Scotch Bonnet Peppers (Ata rodo)',
+                        description: 'Spicy fresh red peppers for authentic Nigerian dishes',
+                        price: 1200,
+                        images: ['https://images.unsplash.com/photo-1583454110551-21f2fa2afe61?w=600&h=400&fit=crop'],
+                        stockQuantity: 80,
+                        attributes: { quantity: 'Medium bowl', spice: 'Very hot', freshness: 'Daily harvest' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Fresh Onions (Alubosa)',
+                        description: 'Large fresh onions for cooking',
+                        price: 2000,
+                        images: ['https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=600&h=400&fit=crop'],
+                        stockQuantity: 100,
+                        attributes: { quantity: 'Big basket', size: 'Large', origin: 'Northern Nigeria' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Ugwu Leaves (Fluted Pumpkin)',
+                        description: 'Fresh ugwu vegetable leaves, rich in nutrients',
+                        price: 500,
+                        images: ['https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600&h=400&fit=crop'],
+                        stockQuantity: 60,
+                        attributes: { quantity: 'Bunch', freshness: 'Morning harvest', type: 'Fluted pumpkin' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Sweet Plantain (Ripe)',
+                        description: 'Ripe sweet plantains, ready to fry or roast',
+                        price: 1500,
+                        images: ['https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=600&h=400&fit=crop'],
+                        stockQuantity: 120,
+                        attributes: { quantity: 'Bundle (8-10 pieces)', ripeness: 'Ripe', size: 'Large' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Fresh Yam Tubers',
+                        description: 'Premium quality white yam tubers',
+                        price: 4500,
+                        images: ['https://images.unsplash.com/photo-1522930845072-7a72a7c352f5?w=600&h=400&fit=crop'],
+                        stockQuantity: 40,
+                        attributes: { quantity: '1 large tuber', size: 'Extra large', type: 'White yam' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Palm Oil (Red oil)',
+                        description: 'Pure local palm oil, traditionally processed',
+                        price: 2500,
+                        images: ['https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=600&h=400&fit=crop'],
+                        stockQuantity: 70,
+                        attributes: { volume: '1 liter', processing: 'Traditional', purity: '100% pure' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Okra (Fresh)',
+                        description: 'Fresh green okra for drawing soups',
+                        price: 800,
+                        images: ['https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=600&h=400&fit=crop'],
+                        stockQuantity: 90,
+                        attributes: { quantity: 'Medium bowl', freshness: 'Farm fresh', size: 'Medium' },
+                        isAvailable: true,
+                    },
+                ],
+                pharmacy: [
+                    {
+                        name: 'Paracetamol 500mg Tablets',
+                        description: 'Pain relief and fever reducer (Pack of 10)',
+                        price: 150,
+                        images: ['https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=600&h=400&fit=crop'],
+                        barcode: 'PARA-500-10',
+                        sku: 'MED001',
+                        stockQuantity: 500,
+                        attributes: { dosage: '500mg', quantity: '10 tablets', type: 'Analgesic' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Vitamin C 1000mg (30 tablets)',
+                        description: 'Immune system support and antioxidant supplement',
+                        price: 2500,
+                        images: ['https://images.unsplash.com/photo-1550572017-4a6e8c8d3e8c?w=600&h=400&fit=crop'],
+                        barcode: 'VITC-1000-30',
+                        sku: 'SUP002',
+                        stockQuantity: 200,
+                        attributes: { dosage: '1000mg', quantity: '30 tablets', type: 'Supplement' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Hand Sanitizer 500ml',
+                        description: 'Antibacterial hand sanitizer with 70% alcohol',
+                        price: 1200,
+                        images: ['https://images.unsplash.com/photo-1584483766041-8dd012a8e0e8?w=600&h=400&fit=crop'],
+                        barcode: 'SANI-500-ALC',
+                        sku: 'HYG003',
+                        stockQuantity: 300,
+                        attributes: { volume: '500ml', alcohol: '70%', type: 'Sanitizer' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Multivitamin Tablets (60 count)',
+                        description: 'Daily multivitamin and mineral supplement',
+                        price: 3500,
+                        images: ['https://images.unsplash.com/photo-1550572017-4a6e8c8d3e8c?w=600&h=400&fit=crop'],
+                        barcode: 'MULTI-VIT-60',
+                        sku: 'SUP004',
+                        stockQuantity: 150,
+                        attributes: { quantity: '60 tablets', frequency: 'Daily', type: 'Multivitamin' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'First Aid Kit (Complete)',
+                        description: 'Comprehensive first aid kit with essential medical supplies',
+                        price: 5500,
+                        images: ['https://images.unsplash.com/photo-1603398938378-e54eab446dde?w=600&h=400&fit=crop'],
+                        barcode: 'FAK-COMP-01',
+                        sku: 'KIT005',
+                        stockQuantity: 80,
+                        attributes: { items: '50+ pieces', type: 'Emergency kit', case: 'Portable' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Face Masks (Surgical, 50pcs)',
+                        description: '3-ply disposable surgical face masks',
+                        price: 1800,
+                        images: ['https://images.unsplash.com/photo-1603273220212-cd6f85eab779?w=600&h=400&fit=crop'],
+                        barcode: 'MASK-3PLY-50',
+                        sku: 'PPE006',
+                        stockQuantity: 400,
+                        attributes: { quantity: '50 pieces', layers: '3-ply', type: 'Disposable' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Antiseptic Liquid 500ml',
+                        description: 'Multi-purpose antiseptic for wound cleaning',
+                        price: 900,
+                        images: ['https://images.unsplash.com/photo-1587854692152-cbe660dbde88?w=600&h=400&fit=crop'],
+                        barcode: 'ANTI-LIQ-500',
+                        sku: 'MED007',
+                        stockQuantity: 250,
+                        attributes: { volume: '500ml', type: 'Antiseptic', use: 'External' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Digital Thermometer',
+                        description: 'Fast and accurate digital body thermometer',
+                        price: 2200,
+                        images: ['https://images.unsplash.com/photo-1585435557343-3b092031a831?w=600&h=400&fit=crop'],
+                        barcode: 'THERM-DIG-01',
+                        sku: 'DEV008',
+                        stockQuantity: 120,
+                        attributes: { type: 'Digital', accuracy: '±0.1°C', battery: 'Included' },
+                        isAvailable: true,
+                    },
+                ],
+                specialty_store: [
+                    {
+                        name: 'Organic Honey (500g)',
+                        description: 'Pure raw organic honey from local beekeepers',
+                        price: 4500,
+                        images: ['https://images.unsplash.com/photo-1587049352846-4a222e784176?w=600&h=400&fit=crop'],
+                        barcode: 'HON-ORG-500',
+                        sku: 'ORG001',
+                        stockQuantity: 100,
+                        attributes: { weight: '500g', type: 'Raw honey', organic: true },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Shea Butter (Natural, 250g)',
+                        description: 'Premium quality unrefined African shea butter',
+                        price: 2800,
+                        images: ['https://images.unsplash.com/photo-1608571423902-eed4a5ad8108?w=600&h=400&fit=crop'],
+                        barcode: 'SHEA-NAT-250',
+                        sku: 'NAT002',
+                        stockQuantity: 150,
+                        attributes: { weight: '250g', type: 'Unrefined', origin: 'Nigeria' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Moringa Powder (200g)',
+                        description: 'Organic moringa leaf powder superfood supplement',
+                        price: 3200,
+                        images: ['https://images.unsplash.com/photo-1505576399279-565b52d4ac71?w=600&h=400&fit=crop'],
+                        barcode: 'MOR-POW-200',
+                        sku: 'SUP003',
+                        stockQuantity: 80,
+                        attributes: { weight: '200g', organic: true, type: 'Superfood' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'African Black Soap (500g)',
+                        description: 'Traditional handmade African black soap',
+                        price: 1500,
+                        images: ['https://images.unsplash.com/photo-1585838908481-8831d44ea3c1?w=600&h=400&fit=crop'],
+                        barcode: 'SOAP-BLK-500',
+                        sku: 'SOAP004',
+                        stockQuantity: 200,
+                        attributes: { weight: '500g', handmade: true, natural: true },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Coconut Oil (Cold Pressed, 500ml)',
+                        description: 'Extra virgin cold-pressed coconut oil',
+                        price: 3800,
+                        images: ['https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=600&h=400&fit=crop'],
+                        barcode: 'COCO-OIL-500',
+                        sku: 'OIL005',
+                        stockQuantity: 120,
+                        attributes: { volume: '500ml', processing: 'Cold pressed', virgin: true },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Ginger Tea (Organic, 100g)',
+                        description: 'Premium organic ginger tea blend',
+                        price: 2200,
+                        images: ['https://images.unsplash.com/photo-1597318181592-63ec5e4ef8e1?w=600&h=400&fit=crop'],
+                        barcode: 'TEA-GING-100',
+                        sku: 'TEA006',
+                        stockQuantity: 150,
+                        attributes: { weight: '100g', organic: true, caffeine: 'Free' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Turmeric Powder (Organic, 150g)',
+                        description: 'Pure organic turmeric powder with high curcumin',
+                        price: 2500,
+                        images: ['https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=600&h=400&fit=crop'],
+                        barcode: 'TURM-POW-150',
+                        sku: 'SPI007',
+                        stockQuantity: 100,
+                        attributes: { weight: '150g', organic: true, curcumin: 'High' },
+                        isAvailable: true,
+                    },
+                    {
+                        name: 'Aloe Vera Gel (Pure, 250ml)',
+                        description: '100% pure aloe vera gel for skin and hair',
+                        price: 1800,
+                        images: ['https://images.unsplash.com/photo-1620916244616-598775e33f70?w=600&h=400&fit=crop'],
+                        barcode: 'ALOE-GEL-250',
+                        sku: 'GEL008',
+                        stockQuantity: 180,
+                        attributes: { volume: '250ml', purity: '100%', use: 'Multipurpose' },
+                        isAvailable: true,
+                    },
+                ],
+            };
+
+            const seededResults = {
+                marketsProcessed: 0,
+                marketsSkipped: 0,
+                totalProductsAdded: 0,
+                marketDetails: [] as any[],
+            };
+
+            // Process each market
+            for (const market of markets) {
+                const existingProductsCount = market.products?.length || 0;
+                const minimumProducts = 5;
+
+                if (existingProductsCount >= minimumProducts) {
+                    logger.info(`✅ Market "${market.name || market.address}" already has ${existingProductsCount} products. Skipping...`);
+                    seededResults.marketsSkipped++;
+                    continue;
+                }
+
+                const productsNeeded = minimumProducts - existingProductsCount;
+                logger.info(`📦 Market "${market.name || market.address}" needs ${productsNeeded} more products`);
+
+                // Get appropriate product template based on market type
+                const templates = productTemplates[market.marketType] || productTemplates.supermarket;
+
+                // Shuffle templates to get variety
+                const shuffled = templates.sort(() => 0.5 - Math.random());
+                const selectedTemplates = shuffled.slice(0, productsNeeded);
+
+                let productsAdded = 0;
+                for (const template of selectedTemplates) {
+                    try {
+                        await Product.create({
+                            ...template,
+                            marketId: market.id,
+                        });
+                        productsAdded++;
+                        logger.info(`  ✅ Added "${template.name}" to ${market.name || market.address}`);
+                    } catch (error: any) {
+                        logger.error(`  ❌ Failed to add product: ${error.message}`);
+                    }
+                }
+
+                seededResults.marketsProcessed++;
+                seededResults.totalProductsAdded += productsAdded;
+                seededResults.marketDetails.push({
+                    marketName: market.name || market.address,
+                    marketType: market.marketType,
+                    previousProductCount: existingProductsCount,
+                    productsAdded: productsAdded,
+                    newTotalProducts: existingProductsCount + productsAdded,
+                });
+            }
+
+            logger.info('✅ Market products seeding completed successfully');
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Market products seeded successfully',
+                data: {
+                    summary: {
+                        totalMarkets: markets.length,
+                        marketsProcessed: seededResults.marketsProcessed,
+                        marketsSkipped: seededResults.marketsSkipped,
+                        totalProductsAdded: seededResults.totalProductsAdded,
+                    },
+                    marketDetails: seededResults.marketDetails,
+                },
+            });
+
+        } catch (error: any) {
+            logger.error('❌ Market products seeding failed:', error);
+
+            res.status(error.statusCode || 500).json({
+                status: 'error',
+                message: error.message || 'Market products seeding failed',
+                error: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+            });
+        }
+    }
+
 }
 
 export default new SeederController();

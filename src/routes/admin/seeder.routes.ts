@@ -34,4 +34,7 @@ router.get('/seed-campaigns', SeederController.seedDiscountCampaigns);
 router.delete('/orders', SeederController.dropOrders);
 router.get('/orders/drop', SeederController.dropOrders); // GET alternative for browser testing
 
+// Seed products for markets that have fewer than 5 products
+router.get('/market-products', SeederController.seedMarketProducts);
+
 export default router;

@@ -1,4 +1,4 @@
-import { Op, literal, QueryTypes } from 'sequelize';
+import { Op, literal, QueryTypes, col } from 'sequelize';
 import Product from '../models/product.model';
 import Market from '../models/market.model';
 import Category from '../models/category.model';
@@ -1186,6 +1186,513 @@ export class HomeService {
     /**
      * Enhanced search with intelligent ranking
      */
+    /**
+     * Advanced multi-term search with promotion metadata support
+     * Searches using multiple terms (query, title, subtitle) for comprehensive results
+     */
+    async advancedSearch(
+        searchTerms: string[],
+        type: 'all' | 'products' | 'markets' | 'categories' = 'all',
+        limit: number = 10,
+        context?: {
+            userContext?: UserContext;
+            locationContext?: LocationContext;
+            filters?: ContentFilters & {
+                locationQuery?: string;
+                marketId?: string;
+            };
+        }
+    ): Promise<SearchResults> {
+        try {
+            // Build combined search pattern from all terms
+            const combinedQuery = searchTerms.map(term => term.trim().toLowerCase()).join(' ');
+            const results: SearchResults = {};
+
+            // Enhanced product search with multi-term matching
+            if (type === 'all' || type === 'products') {
+                const productWhereConditions: any = {
+                    [Op.and]: [
+                        {
+                            [Op.or]: searchTerms.flatMap(term => [
+                                { name: { [Op.iLike]: `%${term.trim()}%` } },
+                                { description: { [Op.iLike]: `%${term.trim()}%` } },
+                                { barcode: { [Op.iLike]: `%${term.trim()}%` } },
+                            ]),
+                        },
+                        { isAvailable: true },
+                    ],
+                };
+
+                // Apply price range filter
+                if (context?.filters?.priceRange) {
+                    if (context.filters.priceRange.min !== undefined) {
+                        productWhereConditions[Op.and].push({
+                            price: { [Op.gte]: context.filters.priceRange.min },
+                        });
+                    }
+                    if (context.filters.priceRange.max !== undefined) {
+                        productWhereConditions[Op.and].push({
+                            price: { [Op.lte]: context.filters.priceRange.max },
+                        });
+                    }
+                }
+
+                const marketInclude: any = {
+                    model: Market,
+                    as: 'market',
+                    attributes: ['id', 'name', 'address', 'marketType', 'images'],
+                    where: { isActive: true },
+                    include: [
+                        {
+                            model: Category,
+                            as: 'categories',
+                            attributes: ['id', 'name'],
+                            through: { attributes: [] },
+                        },
+                    ],
+                };
+
+                // Apply market filter
+                if (context?.filters?.marketId) {
+                    marketInclude.where.id = context.filters.marketId;
+                }
+
+                // Apply location filter to markets (search by location query in address)
+                if (context?.filters?.locationQuery) {
+                    marketInclude.where[Op.or] = [
+                        { address: { [Op.iLike]: `%${context.filters.locationQuery}%` } },
+                        { name: { [Op.iLike]: `%${context.filters.locationQuery}%` } },
+                    ];
+                }
+
+                // Build relevance score for multi-term matching
+                const relevanceScoreCases = searchTerms.map(term => `
+                    CASE
+                        WHEN LOWER("Product"."name") = '${term.toLowerCase()}' THEN 100
+                        WHEN LOWER("Product"."name") LIKE '${term.toLowerCase()}%' THEN 80
+                        WHEN LOWER("Product"."name") LIKE '%${term.toLowerCase()}%' THEN 60
+                        WHEN LOWER("Product"."description") LIKE '%${term.toLowerCase()}%' THEN 40
+                        WHEN "Product"."barcode" LIKE '%${term.toLowerCase()}%' THEN 30
+                        ELSE 0
+                    END
+                `).join(' + ');
+
+                const products = await Product.findAll({
+                    where: productWhereConditions,
+                    include: [marketInclude],
+                    attributes: {
+                        include: [
+                            // Multi-term relevance score
+                            [literal(`(${relevanceScoreCases})`), 'baseRelevanceScore'],
+                            // Market reputation score
+                            [
+                                literal(`(
+                                    SELECT COALESCE(AVG(r.rating), 0)
+                                    FROM "Reviews" r
+                                    WHERE r."marketId" = "Product"."marketId"
+                                )`),
+                                'marketRating',
+                            ],
+                            // Recent activity score
+                            [
+                                literal(`(
+                                    SELECT COUNT(*)
+                                    FROM "ShoppingListItems" sli
+                                    INNER JOIN "ShoppingLists" sl ON sli."shoppingListId" = sl.id
+                                    WHERE sli."productId" = "Product"."id"
+                                    AND sl.status IN ('completed', 'processing')
+                                    AND sl."createdAt" >= NOW() - INTERVAL '30 days'
+                                )`),
+                                'recentOrders',
+                            ],
+                        ],
+                    },
+                    limit: limit * 2,
+                    order: [
+                        [literal(`(${relevanceScoreCases})`), 'DESC'],
+                        ['isPinned', 'DESC'],
+                        [literal(`(
+                            SELECT COALESCE(AVG(r.rating), 0)
+                            FROM "Reviews" r
+                            WHERE r."marketId" = "Product"."marketId"
+                        )`), 'DESC'],
+                        ['createdAt', 'DESC'],
+                    ],
+                });
+
+                // Apply context scoring
+                const scoredProducts = products.map(product => {
+                    const productData = product.get({ plain: true });
+                    const contextScore = this.calculateContentScore(productData, {
+                        userContext: context?.userContext,
+                        locationContext: context?.locationContext,
+                        timeContext: new Date(),
+                    });
+
+                    const baseScore = Number(product.get('baseRelevanceScore')) || 0;
+                    const marketScore = Number(product.get('marketRating')) || 0;
+                    const activityScore = Number(product.get('recentOrders')) || 0;
+                    const contextScoreValue = contextScore.score;
+
+                    // Weighted scoring with higher emphasis on relevance
+                    const finalScore = (
+                        baseScore * 0.5 +           // Base relevance (50%)
+                        marketScore * 0.15 +        // Market reputation (15%)
+                        activityScore * 0.15 +      // Recent activity (15%)
+                        contextScoreValue * 0.2     // Context score (20%)
+                    );
+
+                    return {
+                        product,
+                        finalScore,
+                        scoreDetails: {
+                            baseScore,
+                            marketScore,
+                            activityScore,
+                            contextScore: contextScoreValue,
+                            reasons: contextScore.reasons,
+                            matchedTerms: searchTerms.length,
+                        },
+                    };
+                });
+
+                results.products = scoredProducts
+                    .sort((a, b) => b.finalScore - a.finalScore)
+                    .slice(0, limit)
+                    .map(item => {
+                        (item.product as any).scoreDetails = item.scoreDetails;
+                        return item.product;
+                    });
+            }
+
+            // Enhanced market search with multi-term matching
+            if (type === 'all' || type === 'markets') {
+                const marketWhereConditions: any = {
+                    [Op.and]: [
+                        {
+                            [Op.or]: searchTerms.flatMap(term => [
+                                { name: { [Op.iLike]: `%${term.trim()}%` } },
+                                { description: { [Op.iLike]: `%${term.trim()}%` } },
+                                { address: { [Op.iLike]: `%${term.trim()}%` } },
+                            ]),
+                        },
+                        { isActive: true },
+                    ],
+                };
+
+                // Apply market ID filter
+                if (context?.filters?.marketId) {
+                    marketWhereConditions.id = context.filters.marketId;
+                }
+
+                // Apply market type filter
+                if (context?.filters?.marketTypes && context.filters.marketTypes.length > 0) {
+                    marketWhereConditions.marketType = { [Op.in]: context.filters.marketTypes };
+                }
+
+                results.markets = await Market.findAll({
+                    where: marketWhereConditions,
+                    include: [
+                        {
+                            model: User,
+                            as: 'owner',
+                            attributes: ['id', 'firstName', 'lastName'],
+                            required: false,
+                        },
+                    ],
+                    limit,
+                    order: [
+                        ['isPinned', 'DESC'],
+                        ['name', 'ASC'],
+                    ],
+                });
+            }
+
+            // Enhanced category search with multi-term matching
+            if (type === 'all' || type === 'categories') {
+                const categoryWhereConditions: any = {
+                    [Op.or]: searchTerms.flatMap(term => [
+                        { name: { [Op.iLike]: `%${term.trim()}%` } },
+                        { description: { [Op.iLike]: `%${term.trim()}%` } },
+                    ]),
+                };
+
+                // Apply category filter
+                if (context?.filters?.categories && context.filters.categories.length > 0) {
+                    categoryWhereConditions.id = { [Op.in]: context.filters.categories };
+                }
+
+                results.categories = await Category.findAll({
+                    where: categoryWhereConditions,
+                    limit,
+                    order: [
+                        ['isPinned', 'DESC'],
+                        ['name', 'ASC'],
+                    ],
+                });
+            }
+
+            logger.info('🔍 Advanced search completed', {
+                searchTerms,
+                productsFound: results.products?.length || 0,
+                marketsFound: results.markets?.length || 0,
+                categoriesFound: results.categories?.length || 0,
+            });
+
+            return results;
+
+        } catch (error) {
+            logger.error('Error performing advanced search:', error);
+            throw new BadRequestError('Advanced search failed');
+        }
+    }
+
+    /**
+     * Multi-dimensional keyword-based search
+     * Each keyword is searched independently across ALL fields for maximum coverage
+     * Implements advanced relevance scoring and ranking
+     */
+    async keywordSearch(
+        keywords: string[],
+        type: 'all' | 'products' | 'markets' | 'categories' = 'all',
+        limit: number = 10,
+        context?: {
+            userContext?: UserContext;
+            locationContext?: LocationContext;
+            filters?: ContentFilters & {
+                locationQuery?: string;
+                marketId?: string;
+            };
+        }
+    ): Promise<SearchResults> {
+        try {
+            if (!keywords || keywords.length === 0) {
+                return { products: [], markets: [], categories: [] };
+            }
+
+            const results: SearchResults = {};
+
+            // PRODUCTS: Search each keyword independently across all product fields
+            if (type === 'all' || type === 'products') {
+                const productWhereConditions: any = {
+                    [Op.and]: [
+                        {
+                            [Op.or]: keywords.flatMap(keyword => [
+                                { name: { [Op.iLike]: `%${keyword}%` } },
+                                { description: { [Op.iLike]: `%${keyword}%` } },
+                                { barcode: { [Op.iLike]: `%${keyword}%` } },
+                                { sku: { [Op.iLike]: `%${keyword}%` } },
+                            ]),
+                        },
+                        { isAvailable: true },
+                    ],
+                };
+
+                // Apply price filters
+                if (context?.filters?.priceRange) {
+                    if (context.filters.priceRange.min !== undefined) {
+                        productWhereConditions[Op.and].push({
+                            price: { [Op.gte]: context.filters.priceRange.min },
+                        });
+                    }
+                    if (context.filters.priceRange.max !== undefined) {
+                        productWhereConditions[Op.and].push({
+                            price: { [Op.lte]: context.filters.priceRange.max },
+                        });
+                    }
+                }
+
+                const marketInclude: any = {
+                    model: Market,
+                    as: 'market',
+                    attributes: ['id', 'name', 'address', 'marketType', 'images'],
+                    where: { isActive: true },
+                    include: [
+                        {
+                            model: Category,
+                            as: 'categories',
+                            attributes: ['id', 'name'],
+                            through: { attributes: [] },
+                        },
+                    ],
+                };
+
+                // Apply market filter
+                if (context?.filters?.marketId) {
+                    marketInclude.where.id = context.filters.marketId;
+                }
+
+                // Location filter is already incorporated into keywords, so we skip the restrictive filter
+                // This allows products from markets matching ANY keyword to be returned
+
+                // Advanced relevance scoring: Each keyword contributes to total score
+                const keywordScoreCases = keywords.map(keyword => `
+                    CASE
+                        WHEN LOWER("Product"."name") = '${keyword.toLowerCase()}' THEN 100
+                        WHEN LOWER("Product"."name") LIKE '${keyword.toLowerCase()}%' THEN 80
+                        WHEN LOWER("Product"."name") LIKE '%${keyword.toLowerCase()}%' THEN 60
+                        WHEN LOWER("Product"."description") LIKE '%${keyword.toLowerCase()}%' THEN 40
+                        WHEN LOWER("Product"."barcode") LIKE '%${keyword.toLowerCase()}%' THEN 30
+                        WHEN LOWER("Product"."sku") LIKE '%${keyword.toLowerCase()}%' THEN 35
+                        ELSE 0
+                    END
+                `).join(' + ');
+
+                const products = await Product.findAll({
+                    where: productWhereConditions,
+                    include: [marketInclude],
+                    attributes: {
+                        include: [
+                            [literal(`(${keywordScoreCases})`), 'baseRelevanceScore'],
+                            [
+                                literal(`
+                                    CASE
+                                        WHEN "Product"."isAvailable" = true THEN 20
+                                        ELSE 0
+                                    END
+                                `),
+                                'availabilityScore',
+                            ],
+                            [
+                                literal(`
+                                    (${keywordScoreCases}) * 0.7 +
+                                    CASE WHEN "Product"."isAvailable" = true THEN 20 ELSE 0 END
+                                `),
+                                'relevanceScore',
+                            ],
+                        ],
+                    },
+                    order: [[col('relevanceScore'), 'DESC']],
+                    limit,
+                });
+
+                results.products = products.map((product: any) => product.toJSON());
+            }
+
+            // MARKETS: Search each keyword across market fields (including JSONB location fields)
+            if (type === 'all' || type === 'markets') {
+                const marketWhereConditions: any = {
+                    [Op.and]: [
+                        {
+                            [Op.or]: keywords.flatMap(keyword => [
+                                { name: { [Op.iLike]: `%${keyword}%` } },
+                                { description: { [Op.iLike]: `%${keyword}%` } },
+                                { address: { [Op.iLike]: `%${keyword}%` } },
+                                { phoneNumber: { [Op.iLike]: `%${keyword}%` } },
+                                // Search JSONB location fields
+                                literal(`"Market"."location"->>'city' ILIKE '%${keyword}%'`),
+                                literal(`"Market"."location"->>'state' ILIKE '%${keyword}%'`),
+                                literal(`"Market"."location"->>'country' ILIKE '%${keyword}%'`),
+                                // Cast ENUM to TEXT for ILIKE search
+                                literal(`"Market"."marketType"::TEXT ILIKE '%${keyword}%'`),
+                            ]),
+                        },
+                        { isActive: true },
+                    ],
+                };
+
+                // Apply market filter
+                if (context?.filters?.marketId) {
+                    marketWhereConditions[Op.and].push({ id: context.filters.marketId });
+                }
+
+                // Location filter is already incorporated into keywords, so we skip the restrictive filter
+                // This allows markets matching ANY keyword to be returned, not just those matching the full location string
+
+                const marketKeywordScores = keywords.map(keyword => `
+                    CASE
+                        WHEN LOWER("Market"."name") = '${keyword.toLowerCase()}' THEN 100
+                        WHEN LOWER("Market"."name") LIKE '${keyword.toLowerCase()}%' THEN 80
+                        WHEN LOWER("Market"."name") LIKE '%${keyword.toLowerCase()}%' THEN 60
+                        WHEN LOWER("Market"."description") LIKE '%${keyword.toLowerCase()}%' THEN 40
+                        WHEN LOWER("Market"."address") LIKE '%${keyword.toLowerCase()}%' THEN 30
+                        WHEN LOWER("Market"."location"->>'city') LIKE '%${keyword.toLowerCase()}%' THEN 35
+                        WHEN LOWER("Market"."location"->>'state') LIKE '%${keyword.toLowerCase()}%' THEN 35
+                        WHEN LOWER("Market"."location"->>'country') LIKE '%${keyword.toLowerCase()}%' THEN 25
+                        WHEN LOWER("Market"."phoneNumber") LIKE '%${keyword.toLowerCase()}%' THEN 20
+                        WHEN LOWER("Market"."marketType"::TEXT) LIKE '%${keyword.toLowerCase()}%' THEN 30
+                        ELSE 0
+                    END
+                `).join(' + ');
+
+                const markets = await Market.findAll({
+                    where: marketWhereConditions,
+                    include: [
+                        {
+                            model: Category,
+                            as: 'categories',
+                            attributes: ['id', 'name'],
+                            through: { attributes: [] },
+                        },
+                    ],
+                    attributes: {
+                        include: [
+                            [literal(`(${marketKeywordScores})`), 'baseRelevanceScore'],
+                            [
+                                literal(`
+                                    (${marketKeywordScores}) * 0.8 +
+                                    CASE WHEN "Market"."isPinned" = true THEN 40 ELSE 0 END
+                                `),
+                                'relevanceScore',
+                            ],
+                        ],
+                    },
+                    order: [[col('relevanceScore'), 'DESC']],
+                    limit,
+                });
+
+                results.markets = markets.map((market: any) => market.toJSON());
+            }
+
+            // CATEGORIES: Search keywords across category fields
+            if (type === 'all' || type === 'categories') {
+                const categoryWhereConditions: any = {
+                    [Op.or]: keywords.flatMap(keyword => [
+                        { name: { [Op.iLike]: `%${keyword}%` } },
+                        { description: { [Op.iLike]: `%${keyword}%` } },
+                    ]),
+                };
+
+                const categoryKeywordScores = keywords.map(keyword => `
+                    CASE
+                        WHEN LOWER("Category"."name") = '${keyword.toLowerCase()}' THEN 100
+                        WHEN LOWER("Category"."name") LIKE '${keyword.toLowerCase()}%' THEN 80
+                        WHEN LOWER("Category"."name") LIKE '%${keyword.toLowerCase()}%' THEN 60
+                        WHEN LOWER("Category"."description") LIKE '%${keyword.toLowerCase()}%' THEN 40
+                        ELSE 0
+                    END
+                `).join(' + ');
+
+                const categories = await Category.findAll({
+                    where: categoryWhereConditions,
+                    attributes: {
+                        include: [
+                            [literal(`(${categoryKeywordScores})`), 'relevanceScore'],
+                        ],
+                    },
+                    order: [[col('relevanceScore'), 'DESC']],
+                    limit: Math.min(limit, 10),
+                });
+
+                results.categories = categories.map((category: any) => category.toJSON());
+            }
+
+            logger.info('🎯 Keyword search completed', {
+                keywords,
+                keywordCount: keywords.length,
+                productsFound: results.products?.length || 0,
+                marketsFound: results.markets?.length || 0,
+                categoriesFound: results.categories?.length || 0,
+            });
+
+            return results;
+
+        } catch (error) {
+            logger.error('Error performing keyword search:', error);
+            throw new BadRequestError('Keyword search failed');
+        }
+    }
+
     async search(
         query: string,
         type: 'all' | 'products' | 'markets' | 'categories' = 'all',

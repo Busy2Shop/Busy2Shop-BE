@@ -945,7 +945,13 @@ export default class HomeController {
      */
     static async search(req: Request, res: Response) {
         try {
-            const { query, type = 'all', limit, suggest = 'true' } = req.query;
+            const {
+                query,
+                type = 'all',
+                limit,
+                suggest = 'true',
+                promotionId,  // Featured promotion ID - backend will fetch all details
+            } = req.query;
 
             if (!query || typeof query !== 'string' || query.trim().length < 2) {
                 throw new BadRequestError('Search query must be at least 2 characters long');
@@ -977,14 +983,108 @@ export default class HomeController {
             const context = HomeController.buildContext(req);
             const homeService = new HomeService();
 
-            // Enhanced query processing for better search results
-            const processedQuery = query.trim();
+            // Fetch featured promotion if promotionId provided
+            let promotion: any = null;
+            if (promotionId && typeof promotionId === 'string') {
+                const FeaturedPromotion = (await import('../models/featuredPromotion.model')).default;
+                promotion = await FeaturedPromotion.findByPk(promotionId);
 
-            const results = await homeService.search(
-                processedQuery,
+                if (!promotion) {
+                    logger.warn(`⚠️ Promotion not found: ${promotionId}`);
+                }
+            }
+
+            // Advanced keyword tokenization - extract ALL keywords from all sources
+            const tokenizeText = (text: string): string[] => {
+                if (!text) return [];
+                // Remove special characters, split by whitespace, filter empty strings
+                return text
+                    .toLowerCase()
+                    .replace(/[^\w\s]/g, ' ') // Replace special chars with space
+                    .split(/\s+/) // Split on whitespace
+                    .filter(word => word.length > 2) // Only words with 3+ chars
+                    .filter(word => !['the', 'and', 'for', 'with', 'from'].includes(word)); // Remove common stop words
+            };
+
+            // Collect all search keywords from multiple sources
+            const allKeywords: Set<string> = new Set();
+
+            // 1. Primary query keywords
+            tokenizeText(query.trim()).forEach(kw => allKeywords.add(kw));
+
+            // 2. Promotion title keywords
+            if (promotion?.title) {
+                tokenizeText(promotion.title).forEach(kw => allKeywords.add(kw));
+            }
+
+            // 3. Promotion subtitle keywords
+            if (promotion?.subtitle) {
+                tokenizeText(promotion.subtitle).forEach(kw => allKeywords.add(kw));
+            }
+
+            // 4. Location/address keywords
+            if (promotion?.searchFilters?.location) {
+                tokenizeText(promotion.searchFilters.location).forEach(kw => allKeywords.add(kw));
+            }
+
+            // Convert to array for search
+            const searchKeywords = Array.from(allKeywords);
+
+            // Build advanced filters from promotion
+            const advancedFilters: any = { ...context?.filters };
+
+            if (promotion && promotion.searchFilters) {
+                // Apply all filters from promotion
+                if (promotion.searchFilters.location) {
+                    advancedFilters.locationQuery = promotion.searchFilters.location;
+                }
+
+                if (promotion.searchFilters.categoryId) {
+                    advancedFilters.categories = [promotion.searchFilters.categoryId];
+                }
+
+                if (promotion.searchFilters.marketId) {
+                    advancedFilters.marketId = promotion.searchFilters.marketId;
+                }
+
+                if (promotion.searchFilters.minPrice !== undefined) {
+                    advancedFilters.priceRange = advancedFilters.priceRange || {};
+                    advancedFilters.priceRange.min = promotion.searchFilters.minPrice;
+                }
+
+                if (promotion.searchFilters.maxPrice !== undefined) {
+                    advancedFilters.priceRange = advancedFilters.priceRange || {};
+                    advancedFilters.priceRange.max = promotion.searchFilters.maxPrice;
+                }
+            }
+
+            // Enhanced context with advanced filters
+            const enhancedContext = {
+                ...context,
+                filters: advancedFilters,
+            };
+
+            logger.info('🔍 Multi-dimensional keyword search initiated', {
+                promotionId: promotionId || 'none',
+                promotionFound: !!promotion,
+                totalKeywords: searchKeywords.length,
+                keywords: searchKeywords,
+                searchType,
+                filters: advancedFilters,
+                rawType,
+                sources: {
+                    query: query.trim(),
+                    promotionTitle: promotion?.title || null,
+                    promotionSubtitle: promotion?.subtitle || null,
+                    locationFilter: promotion?.searchFilters?.location || null,
+                },
+            });
+
+            const results = await homeService.keywordSearch(
+                searchKeywords,
                 searchType,
                 limitNum,
-                context
+                enhancedContext
             );
 
             const totalResults =
@@ -995,11 +1095,13 @@ export default class HomeController {
             const responseData: any = {
                 ...results,
                 totalResults,
-                searchQuery: processedQuery,
+                searchQuery: query.trim(), // Keep UI clean - only show primary query
                 searchType,
                 originalType: rawType,
                 performance: {
-                    algorithm: 'relevance_scoring_v2',
+                    algorithm: 'multi_dimensional_keyword_search_v4',
+                    keywordsCount: searchKeywords.length,
+                    filtersApplied: Object.keys(advancedFilters).length,
                     processingTime: Date.now(),
                     cached: false,
                 },
@@ -1019,6 +1121,8 @@ export default class HomeController {
                     categories: results.categories?.length || 0,
                 },
                 searchScore: HomeController.calculateSearchQuality(results, query.trim()),
+                advancedSearch: searchKeywords.length > 1 || Object.keys(advancedFilters).length > 0,
+                keywordBasedSearch: true,
             };
 
             res.status(200).json({
