@@ -29,6 +29,8 @@ export enum SYSTEM_SETTING_KEYS {
     SERVICE_FEE_PERCENTAGE = 'service_fee_percentage',
     SERVICE_FEE_AMOUNT = 'service_fee_amount',
     DELIVERY_FEE = 'delivery_fee',
+    DELIVERY_SURCHARGE = 'delivery_surcharge',
+    ITEM_MARKUP_PERCENTAGE = 'item_markup_percentage',
     MINIMUM_ORDER_AMOUNT = 'minimum_order_amount',
     MAXIMUM_DISCOUNT_PERCENTAGE = 'maximum_discount_percentage',
     MAXIMUM_SINGLE_DISCOUNT_AMOUNT = 'maximum_single_discount_amount',
@@ -100,6 +102,8 @@ export type SystemSettingValueMap = {
     [SYSTEM_SETTING_KEYS.SERVICE_FEE_PERCENTAGE]: number;
     [SYSTEM_SETTING_KEYS.SERVICE_FEE_AMOUNT]: number;
     [SYSTEM_SETTING_KEYS.DELIVERY_FEE]: number;
+    [SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE]: number;
+    [SYSTEM_SETTING_KEYS.ITEM_MARKUP_PERCENTAGE]: number;
     [SYSTEM_SETTING_KEYS.MINIMUM_ORDER_AMOUNT]: number;
     [SYSTEM_SETTING_KEYS.MAXIMUM_DISCOUNT_PERCENTAGE]: number;
     [SYSTEM_SETTING_KEYS.MAXIMUM_SINGLE_DISCOUNT_AMOUNT]: number;

@@ -1,10 +1,7 @@
 import SystemSettings, { 
-    ISystemSettings, 
     ISettingValue, 
     SYSTEM_SETTING_KEYS, 
-    SystemSettingValueMap, 
 } from '../models/systemSettings.model';
-import { NotFoundError } from '../utils/customErrors';
 
 export default class SystemSettingsService {
     private static settingsCache: Map<string, any> = new Map();
@@ -264,26 +261,27 @@ export default class SystemSettingsService {
      * Business logic helper methods
      */
     static async calculateServiceFee(subtotal: number): Promise<number> {
-        // Try to get fixed service fee amount first
-        try {
-            const serviceAmount = await this.getSetting(SYSTEM_SETTING_KEYS.SERVICE_FEE_AMOUNT);
-            if (serviceAmount && serviceAmount > 0) {
-                // Use fixed service fee for orders >= ₦4,000
-                if (subtotal >= 4000) {
-                    return Math.round(serviceAmount * 100) / 100;
-                }
-            }
-        } catch (error) {
-            // Fall back to percentage if SERVICE_FEE_AMOUNT is not available
-        }
-
-        // For orders < ₦4,000 or as fallback, use percentage calculation
-        const percentage = await this.getSetting(SYSTEM_SETTING_KEYS.SERVICE_FEE_PERCENTAGE);
-        return Math.round(subtotal * (percentage / 100) * 100) / 100;
+        // Get fixed service fee amount (default ₦1,000 for new pricing model)
+        const serviceAmount = await this.getSetting(SYSTEM_SETTING_KEYS.SERVICE_FEE_AMOUNT);
+        // Use service fee if set, otherwise default to 1000 (new pricing model)
+        return Math.round((serviceAmount || 1000) * 100) / 100;
     }
 
     static async getDeliveryFee(): Promise<number> {
-        return await this.getSetting(SYSTEM_SETTING_KEYS.DELIVERY_FEE);
+        // Get base delivery fee
+        const baseFee = await this.getSetting(SYSTEM_SETTING_KEYS.DELIVERY_FEE);
+
+        // Get delivery surcharge (new in pricing model)
+        const surcharge = await this.getSetting(SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE);
+
+        // Return total delivery fee (base + surcharge)
+        return Math.round(((baseFee || 500) + (surcharge || 500)) * 100) / 100;
+    }
+
+    static async getItemMarkupPercentage(): Promise<number> {
+        // Get markup percentage (default 10% for new pricing model)
+        const markup = await this.getSetting(SYSTEM_SETTING_KEYS.ITEM_MARKUP_PERCENTAGE);
+        return markup || 10;
     }
 
     static async calculateTotal(subtotal: number, discountAmount: number = 0): Promise<{
@@ -337,7 +335,7 @@ export default class SystemSettingsService {
             return {
                 valid: false,
                 error: `Discount cannot exceed ${maxPercentage}% of order value`,
-                cappedAmount
+                cappedAmount,
             };
         }
 
@@ -345,7 +343,7 @@ export default class SystemSettingsService {
             return {
                 valid: false,
                 error: `Single discount cannot exceed ₦${maxAmount}`,
-                cappedAmount: maxAmount
+                cappedAmount: maxAmount,
             };
         }
 
@@ -355,7 +353,7 @@ export default class SystemSettingsService {
             return {
                 valid: false,
                 error: 'Discount cannot exceed 70% of order value',
-                cappedAmount
+                cappedAmount,
             };
         }
 

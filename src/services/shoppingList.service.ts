@@ -11,6 +11,8 @@ import OrderTrail from '../models/orderTrail.model';
 import { Database } from '../models';
 import AgentService from './agent.service';
 import { logger } from '../utils/logger';
+import PriceCalculatorService from './priceCalculator.service';
+import SystemSettingsService from './systemSettings.service';
 
 export interface IViewShoppingListsQuery {
     page?: number;
@@ -394,7 +396,7 @@ export default class ShoppingListService {
                 // Block deletion for active pending payments (< 30 minutes)
                 if (orderAge < thirtyMinutes) {
                     throw new BadRequestError(
-                        `Cannot delete shopping list with active pending payment. ` +
+                        'Cannot delete shopping list with active pending payment. ' +
                         `Please wait ${Math.ceil((thirtyMinutes - orderAge) / 60000)} minutes or cancel the payment first.`
                     );
                 }
@@ -468,7 +470,15 @@ export default class ShoppingListService {
             }
             // Use product information for the item
             itemData.name = product.name;
-            itemData.estimatedPrice = product.price;
+
+            // Apply markup to product price (10% default from new pricing model)
+            if (product.price) {
+                const markupPercentage = await SystemSettingsService.getItemMarkupPercentage();
+                itemData.estimatedPrice = PriceCalculatorService.applyMarkup(product.price, markupPercentage);
+            } else {
+                itemData.estimatedPrice = product.price;
+            }
+
             // Store the first product image if available
             itemData.productImage = product.images && product.images.length > 0 ? product.images[0] : null;
         }
@@ -1018,8 +1028,9 @@ export default class ShoppingListService {
 
             // Handle pricing logic
             if (product.price !== null) {
-                // Product has a price, use it (discounts now handled through centralized system)
-                finalEstimatedPrice = product.price;
+                // Product has a price, apply markup (10% default from new pricing model)
+                const markupPercentage = await SystemSettingsService.getItemMarkupPercentage();
+                finalEstimatedPrice = PriceCalculatorService.applyMarkup(product.price, markupPercentage);
                 userProvidedPrice = null; // Clear user provided price
             } else {
                 // Product has no price, require user to provide one

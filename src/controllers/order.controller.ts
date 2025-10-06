@@ -71,6 +71,19 @@ export default class OrderController {
         const { totalAmount, serviceFee, deliveryFee, originalSubtotal, discountAmount } =
             await OrderService.calculateTotals(shoppingListId);
 
+        // Validate minimum order amount (₦5,000 in new pricing model)
+        const SystemSettingsService = (await import('../services/systemSettings.service')).default;
+        const { SYSTEM_SETTING_KEYS } = await import('../models/systemSettings.model');
+        const minimumOrder = await SystemSettingsService.getSetting(
+            SYSTEM_SETTING_KEYS.MINIMUM_ORDER_AMOUNT
+        );
+
+        if (totalAmount < (minimumOrder || 5000)) {
+            throw new BadRequestError(
+                `Minimum order amount is ₦${(minimumOrder || 5000).toLocaleString()}`
+            );
+        }
+
         // Create the order with audit trail fields
         const order = await OrderService.createOrder({
             shoppingListId,

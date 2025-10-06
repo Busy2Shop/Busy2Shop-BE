@@ -106,6 +106,21 @@ export default class PriceCalculatorService {
     }
 
     /**
+     * Apply markup percentage to a price
+     * @param price Original price
+     * @param markupPercentage Markup percentage (default 10%)
+     * @returns Price with markup applied
+     */
+    static applyMarkup(price: number, markupPercentage: number = 10): number {
+        if (price <= 0) {
+            return 0;
+        }
+
+        const markup = (price * markupPercentage) / 100;
+        return this.roundPrice(price + markup);
+    }
+
+    /**
      * Apply discount to a price with validation
      * @param price Original price
      * @param discountType Type of discount (percentage or fixed_amount)
@@ -163,7 +178,7 @@ export default class PriceCalculatorService {
             return {
                 valid: false,
                 error: `Discount exceeds maximum ${maxDiscountPercentage}% of subtotal`,
-                cappedAmount
+                cappedAmount,
             };
         }
 
@@ -171,7 +186,7 @@ export default class PriceCalculatorService {
             return {
                 valid: false,
                 error: `Discount exceeds maximum single discount amount of ₦${maxSingleDiscountAmount}`,
-                cappedAmount: maxSingleDiscountAmount
+                cappedAmount: maxSingleDiscountAmount,
             };
         }
 
@@ -180,7 +195,7 @@ export default class PriceCalculatorService {
             return {
                 valid: false,
                 error: 'Discount cannot exceed 70% of order value',
-                cappedAmount
+                cappedAmount,
             };
         }
 
