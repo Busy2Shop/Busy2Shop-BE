@@ -8,7 +8,7 @@ import { emailService, EmailTemplate } from '../../utils/Email';
 import UserService, { IViewUsersQuery } from '../../services/user.service';
 import { IBlockMeta, IAgentMeta } from '../../models/userSettings.model';
 import { Database } from '../../models';
-import { QueryTypes } from 'sequelize';
+import { QueryTypes, Op } from 'sequelize';
 import Order from '../../models/order.model';
 import ShoppingList from '../../models/shoppingList.model';
 import ShoppingListItem from '../../models/shoppingListItem.model';
@@ -21,6 +21,10 @@ import CategoryService from '../../services/category.service';
 import Product from '../../models/product.model';
 import Category from '../../models/category.model';
 import FeaturedPromotionService from '../../services/featuredPromotion.service';
+import DiscountCampaignService from '../../services/discountCampaign.service';
+import { IDiscountCampaign, DiscountType, DiscountTargetType, CampaignStatus } from '../../models/discountCampaign.model';
+import DiscountUsage from '../../models/discountUsage.model';
+import User from '../../models/user.model';
 import { logger } from '../../utils/logger';
 
 export default class AdminController {
@@ -3228,5 +3232,379 @@ export default class AdminController {
             throw error;
         }
     }
-}
 
+    // ============================================================================
+    // DISCOUNT CAMPAIGN MANAGEMENT
+    // ============================================================================
+
+    /**
+     * Get all discount campaigns with filtering and pagination
+     */
+    static async getAllDiscountCampaigns(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { page, size, status, type, targetType, isActive, q } = req.query;
+
+            const queryParams: any = {};
+
+            if (page && size) {
+                queryParams.page = Number(page);
+                queryParams.size = Number(size);
+            }
+
+            if (status) {
+                queryParams.status = status as CampaignStatus;
+            }
+
+            if (type) {
+                queryParams.type = type as DiscountType;
+            }
+
+            if (targetType) {
+                queryParams.targetType = targetType as DiscountTargetType;
+            }
+
+            if (isActive !== undefined) {
+                queryParams.isActive = isActive === 'true';
+            }
+
+            if (q) {
+                queryParams.searchQuery = q as string;
+            }
+
+            const campaigns = await DiscountCampaignService.getAllCampaigns(queryParams);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Discount campaigns retrieved successfully',
+                data: campaigns,
+            });
+        } catch (error) {
+            logger.error('Error getting all discount campaigns:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get discount campaign statistics
+     */
+    static async getDiscountCampaignStats(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const stats = await DiscountCampaignService.getCampaignStats();
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Discount campaign statistics retrieved successfully',
+                data: stats,
+            });
+        } catch (error) {
+            logger.error('Error getting discount campaign stats:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get single discount campaign by ID
+     */
+    static async getDiscountCampaign(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            if (!id) {
+                throw new BadRequestError('Campaign ID is required');
+            }
+
+            const campaign = await DiscountCampaignService.getCampaignById(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Discount campaign retrieved successfully',
+                data: { campaign },
+            });
+        } catch (error) {
+            logger.error('Error getting discount campaign:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create new discount campaign
+     */
+    static async createDiscountCampaign(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const adminEmail = req.email;
+
+            // Find or create a user for the admin (needed for createdBy field)
+            let adminUser = await User.findOne({ where: { email: adminEmail } });
+
+            if (!adminUser) {
+                // Create a system user for admin
+                adminUser = await User.create({
+                    email: adminEmail,
+                    firstName: req.admin?.name || 'Admin',
+                    lastName: '',
+                    phone: {
+                        countryCode: '+234',
+                        number: '0000000000'
+                    },
+                    status: {
+                        activated: true,
+                        emailVerified: true,
+                        userType: 'customer'
+                    }
+                });
+            }
+
+            const campaignData: IDiscountCampaign = {
+                ...req.body,
+                createdBy: adminUser.id,
+            };
+
+            // Validate required fields
+            if (!campaignData.name || !campaignData.type || !campaignData.targetType ||
+                !campaignData.value || !campaignData.startDate || !campaignData.endDate) {
+                throw new BadRequestError('Name, type, targetType, value, startDate, and endDate are required');
+            }
+
+            const campaign = await DiscountCampaignService.createCampaign(campaignData);
+
+            res.status(201).json({
+                status: 'success',
+                message: 'Discount campaign created successfully',
+                data: { campaign },
+            });
+        } catch (error) {
+            logger.error('Error creating discount campaign:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update discount campaign
+     */
+    static async updateDiscountCampaign(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            if (!id) {
+                throw new BadRequestError('Campaign ID is required');
+            }
+
+            // Remove fields that shouldn't be updated directly
+            const updateData = { ...req.body };
+            delete updateData.id;
+            delete updateData.createdBy;
+            delete updateData.usageCount;
+
+            const campaign = await DiscountCampaignService.updateCampaign(id, updateData);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Discount campaign updated successfully',
+                data: { campaign },
+            });
+        } catch (error) {
+            logger.error('Error updating discount campaign:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete discount campaign
+     */
+    static async deleteDiscountCampaign(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            if (!id) {
+                throw new BadRequestError('Campaign ID is required');
+            }
+
+            await DiscountCampaignService.deleteCampaign(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Discount campaign deleted successfully',
+            });
+        } catch (error) {
+            logger.error('Error deleting discount campaign:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Toggle discount campaign status (activate/pause/cancel)
+     */
+    static async toggleDiscountCampaignStatus(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const { status } = req.body;
+
+            if (!id) {
+                throw new BadRequestError('Campaign ID is required');
+            }
+
+            if (!status || !Object.values(CampaignStatus).includes(status)) {
+                throw new BadRequestError('Valid status is required (draft, active, paused, expired, cancelled)');
+            }
+
+            const campaign = await DiscountCampaignService.updateCampaignStatus(id, status);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Campaign status updated successfully',
+                data: { campaign },
+            });
+        } catch (error) {
+            logger.error('Error toggling discount campaign status:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get discount campaign statistics and usage analytics
+     */
+    static async getDiscountCampaignAnalytics(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            if (!id) {
+                throw new BadRequestError('Campaign ID is required');
+            }
+
+            const statistics = await DiscountCampaignService.getCampaignStatistics(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Campaign analytics retrieved successfully',
+                data: statistics,
+            });
+        } catch (error) {
+            logger.error('Error getting discount campaign analytics:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get discount usage history across all campaigns
+     */
+    static async getDiscountUsageHistory(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { page = 1, size = 25, campaignId, userId, startDate, endDate } = req.query;
+
+            const where: any = {};
+
+            if (campaignId) {
+                where.campaignId = campaignId;
+            }
+
+            if (userId) {
+                where.userId = userId;
+            }
+
+            if (startDate || endDate) {
+                where.createdAt = {};
+                if (startDate) {
+                    where.createdAt[Op.gte] = new Date(startDate as string);
+                }
+                if (endDate) {
+                    where.createdAt[Op.lte] = new Date(endDate as string);
+                }
+            }
+
+            const offset = (Number(page) - 1) * Number(size);
+
+            const { rows: usages, count } = await DiscountUsage.findAndCountAll({
+                where,
+                include: [
+                    {
+                        association: 'campaign',
+                        attributes: ['id', 'name', 'code', 'type', 'targetType'],
+                    },
+                    {
+                        association: 'user',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    },
+                ],
+                limit: Number(size),
+                offset,
+                order: [['createdAt', 'DESC']],
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Discount usage history retrieved successfully',
+                data: {
+                    usages,
+                    pagination: {
+                        total: count,
+                        page: Number(page),
+                        size: Number(size),
+                        totalPages: Math.ceil(count / Number(size)),
+                    },
+                },
+            });
+        } catch (error) {
+            logger.error('Error getting discount usage history:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Duplicate an existing discount campaign
+     */
+    static async duplicateDiscountCampaign(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+            const { name } = req.body;
+
+            if (!id) {
+                throw new BadRequestError('Campaign ID is required');
+            }
+
+            const originalCampaign = await DiscountCampaignService.getCampaignById(id);
+
+            const adminEmail = req.email;
+            let adminUser = await User.findOne({ where: { email: adminEmail } });
+
+            if (!adminUser) {
+                adminUser = await User.create({
+                    email: adminEmail,
+                    firstName: req.admin?.name || 'Admin',
+                    lastName: '',
+                    phone: {
+                        countryCode: '+234',
+                        number: '0000000000'
+                    },
+                    status: {
+                        activated: true,
+                        emailVerified: true,
+                        userType: 'customer'
+                    }
+                });
+            }
+
+            const duplicatedData: IDiscountCampaign = {
+                ...originalCampaign.toJSON(),
+                id: undefined,
+                name: name || `${originalCampaign.name} (Copy)`,
+                code: originalCampaign.code ? `${originalCampaign.code}_COPY_${Date.now()}` : undefined,
+                status: CampaignStatus.DRAFT,
+                usageCount: 0,
+                createdBy: adminUser.id,
+                startDate: new Date(),
+                endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+            };
+
+            const duplicatedCampaign = await DiscountCampaignService.createCampaign(duplicatedData);
+
+            res.status(201).json({
+                status: 'success',
+                message: 'Discount campaign duplicated successfully',
+                data: { campaign: duplicatedCampaign },
+            });
+        } catch (error) {
+            logger.error('Error duplicating discount campaign:', error);
+            throw error;
+        }
+    }
+}

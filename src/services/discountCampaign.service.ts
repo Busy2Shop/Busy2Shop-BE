@@ -525,6 +525,58 @@ export default class DiscountCampaignService {
         };
     }
 
+    static async getCampaignStats(): Promise<{
+        totalCampaigns: number;
+        activeCampaigns: number;
+        draftCampaigns: number;
+        pausedCampaigns: number;
+        expiredCampaigns: number;
+        totalDiscountGiven: number;
+        totalUsage: number;
+        campaignsByType: Record<string, number>;
+        campaignsByTargetType: Record<string, number>;
+    }> {
+        const now = new Date();
+
+        // Get all campaigns grouped by status
+        const allCampaigns = await DiscountCampaign.findAll();
+
+        const totalCampaigns = allCampaigns.length;
+        const activeCampaigns = allCampaigns.filter(c => c.status === CampaignStatus.ACTIVE).length;
+        const draftCampaigns = allCampaigns.filter(c => c.status === CampaignStatus.DRAFT).length;
+        const pausedCampaigns = allCampaigns.filter(c => c.status === CampaignStatus.PAUSED).length;
+        const expiredCampaigns = allCampaigns.filter(c => c.status === CampaignStatus.EXPIRED).length;
+
+        // Get all discount usages for total stats
+        const allUsages = await DiscountUsage.findAll();
+        const totalDiscountGiven = allUsages.reduce((sum, usage) => sum + Number(usage.discountAmount), 0);
+        const totalUsage = allUsages.length;
+
+        // Group campaigns by type
+        const campaignsByType = allCampaigns.reduce((acc, campaign) => {
+            acc[campaign.type] = (acc[campaign.type] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        // Group campaigns by target type
+        const campaignsByTargetType = allCampaigns.reduce((acc, campaign) => {
+            acc[campaign.targetType] = (acc[campaign.targetType] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        return {
+            totalCampaigns,
+            activeCampaigns,
+            draftCampaigns,
+            pausedCampaigns,
+            expiredCampaigns,
+            totalDiscountGiven,
+            totalUsage,
+            campaignsByType,
+            campaignsByTargetType,
+        };
+    }
+
     static async getCampaignStatistics(id: string): Promise<{
         totalUsage: number;
         totalDiscountGiven: number;
@@ -555,8 +607,8 @@ export default class DiscountCampaignService {
         const totalUsage = usages.length;
         const totalDiscountGiven = usages.reduce((sum, usage) => sum + Number(usage.discountAmount), 0);
         const uniqueUsers = new Set(usages.map(usage => usage.userId)).size;
-        const averageOrderValue = usages.length > 0 
-            ? usages.reduce((sum, usage) => sum + Number(usage.orderTotal), 0) / usages.length 
+        const averageOrderValue = usages.length > 0
+            ? usages.reduce((sum, usage) => sum + Number(usage.orderTotal), 0) / usages.length
             : 0;
 
         // Group by user for top users

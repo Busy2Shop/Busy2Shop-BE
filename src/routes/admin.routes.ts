@@ -154,5 +154,17 @@ router.patch('/featured-promotions/:id/toggle-status', adminAuth('admin'), Admin
 router.post('/featured-promotions/reorder', adminAuth('admin'), AdminAuthenticatedController(AdminController.reorderPromotions));
 router.post('/featured-promotions/update-icon-urls', adminAuth('admin'), AdminAuthenticatedController(AdminController.updatePromotionsWithIconUrls));
 
+// Admin Discount Campaign Management Routes
+router.get('/discount-campaigns', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllDiscountCampaigns));
+router.get('/discount-campaigns/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDiscountCampaignStats));
+router.get('/discount-campaigns/usage-history', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDiscountUsageHistory));
+router.get('/discount-campaigns/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDiscountCampaign));
+router.get('/discount-campaigns/:id/analytics', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDiscountCampaignAnalytics));
+router.post('/discount-campaigns', adminAuth('admin'), AdminAuthenticatedController(AdminController.createDiscountCampaign));
+router.post('/discount-campaigns/:id/duplicate', adminAuth('admin'), AdminAuthenticatedController(AdminController.duplicateDiscountCampaign));
+router.put('/discount-campaigns/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateDiscountCampaign));
+router.delete('/discount-campaigns/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteDiscountCampaign));
+router.patch('/discount-campaigns/:id/status', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleDiscountCampaignStatus));
+
 export default router;
 
