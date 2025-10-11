@@ -815,14 +815,14 @@ export default class ShoppingListController {
                 expires_at: moment().add(24, 'hours').toDate(),
             });
 
-            // Get ShipBubble delivery fee from recommended courier
-            const shipBubbleDeliveryFee = recommendation.recommended.amount || recommendation.recommended.total || 0;
+            // Get ShipBubble delivery fee from recommended courier (round UP to whole number)
+            const shipBubbleDeliveryFee = Math.ceil(recommendation.recommended.amount || recommendation.recommended.total || 0);
 
-            // Get delivery surcharge from system settings
-            const deliverySurcharge = await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE) || 0;
+            // Get delivery surcharge from system settings (ensure whole number)
+            const deliverySurcharge = Math.ceil(await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE) || 0);
 
-            // Calculate final delivery fee (ShipBubble fee + system surcharge)
-            const deliveryFee = Math.round((shipBubbleDeliveryFee + deliverySurcharge) * 100) / 100;
+            // Calculate final delivery fee (ShipBubble fee + system surcharge) - both already whole numbers
+            const deliveryFee = shipBubbleDeliveryFee + deliverySurcharge;
 
             const deliveryQuoteData = {
                 quoteId: quote.id,
@@ -1330,14 +1330,14 @@ export default class ShoppingListController {
 
                     deliveryQuoteId = quote.id;
 
-                    // Get ShipBubble delivery fee from recommended courier
-                    const shipBubbleDeliveryFee = recommendation.recommended.amount || recommendation.recommended.total || 0;
+                    // Get ShipBubble delivery fee from recommended courier (round UP to whole number)
+                    const shipBubbleDeliveryFee = Math.ceil(recommendation.recommended.amount || recommendation.recommended.total || 0);
 
-                    // Get delivery surcharge from system settings
-                    const deliverySurcharge = await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE) || 0;
+                    // Get delivery surcharge from system settings (ensure whole number)
+                    const deliverySurcharge = Math.ceil(await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE) || 0);
 
-                    // Calculate final delivery fee (ShipBubble fee + system surcharge)
-                    deliveryFee = Math.round((shipBubbleDeliveryFee + deliverySurcharge) * 100) / 100;
+                    // Calculate final delivery fee (ShipBubble fee + system surcharge) - both already whole numbers
+                    deliveryFee = shipBubbleDeliveryFee + deliverySurcharge;
 
                     deliveryQuoteData = {
                         quoteId: quote.id,

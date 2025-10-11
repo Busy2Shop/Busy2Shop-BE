@@ -1404,16 +1404,47 @@ export default class OrderService {
      * Find order by shopping list ID for a specific user
      * @param shoppingListId The ID of the shopping list
      * @param userId The ID of the user (for security)
+     * @param options Optional parameters to match against (discount, delivery quote)
      * @returns Order if found, null otherwise
      */
-    static async findOrderByShoppingListId(shoppingListId: string, userId: string): Promise<Order | null> {
-        const order = await Order.findOne({
-            where: {
-                shoppingListId,
-                customerId: userId,
-                // Only look for pending orders to avoid returning completed/expired orders
-                paymentStatus: 'pending',
+    static async findOrderByShoppingListId(
+        shoppingListId: string,
+        userId: string,
+        options?: {
+            discountAmount?: number;
+            deliveryQuoteId?: string | null;
+        }
+    ): Promise<Order | null> {
+        const whereClause: any = {
+            shoppingListId,
+            customerId: userId,
+            // Only look for pending orders to avoid returning completed/expired orders
+            paymentStatus: 'pending',
+        };
+
+        // If discount amount is specified, only return orders with matching discount
+        if (options?.discountAmount !== undefined) {
+            whereClause.discountAmount = options.discountAmount;
+        }
+
+        // If delivery quote is specified, only return orders with matching quote
+        if (options?.deliveryQuoteId !== undefined) {
+            whereClause.deliveryQuoteId = options.deliveryQuoteId;
+        }
+
+        // Debug logging to track order lookup
+        logger.info('🔍 ORDER LOOKUP - Searching for order with criteria:', {
+            shoppingListId,
+            userId,
+            providedOptions: {
+                discountAmount: options?.discountAmount,
+                deliveryQuoteId: options?.deliveryQuoteId,
             },
+            finalWhereClause: JSON.stringify(whereClause, null, 2),
+        });
+
+        const order = await Order.findOne({
+            where: whereClause,
             include: [
                 {
                     model: ShoppingList,
@@ -1435,7 +1466,17 @@ export default class OrderService {
             // Get the most recent order if multiple exist
             order: [['createdAt', 'DESC']],
         });
-        
+
+        // Debug logging to track result
+        logger.info('🔍 ORDER LOOKUP - Result:', {
+            found: !!order,
+            orderId: order?.id,
+            orderNumber: order?.orderNumber,
+            orderDiscountAmount: order?.discountAmount,
+            orderDeliveryQuoteId: order?.deliveryQuoteId,
+            matchExpected: options?.discountAmount === order?.discountAmount && options?.deliveryQuoteId === order?.deliveryQuoteId,
+        });
+
         return order;
     }
 

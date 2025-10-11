@@ -9,6 +9,9 @@ import OrderTrailService from '../../services/orderTrail.service';
 import { BadRequestError, NotFoundError } from '../../utils/customErrors';
 import { logger } from '../../utils/logger';
 import ShoppingListItem from '../../models/shoppingListItem.model';
+import DiscountCampaignService from '../../services/discountCampaign.service';
+import DeliveryQuote from '../../models/deliveryQuote.model';
+import { SYSTEM_SETTING_KEYS } from '../../models/systemSettings.model';
 
 // Interface for calculated fees
 interface CalculatedFees {
@@ -19,10 +22,38 @@ interface CalculatedFees {
     total: number;
 }
 
+// Helper function to calculate discount amount from discount ID
+async function calculateDiscountFromId(
+    discountId: string | null | undefined,
+    subtotal: number,
+    items: any[],
+    userId: string
+): Promise<number> {
+    if (!discountId) return 0;
+
+    try {
+        const result = await DiscountCampaignService.getDiscountPreview({
+            campaignId: discountId,
+            orderTotal: subtotal,
+            items: items.map((item: any) => ({
+                productId: item.id || item.itemId,
+                quantity: item.quantity,
+                price: item.userSetPrice || item.userProvidedPrice || item.estimatedPrice || 0,
+            })),
+        });
+
+        return result.discountAmount || 0;
+    } catch (error) {
+        logger.warn(`Failed to calculate discount for campaign ${discountId}:`, error);
+        return 0; // Fail gracefully - don't block payment
+    }
+}
+
 // Helper function to calculate fees
 async function calculateOrderFees(
     subtotal: number | string,
-    discountAmount: number = 0
+    discountAmount: number = 0,
+    deliveryQuoteId?: string | null
 ): Promise<CalculatedFees> {
     // Ensure subtotal is a number
     const numericSubtotal = typeof subtotal === 'string' ? parseFloat(subtotal) : subtotal;
@@ -35,19 +66,44 @@ async function calculateOrderFees(
     const numericDiscount = typeof discountAmount === 'string' ? parseFloat(discountAmount) : (discountAmount || 0);
     const finalDiscount = isNaN(numericDiscount) ? 0 : Math.max(0, numericDiscount);
 
-    // Get fees from system settings
+    // Get service fee from system settings
     const serviceFee = await SystemSettingsService.calculateServiceFee(numericSubtotal);
-    const deliveryFee = await SystemSettingsService.getDeliveryFee();
 
-    // Calculate total ensuring all values are numbers
-    const total = Math.max(0, numericSubtotal + serviceFee + deliveryFee - finalDiscount);
+    // Get delivery fee - use ShipBubble quote if available, otherwise use system default
+    let deliveryFee = 0;
+    if (deliveryQuoteId) {
+        const deliveryQuote = await DeliveryQuote.findByPk(deliveryQuoteId);
+        if (deliveryQuote && deliveryQuote.couriers && deliveryQuote.couriers.length > 0) {
+            // Get the recommended courier (first one in the array from ShipBubble)
+            const recommendedCourier = deliveryQuote.couriers[0];
+            // Round UP ShipBubble fee to whole number (never reduce baseline)
+            const shipBubbleDeliveryFee = Math.ceil(recommendedCourier.amount || recommendedCourier.total || 0);
+
+            // Get delivery surcharge from system settings (ensure whole number)
+            const deliverySurcharge = Math.ceil(await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE) || 0);
+
+            // Calculate final delivery fee (ShipBubble fee + system surcharge) - both already whole numbers
+            deliveryFee = shipBubbleDeliveryFee + deliverySurcharge;
+
+            logger.info(`Using ShipBubble delivery fee from quote ${deliveryQuoteId}: ₦${shipBubbleDeliveryFee} + surcharge ₦${deliverySurcharge} = ₦${deliveryFee}`);
+        } else {
+            logger.warn(`Delivery quote ${deliveryQuoteId} not found or has no couriers, using system default`);
+            deliveryFee = await SystemSettingsService.getDeliveryFee();
+        }
+    } else {
+        deliveryFee = await SystemSettingsService.getDeliveryFee();
+        logger.info(`No delivery quote provided, using system default: ₦${deliveryFee}`);
+    }
+
+    // Calculate total ensuring all values are numbers (round UP to whole number)
+    const total = Math.ceil(Math.max(0, numericSubtotal + serviceFee + deliveryFee - finalDiscount));
 
     return {
-        subtotal: numericSubtotal,
-        serviceFee: Math.round(serviceFee * 100) / 100,
-        deliveryFee: Math.round(deliveryFee * 100) / 100,
-        discountAmount: Math.round(finalDiscount * 100) / 100,
-        total: Math.round(total * 100) / 100,
+        subtotal: Math.ceil(numericSubtotal), // Round UP to whole number
+        serviceFee: Math.ceil(serviceFee), // Round UP to whole number
+        deliveryFee: Math.ceil(deliveryFee), // Already whole number from above
+        discountAmount: Math.ceil(finalDiscount), // Round UP to whole number
+        total: total, // Already whole number from Math.ceil above
     };
 }
 
@@ -58,7 +114,7 @@ export default class PaystackController {
      */
     static async initializeShoppingListPayment(req: AuthenticatedRequest, res: Response) {
         const { shoppingListId } = req.params;
-        const { currency, deliveryAddress, customerNotes, discountAmount } = req.body;
+        const { currency, deliveryAddress, customerNotes, discountAmount, selectedDiscountId, deliveryQuoteId } = req.body;
 
         if (!shoppingListId) {
             throw new BadRequestError('Shopping list ID is required');
@@ -87,7 +143,11 @@ export default class PaystackController {
             }
 
             // Check for existing order - follow same pattern as AlatPay
-            const existingOrder = await OrderService.findOrderByShoppingListId(shoppingListId, req.user.id);
+            // Important: Match on discount and delivery quote to allow users to change these parameters
+            const existingOrder = await OrderService.findOrderByShoppingListId(shoppingListId, req.user.id, {
+                discountAmount: discountAmount || 0,
+                deliveryQuoteId: deliveryQuoteId || null,
+            });
 
             if (existingOrder) {
                 logger.info(`Found existing order ${existingOrder.orderNumber} for shopping list ${shoppingListId}`);
@@ -236,7 +296,43 @@ export default class PaystackController {
                 shoppingList.items.reduce((acc: number, item: ShoppingListItem) =>
                     acc + ((item as any).userSetPrice || (item as any).userProvidedPrice || item.estimatedPrice || 0) * item.quantity, 0);
 
-            const calculatedFees = await calculateOrderFees(subtotal, discountAmount || 0);
+            // Calculate discount amount from ID if provided, otherwise use the provided discountAmount
+            let finalDiscountAmount = discountAmount || 0;
+            if (selectedDiscountId) {
+                finalDiscountAmount = await calculateDiscountFromId(
+                    selectedDiscountId,
+                    subtotal,
+                    shoppingList.items,
+                    req.user.id
+                );
+            }
+
+            const calculatedFees = await calculateOrderFees(subtotal, finalDiscountAmount, deliveryQuoteId);
+
+            // Get discount campaign details if discount was applied
+            let appliedDiscounts: Array<{
+                id: string;
+                name: string;
+                type: string;
+                value: number;
+                amount: number;
+                appliedAt: Date;
+            }> = [];
+            if (selectedDiscountId && finalDiscountAmount > 0) {
+                try {
+                    const campaign = await DiscountCampaignService.getCampaignById(selectedDiscountId);
+                    appliedDiscounts = [{
+                        id: campaign.id,
+                        name: campaign.name,
+                        type: campaign.type,
+                        value: Number(campaign.value),
+                        amount: finalDiscountAmount,
+                        appliedAt: new Date(),
+                    }];
+                } catch (error) {
+                    logger.warn(`Failed to fetch discount campaign details: ${selectedDiscountId}`);
+                }
+            }
 
             // Create new order
             const order = await OrderService.createOrder({
@@ -250,6 +346,10 @@ export default class PaystackController {
                 deliveryAddress: deliveryAddress,
                 customerNotes: customerNotes,
                 paymentMethod: 'PAYSTACK',
+                discountAmount: finalDiscountAmount,
+                appliedDiscounts: appliedDiscounts,
+                originalSubtotal: subtotal,
+                deliveryQuoteId: deliveryQuoteId || null,
             });
 
             // Generate unique reference

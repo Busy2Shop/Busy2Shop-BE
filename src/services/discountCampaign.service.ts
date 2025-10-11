@@ -1,9 +1,9 @@
 import { Op } from 'sequelize';
-import DiscountCampaign, { 
-    IDiscountCampaign, 
-    DiscountType, 
-    DiscountTargetType, 
-    CampaignStatus, 
+import DiscountCampaign, {
+    IDiscountCampaign,
+    DiscountType,
+    DiscountTargetType,
+    CampaignStatus,
 } from '../models/discountCampaign.model';
 import DiscountUsage from '../models/discountUsage.model';
 import User from '../models/user.model';
@@ -12,6 +12,8 @@ import Market from '../models/market.model';
 import ReferralBonus, { BonusType, BonusStatus } from '../models/referralBonus.model';
 import { NotFoundError, BadRequestError } from '../utils/customErrors';
 import { Database } from '../models';
+import SystemSettingsService from './systemSettings.service';
+import { SYSTEM_SETTING_KEYS } from '../models/systemSettings.model';
 
 interface ICampaignQuery {
     page?: number;
@@ -720,35 +722,40 @@ export default class DiscountCampaignService {
     }
 
     private static async calculateDiscountAmount(
-        campaign: DiscountCampaign, 
+        campaign: DiscountCampaign,
         context: {
             orderAmount: number;
             productIds: string[];
         }
     ): Promise<number> {
         const { orderAmount, productIds } = context;
-        
-        // Security: Maximum allowed discount percentages
-        const MAX_DISCOUNT_PERCENTAGE = 40; // 40% max
-        const MAX_DISCOUNT_AMOUNT_RATIO = 0.4; // Maximum 40% of order value
-        
+
+        // Efficiently get security constraints from cached system settings in one batch query
+        const settings = await SystemSettingsService.getSettings([
+            SYSTEM_SETTING_KEYS.MAXIMUM_DISCOUNT_PERCENTAGE,
+            SYSTEM_SETTING_KEYS.MAXIMUM_SINGLE_DISCOUNT_AMOUNT,
+        ]);
+
+        const MAX_DISCOUNT_PERCENTAGE = settings[SYSTEM_SETTING_KEYS.MAXIMUM_DISCOUNT_PERCENTAGE] || 30;
+        const MAX_SINGLE_DISCOUNT_AMOUNT = settings[SYSTEM_SETTING_KEYS.MAXIMUM_SINGLE_DISCOUNT_AMOUNT] || 2000;
+        const MAX_DISCOUNT_AMOUNT_RATIO = MAX_DISCOUNT_PERCENTAGE / 100;
+
         let discountAmount = 0;
 
         switch (campaign.type) {
             case DiscountType.PERCENTAGE:
-                // Cap percentage at maximum allowed
+                // Cap percentage at maximum allowed from system settings
                 const effectivePercentage = Math.min(campaign.value, MAX_DISCOUNT_PERCENTAGE);
                 const percentageDiscount = (orderAmount * effectivePercentage) / 100;
-                
-                // Apply campaign's maximum if set
-                discountAmount = campaign.maximumDiscountAmount 
-                    ? Math.min(percentageDiscount, campaign.maximumDiscountAmount)
-                    : percentageDiscount;
+
+                // Apply campaign's maximum if set, otherwise use system maximum
+                const campaignMax = campaign.maximumDiscountAmount || MAX_SINGLE_DISCOUNT_AMOUNT;
+                discountAmount = Math.min(percentageDiscount, campaignMax);
                 break;
 
             case DiscountType.FIXED_AMOUNT:
-                // Fixed amount cannot exceed order amount
-                discountAmount = Math.min(campaign.value, orderAmount);
+                // Fixed amount cannot exceed order amount or system maximum
+                discountAmount = Math.min(campaign.value, orderAmount, MAX_SINGLE_DISCOUNT_AMOUNT);
                 break;
 
             case DiscountType.FREE_SHIPPING:
@@ -764,14 +771,14 @@ export default class DiscountCampaignService {
             default:
                 discountAmount = 0;
         }
-        
-        // Final security check: Ensure discount doesn't exceed maximum allowed ratio
+
+        // Final security check: Ensure discount doesn't exceed maximum allowed ratio from system settings
         const maxAllowedDiscount = orderAmount * MAX_DISCOUNT_AMOUNT_RATIO;
-        discountAmount = Math.min(discountAmount, maxAllowedDiscount);
-        
+        discountAmount = Math.min(discountAmount, maxAllowedDiscount, MAX_SINGLE_DISCOUNT_AMOUNT);
+
         // Ensure discount is never negative and doesn't exceed order amount
-        discountAmount = Math.max(0, Math.min(discountAmount, orderAmount * 0.8));
-        
+        discountAmount = Math.max(0, Math.min(discountAmount, orderAmount));
+
         return Math.round(discountAmount * 100) / 100; // Round to 2 decimal places
     }
 }
