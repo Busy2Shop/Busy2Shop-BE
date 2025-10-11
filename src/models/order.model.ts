@@ -11,6 +11,7 @@ import {
 } from 'sequelize-typescript';
 import User from './user.model';
 import ShoppingList from './shoppingList.model';
+import DeliveryQuote from './deliveryQuote.model';
 
 @Table
 export default class Order extends Model<Order | IOrder> {
@@ -225,6 +226,36 @@ export default class Order extends Model<Order | IOrder> {
     })
     paymentProcessedAt: Date;
 
+    // ShipBubble Delivery Fields
+    @IsUUID(4)
+    @ForeignKey(() => DeliveryQuote)
+    @Column({
+        allowNull: true,
+    })
+    deliveryQuoteId: string;
+
+    @BelongsTo(() => DeliveryQuote)
+    deliveryQuote: DeliveryQuote;
+
+    @Column({
+        type: DataType.JSONB,
+        allowNull: true,
+        comment: 'ShipBubble delivery tracking metadata',
+    })
+    deliveryMetadata: {
+        shipbubbleOrderId?: string;
+        trackingNumber?: string;
+        courierName?: string;
+        courierServiceCode?: string;
+        trackingUrl?: string;
+        estimatedDeliveryDate?: string;
+        deliveryStatus?: string;
+        labelUrl?: string;
+        pickedUpAt?: string;
+        deliveredAt?: string;
+        [key: string]: any; // Allow flexible metadata
+    } | null;
+
 }
 
 export interface IOrder {
@@ -281,4 +312,19 @@ export interface IOrder {
     paymentId?: string;
     paymentStatus?: 'pending' | 'completed' | 'failed' | 'expired';
     paymentProcessedAt?: Date;
+    // ShipBubble Delivery Fields
+    deliveryQuoteId?: string;
+    deliveryMetadata?: {
+        shipbubbleOrderId?: string;
+        trackingNumber?: string;
+        courierName?: string;
+        courierServiceCode?: string;
+        trackingUrl?: string;
+        estimatedDeliveryDate?: string;
+        deliveryStatus?: string;
+        labelUrl?: string;
+        pickedUpAt?: string;
+        deliveredAt?: string;
+        [key: string]: any;
+    } | null;
 }

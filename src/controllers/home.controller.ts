@@ -1067,11 +1067,12 @@ export default class HomeController {
             logger.info('🔍 Multi-dimensional keyword search initiated', {
                 promotionId: promotionId || 'none',
                 promotionFound: !!promotion,
+                promotionType: promotion?.searchType || null,
                 totalKeywords: searchKeywords.length,
                 keywords: searchKeywords,
-                searchType,
-                filters: advancedFilters,
                 rawType,
+                mappedSearchType: searchType,
+                filters: advancedFilters,
                 sources: {
                     query: query.trim(),
                     promotionTitle: promotion?.title || null,

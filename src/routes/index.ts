@@ -23,6 +23,7 @@ import userAddressRoute from './userAddress.routes';
 import discountCampaignRoute from './discountCampaign.routes';
 import systemSettingsRoute from './systemSettings.routes';
 import testRoute from './test.routes';
+import deliveryRoute from './delivery.routes';
 
 const router = Router();
 
@@ -50,5 +51,6 @@ router.use('/user-addresses', userAddressRoute);
 router.use('/discounts', discountCampaignRoute);
 router.use('/system/settings', systemSettingsRoute);
 router.use('/test', testRoute); // Test endpoints (no auth required)
+router.use('/delivery', deliveryRoute);
 
 export default router;

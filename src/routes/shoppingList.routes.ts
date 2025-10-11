@@ -21,6 +21,7 @@ router.get('/agent', AuthenticatedController(ShoppingListController.getAgentAssi
 router.post('/todays-list', AuthenticatedController(ShoppingListController.createTodaysShoppingList));
 router.post('/meal-list', AuthenticatedController(ShoppingListController.createMealShoppingList));
 router.post('/validate-and-sync', AuthenticatedController(ShoppingListController.validateAndSyncList));
+router.post('/delivery-quote', AuthenticatedController(ShoppingListController.getDeliveryQuote));
 router.get('/:id', AuthenticatedController(ShoppingListController.getShoppingList));
 router.put('/:id', AuthenticatedController(ShoppingListController.updateShoppingList));
 router.delete('/:id', AuthenticatedController(ShoppingListController.deleteShoppingList));

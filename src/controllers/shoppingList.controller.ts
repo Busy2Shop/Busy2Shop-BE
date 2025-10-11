@@ -5,10 +5,62 @@ import ShoppingListService from '../services/shoppingList.service';
 import DiscountCampaignService from '../services/discountCampaign.service';
 import SystemSettingsService from '../services/systemSettings.service';
 import PriceCalculatorService from '../services/priceCalculator.service';
+import ShipBubbleService from '../services/shipbubble.service';
 import { SYSTEM_SETTING_KEYS } from '../models/systemSettings.model';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/customErrors';
 import ShoppingListItem from '../models/shoppingListItem.model';
 import Product from '../models/product.model';
+import UserAddress from '../models/userAddress.model';
+import User from '../models/user.model';
+import Market from '../models/market.model';
+import ShipBubbleAddress from '../models/shipBubbleAddress.model';
+import DeliveryQuote from '../models/deliveryQuote.model';
+import moment from 'moment';
+
+/**
+ * Helper to normalize and validate Nigerian phone numbers
+ * Converts various formats to international format (+234...)
+ * Returns empty string if invalid
+ */
+const normalizePhoneNumber = (phone: string | null | undefined): string => {
+    if (!phone) return '';
+
+    // Remove all non-digit characters except leading +
+    const cleaned = phone.replace(/[^\d+]/g, '');
+    // Remove any + that's not at the start
+    const normalized = cleaned.replace(/(?!^)\+/g, '');
+
+    let result = '';
+    // If starts with 0, replace with +234
+    if (normalized.startsWith('0')) {
+        result = '+234' + normalized.substring(1);
+    }
+    // If starts with 234, add +
+    else if (normalized.startsWith('234')) {
+        result = '+' + normalized;
+    }
+    // If already has +234, return as is
+    else if (normalized.startsWith('+234')) {
+        result = normalized;
+    }
+    // If has + but not +234, try to keep it
+    else if (normalized.startsWith('+')) {
+        result = normalized;
+    }
+    // Default: assume it's missing country code
+    else {
+        result = '+234' + normalized;
+    }
+
+    // Validate Nigerian phone: +234 + valid carrier prefix (70-91) + 8 digits
+    // Valid prefixes: 070x, 080x, 081x, 090x, 091x, etc.
+    const nigerianPhoneRegex = /^\+234[7-9][0-1]\d{8}$/;
+    if (!nigerianPhoneRegex.test(result)) {
+        return ''; // Return empty if invalid
+    }
+
+    return result;
+};
 
 export default class ShoppingListController {
     static async createShoppingList(req: AuthenticatedRequest, res: Response) {
@@ -159,10 +211,25 @@ export default class ShoppingListController {
         const { listId } = req.params;
         const { name, quantity, unit, notes, estimatedPrice, productId } = req.body;
 
+        console.log('🛒 [CONTROLLER] Add Item Request Received:', {
+            listId,
+            userId: req.user.id,
+            itemName: name,
+            quantity: quantity || 1,
+            unit,
+            estimatedPrice,
+            productId,
+            timestamp: new Date().toISOString(),
+        });
+
         if (!name) {
+            console.error('❌ [CONTROLLER] Validation failed: Item name is required');
             throw new BadRequestError('Item name is required');
         }
 
+        console.log('✅ [CONTROLLER] Validation passed, calling service layer...');
+
+        const startTime = Date.now();
         const newItem = await ShoppingListService.addItemToList(listId, req.user.id, {
             name,
             quantity: quantity || 1,
@@ -171,6 +238,15 @@ export default class ShoppingListController {
             estimatedPrice,
             productId,
             shoppingListId: listId,
+        });
+        const duration = Date.now() - startTime;
+
+        console.log('✅ [CONTROLLER] Item added successfully:', {
+            itemId: newItem.id,
+            itemName: newItem.name,
+            listId,
+            duration: `${duration}ms`,
+            timestamp: new Date().toISOString(),
         });
 
         res.status(201).json({
@@ -409,8 +485,8 @@ export default class ShoppingListController {
             include: [{
                 model: Product,
                 as: 'product',
-                attributes: ['price']
-            }]
+                attributes: ['price'],
+            }],
         });
 
         if (!item) {
@@ -540,71 +616,344 @@ export default class ShoppingListController {
     }
 
     /**
-     * Validate and sync local shopping list with server
-     * This endpoint checks item prices, availability and provides update information
+     * FAST: Get delivery quote only (skips full validation)
+     * Use this when user changes address and you only need updated delivery fee
+     * Much faster than full validateAndSyncList
      */
-    static async validateAndSyncList(req: AuthenticatedRequest, res: Response) {
-        const { listData, marketId } = req.body;
+    static async getDeliveryQuote(req: AuthenticatedRequest, res: Response) {
+        const { listId, userAddressId, subtotal } = req.body;
 
-        if (!listData || !listData.items || listData.items.length === 0) {
-            throw new BadRequestError('Shopping list data with items is required');
+        if (!listId || !userAddressId || !subtotal) {
+            throw new BadRequestError('Shopping list ID, user address ID, and subtotal are required');
         }
 
         try {
-            // Get or create shopping list on server if needed
-            let shoppingList: any;
-            if (listData.id && !listData.isLocal) {
-                // Get existing server list
-                shoppingList = await ShoppingListService.getShoppingList(listData.id);
-                if (shoppingList.customerId !== req.user.id) {
-                    throw new ForbiddenError('You are not authorized to access this shopping list');
-                }
-            } else {
-                // For local lists, create a minimal list record for validation context
-                shoppingList = await ShoppingListService.createShoppingList(
-                    {
-                        name: listData.name || 'Shopping List',
-                        notes: listData.notes,
-                        marketId: marketId || listData.marketId,
-                        customerId: req.user.id,
-                        status: 'draft',
-                    },
-                    listData.items || [] // Save items if this is a local list being synced
-                );
+            console.log('🚀 [GET DELIVERY QUOTE] Fast delivery quote request:', {
+                listId,
+                userAddressId,
+                subtotal,
+                timestamp: new Date().toISOString(),
+            });
+
+            // Get shopping list (lightweight - just need market info)
+            const shoppingList = await ShoppingListService.getShoppingList(listId);
+
+            if (shoppingList.customerId !== req.user.id) {
+                throw new ForbiddenError('You are not authorized to access this shopping list');
             }
+
+            if (!shoppingList.marketId) {
+                throw new BadRequestError('Shopping list must have a market selected');
+            }
+
+            // Get customer address with user info
+            const userAddress = await UserAddress.findByPk(userAddressId, {
+                include: [{ model: User, as: 'user' }],
+            });
+
+            if (!userAddress) {
+                throw new NotFoundError('Customer address not found');
+            }
+
+            const user = (userAddress as any).user;
+            if (!user) {
+                throw new NotFoundError('User not found for address');
+            }
+
+            // Get market
+            const market = await Market.findByPk(shoppingList.marketId);
+            if (!market) {
+                throw new NotFoundError('Market not found');
+            }
+
+            // Validate/cache receiver address (customer)
+            const receiverHash = ShipBubbleService.calculateAddressHash(
+                userAddress.address || userAddress.fullAddress,
+                userAddress.city,
+                userAddress.state
+            );
+
+            let receiverAddressCode: number;
+            const cachedReceiver = await ShipBubbleAddress.findOne({
+                where: { user_address_id: userAddressId, address_hash: receiverHash },
+            });
+
+            if (cachedReceiver) {
+                receiverAddressCode = cachedReceiver.address_code;
+            } else {
+                const adminPhone = await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.ADMIN_PHONE);
+                const userPhone = normalizePhoneNumber(user.phone || userAddress.contactPhone) || adminPhone || '+2349012345678';
+
+                const validated = await ShipBubbleService.validateAddress({
+                    name: `${user.firstName} ${user.lastName}`.trim() || 'Customer',
+                    email: user.email || 'customer@busy2shop.com',
+                    phone: userPhone,
+                    address: userAddress.fullAddress || userAddress.address,
+                    city: userAddress.city,
+                    state: userAddress.state,
+                    country: userAddress.country || 'Nigeria',
+                });
+
+                await ShipBubbleAddress.create({
+                    user_address_id: userAddressId,
+                    address_code: validated.address_code,
+                    formatted_address: validated.formatted_address,
+                    latitude: validated.latitude,
+                    longitude: validated.longitude,
+                    address_hash: receiverHash,
+                    validation_date: new Date(),
+                });
+
+                receiverAddressCode = validated.address_code;
+            }
+
+            // Validate/cache sender address (market)
+            const marketLocation = typeof market.location === 'string'
+                ? JSON.parse(market.location)
+                : market.location;
+
+            const senderHash = ShipBubbleService.calculateAddressHash(
+                market.address,
+                marketLocation.city || '',
+                marketLocation.state || ''
+            );
+
+            let senderAddressCode: number;
+            const cachedSender = await ShipBubbleAddress.findOne({
+                where: { market_id: shoppingList.marketId, address_hash: senderHash },
+            });
+
+            if (cachedSender) {
+                senderAddressCode = cachedSender.address_code;
+            } else {
+                const adminPhone = await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.ADMIN_PHONE);
+                const marketPhone = normalizePhoneNumber(market.phoneNumber) || adminPhone || '+2349012345678';
+
+                const validated = await ShipBubbleService.validateAddress({
+                    name: market.name || 'Market',
+                    email: 'market@busy2shop.com',
+                    phone: marketPhone,
+                    address: market.address,
+                    city: marketLocation.city || '',
+                    state: marketLocation.state || '',
+                    country: marketLocation.country || 'Nigeria',
+                });
+
+                await ShipBubbleAddress.create({
+                    market_id: shoppingList.marketId,
+                    address_code: validated.address_code,
+                    formatted_address: validated.formatted_address,
+                    latitude: validated.latitude,
+                    longitude: validated.longitude,
+                    address_hash: senderHash,
+                    validation_date: new Date(),
+                });
+
+                senderAddressCode = validated.address_code;
+            }
+
+            // Calculate package weight and dimensions
+            const totalWeight = ShipBubbleService.calculatePackageWeight(
+                shoppingList.items.map(item => ({
+                    quantity: item.quantity,
+                    unit: item.unit || undefined,
+                }))
+            );
+
+            const dimensions = ShipBubbleService.getPackageDimensions(totalWeight);
+
+            // Fetch rates from ShipBubble
+            const ratesResponse = await ShipBubbleService.fetchShippingRates({
+                sender_address_code: senderAddressCode,
+                reciever_address_code: receiverAddressCode,
+                pickup_date: moment().add(1, 'day').format('YYYY-MM-DD'),
+                category_id: 0,
+                package_items: shoppingList.items.map(item => ({
+                    name: item.name || 'Grocery Item',
+                    description: item.notes || 'Food item',
+                    unit_weight: (item.quantity || 1).toString(),
+                    unit_amount: ((item.estimatedPrice || 1000)).toString(),
+                    quantity: (item.quantity || 1).toString(),
+                })),
+                package_dimension: dimensions,
+                delivery_instructions: 'Handle with care - food items',
+            });
+
+            // Get courier selection settings
+            const courierSettings = await SystemSettingsService.getSetting(
+                SYSTEM_SETTING_KEYS.COURIER_SELECTION_SETTINGS
+            );
+
+            const settings = courierSettings || {
+                highValueThreshold: 50000,
+                mediumValueThreshold: 20000,
+                maxDeliveryCostPercentage: 5,
+                prioritizeSpeed: false,
+                autoSelectRecommended: false,
+            };
+
+            // Get smart courier recommendation
+            const recommendation = ShipBubbleService.recommendCourier({
+                couriers: ratesResponse.couriers,
+                fastestCourier: ratesResponse.fastest_courier,
+                cheapestCourier: ratesResponse.cheapest_courier,
+                orderTotal: subtotal,
+                systemSettings: settings,
+            });
+
+            // Create or update delivery quote
+            const quote = await DeliveryQuote.create({
+                shopping_list_id: shoppingList.id,
+                request_token: ratesResponse.request_token,
+                sender_address_code: senderAddressCode,
+                receiver_address_code: receiverAddressCode,
+                category_id: ratesResponse.categoryId || 69709726,
+                package_weight: totalWeight,
+                package_dimensions: dimensions,
+                couriers: ratesResponse.couriers,
+                status: 'quoted',
+                expires_at: moment().add(24, 'hours').toDate(),
+            });
+
+            // Get ShipBubble delivery fee from recommended courier
+            const shipBubbleDeliveryFee = recommendation.recommended.amount || recommendation.recommended.total || 0;
+
+            // Get delivery surcharge from system settings
+            const deliverySurcharge = await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE) || 0;
+
+            // Calculate final delivery fee (ShipBubble fee + system surcharge)
+            const deliveryFee = Math.round((shipBubbleDeliveryFee + deliverySurcharge) * 100) / 100;
+
+            const deliveryQuoteData = {
+                quoteId: quote.id,
+                shipBubbleFee: shipBubbleDeliveryFee,
+                systemSurcharge: deliverySurcharge,
+                totalDeliveryFee: deliveryFee,
+                recommendedCourier: {
+                    courier: recommendation.recommended,
+                    reason: recommendation.reason,
+                    score: recommendation.score,
+                },
+                allCouriers: ratesResponse.couriers,
+                fastestCourier: ratesResponse.fastest_courier,
+                cheapestCourier: ratesResponse.cheapest_courier,
+                expiresAt: quote.expires_at,
+            };
+
+            console.log('✅ [GET DELIVERY QUOTE] Quote generated successfully:', {
+                deliveryFee,
+                shipBubbleFee: shipBubbleDeliveryFee,
+                surcharge: deliverySurcharge,
+                courier: recommendation.recommended.courier_name,
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Delivery quote generated successfully',
+                data: {
+                    deliveryFee,
+                    deliveryQuote: deliveryQuoteData,
+                    deliveryQuoteId: quote.id,
+                },
+            });
+
+        } catch (error: any) {
+            console.error('❌ [GET DELIVERY QUOTE] Error:', error);
+            // Fall back to system default delivery fee
+            const deliveryFee = await SystemSettingsService.getDeliveryFee();
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Using fallback delivery fee',
+                data: {
+                    deliveryFee,
+                    deliveryQuote: null,
+                    deliveryQuoteId: null,
+                    error: error.message,
+                },
+            });
+        }
+    }
+
+    /**
+     * Validate and sync shopping list with server
+     * OPTIMIZED: Only requires listId and optional userAddressId
+     * Integrates ShipBubble delivery quotes when address is provided
+     */
+    static async validateAndSyncList(req: AuthenticatedRequest, res: Response) {
+        const { listId, userAddressId } = req.body;
+
+        if (!listId) {
+            throw new BadRequestError('Shopping list ID is required');
+        }
+
+        try {
+            console.log('📦 [VALIDATE & SYNC] Starting validation:', {
+                listId,
+                hasAddress: !!userAddressId,
+                userId: req.user.id,
+                timestamp: new Date().toISOString(),
+            });
+
+            // Get shopping list with items and market in one query
+            const shoppingList = await ShoppingListService.getShoppingList(listId);
+
+            if (shoppingList.customerId !== req.user.id) {
+                throw new ForbiddenError('You are not authorized to access this shopping list');
+            }
+
+            if (!shoppingList.marketId) {
+                throw new BadRequestError('Shopping list must have a market selected');
+            }
+
+            console.log('✅ [VALIDATE & SYNC] Shopping list retrieved:', {
+                listId: shoppingList.id,
+                itemCount: shoppingList.items?.length || 0,
+                marketId: shoppingList.marketId,
+                marketName: shoppingList.market?.name,
+            });
+
+            // Calculate subtotal from shopping list items
+            const productIds = shoppingList.items.map((item: any) => item.productId).filter(Boolean);
 
             // First pass: Get raw discounts to identify product-specific discounts
             const rawDiscounts = await DiscountCampaignService.getAvailableDiscountsForUser({
                 userId: req.user.id,
-                orderAmount: 0, // We'll calculate this properly after price corrections
+                orderAmount: 0, // We'll calculate this properly after price calculations
                 marketId: shoppingList.marketId,
-                productIds: listData.items.map((item: any) => item.productId).filter(Boolean),
+                productIds,
             });
 
             // Get product-specific discounts that should be auto-applied
-            const productDiscounts = rawDiscounts.filter(discount => 
-                discount.targetType === 'product' && 
+            const productDiscounts = rawDiscounts.filter(discount =>
+                discount.targetType === 'product' &&
                 discount.isAutomaticApply &&
-                discount.targetProductIds?.some((productId: string) => 
-                    listData.items.some((item: any) => item.productId === productId)
+                discount.targetProductIds?.some((productId: string) =>
+                    shoppingList.items.some((item: any) => item.productId === productId)
                 )
             );
 
-            // Validate items without saving them
-            const itemValidationResults = [];
-            const priceCorrections = [];
-            let subtotal = 0;
+            console.log('💰 [VALIDATE & SYNC] Discounts retrieved:', {
+                totalDiscounts: rawDiscounts.length,
+                productDiscounts: productDiscounts.length,
+            });
 
-            for (const item of listData.items) {
+            // Calculate subtotal and apply product-specific discounts
+            let subtotal = 0;
+            const itemValidationResults: Array<{
+                itemId: string;
+                itemName: string;
+                originalPrice: number;
+                finalPrice: number;
+                quantity: number;
+                totalPrice: number;
+                appliedDiscounts: any[];
+                isAvailable: boolean;
+            }> = [];
+
+            for (const item of shoppingList.items) {
                 // Use standardized price calculation
                 const currentPrice = PriceCalculatorService.getEffectivePrice(item);
-
-                // Validate price
-                const priceValidation = PriceCalculatorService.validatePrice(currentPrice);
-                if (!priceValidation.valid && currentPrice > 0) {
-                    // Log validation error but continue with corrected price
-                    console.warn(`Price validation failed for item ${item.name}: ${priceValidation.error}`);
-                }
 
                 // Apply product-specific discounts to the item price
                 const itemProductDiscounts = productDiscounts.filter(discount =>
@@ -621,79 +970,34 @@ export default class ShoppingListController {
                     );
                 }
 
-                // Store discounted price for transparency
-                if (discountedPrice !== currentPrice) {
-                    item.discountedPrice = discountedPrice;
-                }
-
                 subtotal += PriceCalculatorService.calculateItemTotal(
                     { ...item, discountedPrice },
                     item.quantity
                 );
 
-                const validationResult: {
-                    originalItem: any;
-                    isAvailable: boolean;
-                    priceCorrection: number | null;
-                    suggestedPrice: number | null;
-                    warnings: string[];
-                    appliedDiscounts: any[];
-                    finalPrice: number;
-                } = {
-                    originalItem: item,
-                    isAvailable: true,
-                    priceCorrection: null,
-                    suggestedPrice: null,
-                    warnings: [],
-                    appliedDiscounts: itemProductDiscounts,
+                itemValidationResults.push({
+                    itemId: item.id,
+                    itemName: item.name,
+                    originalPrice: currentPrice,
                     finalPrice: discountedPrice,
-                };
-
-                // Price validation logic - check against market prices or business rules
-                if (currentPrice > 0) {
-                    // Simple price validation - in a real app, you'd check against market prices
-                    if (currentPrice < 50) {
-                        validationResult.warnings.push('Price seems unusually low');
-                        validationResult.suggestedPrice = Math.max(100, currentPrice * 2);
-                    } else if (currentPrice > 10000) {
-                        validationResult.warnings.push('Price seems unusually high');
-                        validationResult.suggestedPrice = Math.min(5000, currentPrice * 0.7);
-                    }
-                } else {
-                    validationResult.warnings.push('No price provided - using estimated price');
-                    validationResult.suggestedPrice = Math.floor(Math.random() * 2000) + 500;
-                }
-
-                itemValidationResults.push(validationResult);
-
-                // Create price correction if there's a suggested price or product discount applied
-                if (validationResult.suggestedPrice !== null) {
-                    priceCorrections.push({
-                        itemId: item.id || item.name,
-                        itemName: item.name,
-                        originalPrice: currentPrice,
-                        correctedPrice: validationResult.suggestedPrice,
-                        reason: validationResult.warnings.join(', ') || 'Price adjustment',
-                        type: 'suggestion',
-                    });
-                } else if (discountedPrice !== currentPrice) {
-                    priceCorrections.push({
-                        itemId: item.id || item.name,
-                        itemName: item.name,
-                        originalPrice: currentPrice,
-                        correctedPrice: discountedPrice,
-                        reason: `Product discount applied: ${itemProductDiscounts.map(d => d.name).join(', ')}`,
-                        type: 'product_discount',
-                    });
-                }
+                    quantity: item.quantity,
+                    totalPrice: discountedPrice * item.quantity,
+                    appliedDiscounts: itemProductDiscounts,
+                    isAvailable: true,
+                });
             }
+
+            console.log('💵 [VALIDATE & SYNC] Subtotal calculated:', {
+                subtotal,
+                itemCount: shoppingList.items.length,
+            });
 
             // Update the discount query with the calculated subtotal
             const updatedRawDiscounts = await DiscountCampaignService.getAvailableDiscountsForUser({
                 userId: req.user.id,
                 orderAmount: subtotal,
                 marketId: shoppingList.marketId,
-                productIds: listData.items.map((item: any) => item.productId).filter(Boolean),
+                productIds,
             });
 
             // Enhanced discount validation with system constraints
@@ -747,10 +1051,10 @@ export default class ShoppingListController {
             }
 
             // Categorize secure discounts by their application type
-            const updatedProductDiscounts = secureDiscounts.filter(discount => 
-                discount.targetType === 'product' && 
-                discount.targetProductIds?.some((productId: string) => 
-                    listData.items.some((item: any) => item.productId === productId)
+            const updatedProductDiscounts = secureDiscounts.filter(discount =>
+                discount.targetType === 'product' &&
+                discount.targetProductIds?.some((productId: string) =>
+                    shoppingList.items.some((item: any) => item.productId === productId)
                 )
             );
 
@@ -809,82 +1113,303 @@ export default class ShoppingListController {
                 ),
             };
 
-            // Get the updated shopping list with items if they were saved
-            const finalShoppingList = await ShoppingListService.getShoppingList(shoppingList.id);
-            
-            // Calculate service fee and delivery fee using system settings
+            // Calculate service fee using system settings
             const serviceFee = await SystemSettingsService.calculateServiceFee(subtotal);
-            const deliveryFee = await SystemSettingsService.getDeliveryFee();
-            
-            // Calculate auto-applied discount amounts (already applied to item prices)
+
+            // Calculate auto-applied discount amount (already applied to item prices)
             let autoAppliedDiscountAmount = 0;
-            const autoAppliedDiscountDetails = [];
-
-            // Calculate the total amount saved from product discounts
-            for (const item of listData.items) {
-                const originalPrice = item.userProvidedPrice || item.estimatedPrice || 0;
-                const itemValidation = itemValidationResults.find(v => v.originalItem.id === item.id);
-                
-                if (itemValidation && itemValidation.finalPrice < originalPrice) {
-                    const itemSavings = (originalPrice - itemValidation.finalPrice) * item.quantity;
-                    autoAppliedDiscountAmount += itemSavings;
+            for (const itemResult of itemValidationResults) {
+                if (itemResult.finalPrice < itemResult.originalPrice) {
+                    autoAppliedDiscountAmount += (itemResult.originalPrice - itemResult.finalPrice) * itemResult.quantity;
                 }
             }
 
-            // Create details for auto-applied discounts
-            for (const discount of autoAppliedProductDiscounts) {
-                // Find items that this discount applies to
-                const applicableItems = listData.items.filter((item: any) => 
-                    discount.targetProductIds?.includes(item.productId)
-                );
-                
-                let discountAmount = 0;
-                for (const item of applicableItems) {
-                    const originalPrice = item.userProvidedPrice || item.estimatedPrice || 0;
-                    const itemValidation = itemValidationResults.find(v => v.originalItem.id === item.id);
-                    
-                    if (itemValidation && itemValidation.finalPrice < originalPrice) {
-                        discountAmount += (originalPrice - itemValidation.finalPrice) * item.quantity;
-                    }
-                }
-                
-                if (discountAmount > 0) {
-                    autoAppliedDiscountDetails.push({
-                        id: discount.id,
-                        name: discount.name,
-                        amount: discountAmount,
-                        type: discount.type,
-                        value: discount.value,
+            console.log('🎁 [VALIDATE & SYNC] Auto-applied discounts calculated:', {
+                autoAppliedDiscountAmount,
+                productDiscountsCount: productDiscounts.length,
+            });
+
+            // ShipBubble Delivery Quote Integration
+            let deliveryFee = 0;
+            let deliveryQuoteId: string | null = null;
+            let deliveryQuoteData: any = null;
+
+            if (userAddressId) {
+                console.log('📍 [VALIDATE & SYNC] User address provided, fetching ShipBubble quote...');
+
+                try {
+                    // Get customer address with user info
+                    const userAddress = await UserAddress.findByPk(userAddressId, {
+                        include: [{ model: User, as: 'user' }],
                     });
+
+                    if (!userAddress) {
+                        throw new NotFoundError('Customer address not found');
+                    }
+
+                    const user = (userAddress as any).user;
+                    if (!user) {
+                        throw new NotFoundError('User not found for address');
+                    }
+
+                    // Get market
+                    const market = await Market.findByPk(shoppingList.marketId);
+                    if (!market) {
+                        throw new NotFoundError('Market not found');
+                    }
+
+                    // Validate/cache receiver address (customer)
+                    const receiverHash = ShipBubbleService.calculateAddressHash(
+                        userAddress.address || userAddress.fullAddress,
+                        userAddress.city,
+                        userAddress.state
+                    );
+
+                    let receiverAddressCode: number;
+                    const cachedReceiver = await ShipBubbleAddress.findOne({
+                        where: { user_address_id: userAddressId, address_hash: receiverHash },
+                    });
+
+                    if (cachedReceiver) {
+                        console.log('✅ [ShipBubble] Using cached receiver address code:', cachedReceiver.address_code);
+                        receiverAddressCode = cachedReceiver.address_code;
+                    } else {
+                        console.log('🔄 [ShipBubble] Validating receiver address with API');
+                        const adminPhone = await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.ADMIN_PHONE);
+                        const userPhone = normalizePhoneNumber(user.phone || userAddress.contactPhone) || adminPhone || '+2348167291741';
+
+                        const validated = await ShipBubbleService.validateAddress({
+                            name: `${user.firstName} ${user.lastName}`.trim() || 'Customer',
+                            email: user.email || 'customer@busy2shop.com',
+                            phone: userPhone,
+                            address: userAddress.fullAddress || userAddress.address,
+                            city: userAddress.city,
+                            state: userAddress.state,
+                            country: userAddress.country || 'Nigeria',
+                        });
+
+                        await ShipBubbleAddress.create({
+                            user_address_id: userAddressId,
+                            address_code: validated.address_code,
+                            formatted_address: validated.formatted_address,
+                            latitude: validated.latitude,
+                            longitude: validated.longitude,
+                            address_hash: receiverHash,
+                            validation_date: new Date(),
+                        });
+
+                        receiverAddressCode = validated.address_code;
+                    }
+
+                    // Validate/cache sender address (market)
+                    const marketLocation = typeof market.location === 'string'
+                        ? JSON.parse(market.location)
+                        : market.location;
+
+                    const senderHash = ShipBubbleService.calculateAddressHash(
+                        market.address,
+                        marketLocation.city || '',
+                        marketLocation.state || ''
+                    );
+
+                    let senderAddressCode: number;
+                    const cachedSender = await ShipBubbleAddress.findOne({
+                        where: { market_id: shoppingList.marketId, address_hash: senderHash },
+                    });
+
+                    if (cachedSender) {
+                        console.log('✅ [ShipBubble] Using cached sender address code:', cachedSender.address_code);
+                        senderAddressCode = cachedSender.address_code;
+                    } else {
+                        console.log('🔄 [ShipBubble] Validating sender address with API');
+                        const adminPhone = await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.ADMIN_PHONE);
+                        const marketPhone = normalizePhoneNumber(market.phoneNumber) || adminPhone || '+2348167291741';
+
+                        const validated = await ShipBubbleService.validateAddress({
+                            name: market.name || 'Market',
+                            email: 'market@busy2shop.com',
+                            phone: marketPhone,
+                            address: market.address,
+                            city: marketLocation.city || '',
+                            state: marketLocation.state || '',
+                            country: marketLocation.country || 'Nigeria',
+                        });
+
+                        await ShipBubbleAddress.create({
+                            market_id: shoppingList.marketId,
+                            address_code: validated.address_code,
+                            formatted_address: validated.formatted_address,
+                            latitude: validated.latitude,
+                            longitude: validated.longitude,
+                            address_hash: senderHash,
+                            validation_date: new Date(),
+                        });
+
+                        senderAddressCode = validated.address_code;
+                    }
+
+                    // Calculate package weight and dimensions
+                    const totalWeight = ShipBubbleService.calculatePackageWeight(
+                        shoppingList.items.map(item => ({
+                            quantity: item.quantity,
+                            unit: item.unit || undefined,
+                        }))
+                    );
+
+                    const dimensions = ShipBubbleService.getPackageDimensions(totalWeight);
+
+                    console.log('📦 [ShipBubble] Package details calculated:', {
+                        totalWeight,
+                        dimensions,
+                    });
+
+                    // Fetch rates from ShipBubble
+                    const ratesResponse = await ShipBubbleService.fetchShippingRates({
+                        sender_address_code: senderAddressCode,
+                        reciever_address_code: receiverAddressCode,
+                        pickup_date: moment().add(1, 'day').format('YYYY-MM-DD'),
+                        category_id: 0, // Will be overridden by ShipBubbleService
+                        package_items: shoppingList.items.map(item => ({
+                            name: item.name || 'Grocery Item',
+                            description: item.notes || 'Food item',
+                            unit_weight: (item.quantity || 1).toString(),
+                            unit_amount: ((itemValidationResults.find(r => r.itemId === item.id)?.finalPrice || item.estimatedPrice || 1000)).toString(),
+                            quantity: (item.quantity || 1).toString(),
+                        })),
+                        package_dimension: dimensions,
+                        delivery_instructions: 'Handle with care - food items',
+                    });
+
+                    console.log('✅ [ShipBubble] Rates fetched successfully:', {
+                        couriersCount: ratesResponse.couriers.length,
+                        fastestCourier: ratesResponse.fastest_courier?.courier_name,
+                        cheapestCourier: ratesResponse.cheapest_courier?.courier_name,
+                    });
+
+                    // Get courier selection settings
+                    const courierSettings = await SystemSettingsService.getSetting(
+                        SYSTEM_SETTING_KEYS.COURIER_SELECTION_SETTINGS
+                    );
+
+                    const settings = courierSettings || {
+                        highValueThreshold: 50000,
+                        mediumValueThreshold: 20000,
+                        maxDeliveryCostPercentage: 5,
+                        prioritizeSpeed: false,
+                        autoSelectRecommended: false,
+                    };
+
+                    // Get smart courier recommendation
+                    const recommendation = ShipBubbleService.recommendCourier({
+                        couriers: ratesResponse.couriers,
+                        fastestCourier: ratesResponse.fastest_courier,
+                        cheapestCourier: ratesResponse.cheapest_courier,
+                        orderTotal: subtotal,
+                        systemSettings: settings,
+                    });
+
+                    console.log('🎯 [ShipBubble] Recommended courier:', {
+                        courier: recommendation.recommended.courier_name,
+                        reason: recommendation.reason,
+                        score: recommendation.score,
+                    });
+
+                    // Create or update delivery quote
+                    const quote = await DeliveryQuote.create({
+                        shopping_list_id: shoppingList.id,
+                        request_token: ratesResponse.request_token,
+                        sender_address_code: senderAddressCode,
+                        receiver_address_code: receiverAddressCode,
+                        category_id: ratesResponse.categoryId || 69709726,
+                        package_weight: totalWeight,
+                        package_dimensions: dimensions,
+                        couriers: ratesResponse.couriers,
+                        status: 'quoted',
+                        expires_at: moment().add(24, 'hours').toDate(),
+                    });
+
+                    deliveryQuoteId = quote.id;
+
+                    // Get ShipBubble delivery fee from recommended courier
+                    const shipBubbleDeliveryFee = recommendation.recommended.amount || recommendation.recommended.total || 0;
+
+                    // Get delivery surcharge from system settings
+                    const deliverySurcharge = await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE) || 0;
+
+                    // Calculate final delivery fee (ShipBubble fee + system surcharge)
+                    deliveryFee = Math.round((shipBubbleDeliveryFee + deliverySurcharge) * 100) / 100;
+
+                    deliveryQuoteData = {
+                        quoteId: quote.id,
+                        shipBubbleFee: shipBubbleDeliveryFee,
+                        systemSurcharge: deliverySurcharge,
+                        totalDeliveryFee: deliveryFee,
+                        recommendedCourier: {
+                            courier: recommendation.recommended,
+                            reason: recommendation.reason,
+                            score: recommendation.score,
+                        },
+                        allCouriers: ratesResponse.couriers,
+                        fastestCourier: ratesResponse.fastest_courier,
+                        cheapestCourier: ratesResponse.cheapest_courier,
+                        expiresAt: quote.expires_at,
+                    };
+
+                    console.log('💰 [ShipBubble] Delivery fee calculated:', {
+                        shipBubbleFee: shipBubbleDeliveryFee,
+                        surcharge: deliverySurcharge,
+                        total: deliveryFee,
+                    });
+
+                } catch (shipBubbleError: any) {
+                    console.error('❌ [ShipBubble] Error fetching delivery quote:', shipBubbleError);
+                    // Fall back to system default delivery fee
+                    deliveryFee = await SystemSettingsService.getDeliveryFee();
+                    console.log('⚠️ [VALIDATE & SYNC] Using fallback delivery fee:', deliveryFee);
                 }
+            } else {
+                // No address provided, use system default delivery fee
+                deliveryFee = await SystemSettingsService.getDeliveryFee();
+                console.log('📍 [VALIDATE & SYNC] No address provided, using default delivery fee:', deliveryFee);
             }
+
+            // Calculate total
+            const total = subtotal + serviceFee + deliveryFee - autoAppliedDiscountAmount;
+
+            console.log('✅ [VALIDATE & SYNC] Validation completed successfully:', {
+                subtotal,
+                serviceFee,
+                deliveryFee,
+                autoAppliedDiscountAmount,
+                total,
+                hasDeliveryQuote: !!deliveryQuoteId,
+            });
 
             res.status(200).json({
                 status: 'success',
                 message: 'Shopping list validated successfully',
                 data: {
-                    shoppingList: finalShoppingList,
-                    validationResults: itemValidationResults,
-                    priceCorrections,
+                    shoppingList,
+                    itemValidations: itemValidationResults,
                     availableDiscounts, // Only selectable discounts (max 3 general)
                     categorizedDiscounts,
-                    autoAppliedDiscounts: autoAppliedDiscountDetails,
                     autoAppliedDiscountAmount,
                     subtotal,
                     serviceFee,
                     deliveryFee,
-                    total: subtotal + serviceFee + deliveryFee - autoAppliedDiscountAmount,
+                    total,
+                    deliveryQuote: deliveryQuoteData, // ShipBubble delivery quote data if address provided
+                    deliveryQuoteId, // ID for reference in order creation
                     syncedAt: new Date().toISOString(),
-                    needsReview: itemValidationResults.some(r => r.warnings.length > 0),
                     discountSummary: {
                         totalSelectableDiscounts: availableDiscounts.length,
-                        autoAppliedCount: autoAppliedDiscountDetails.length,
+                        autoAppliedCount: productDiscounts.filter(d => d.isAutomaticApply).length,
                         itemSpecificCount: categorizedDiscounts.itemSpecific.length,
                         marketSpecificCount: categorizedDiscounts.marketSpecific.length,
                         globalDiscountCount: categorizedDiscounts.globalDiscounts.length,
                         categorySpecificCount: categorizedDiscounts.categorySpecific.length,
                         userSpecificCount: categorizedDiscounts.userSpecific.length,
-                        hasAutoApplyDiscounts: autoAppliedDiscountDetails.length > 0,
+                        hasAutoApplyDiscounts: autoAppliedDiscountAmount > 0,
                         hasCodeBasedDiscounts: availableDiscounts.some(d => d.code && !d.isAutomaticApply),
                         maxDiscountPercentage: MAX_DISCOUNT_PERCENTAGE,
                         maxSelectableDiscounts: 1, // Only 1 general discount can be selected

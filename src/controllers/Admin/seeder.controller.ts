@@ -15,6 +15,7 @@ import User from '../../models/user.model';
 import Order from '../../models/order.model';
 import OrderTrail from '../../models/orderTrail.model';
 import ChatMessage from '../../models/chatMessage.model';
+import DeliveryQuote from '../../models/deliveryQuote.model';
 import MealSeeder from '../../seeders/mealSeeder';
 import DiscountCampaignService from '../../services/discountCampaign.service';
 import { IDiscountCampaign, DiscountType, DiscountTargetType, CampaignStatus } from '../../models/discountCampaign.model';
@@ -883,17 +884,27 @@ class SeederController {
         try {
             logger.info('🧹 Clearing all shopping list data...');
 
-            const itemsDeleted = await ShoppingListItem.destroy({ where: {}, truncate: false });
-            const listsDeleted = await ShoppingList.destroy({ where: {}, truncate: false });
+            // Delete in reverse order to respect foreign key constraints
+            // DeliveryQuotes reference ShoppingLists, so delete them first
+            const deliveryQuotesDeleted = await DeliveryQuote.destroy({ where: {}, truncate: false });
+            logger.info(`🗑️ Deleted ${deliveryQuotesDeleted} delivery quotes`);
 
-            logger.info(`✅ Cleared ${itemsDeleted} items and ${listsDeleted} lists`);
+            const itemsDeleted = await ShoppingListItem.destroy({ where: {}, truncate: false });
+            logger.info(`🗑️ Deleted ${itemsDeleted} shopping list items`);
+
+            const listsDeleted = await ShoppingList.destroy({ where: {}, truncate: false });
+            logger.info(`🗑️ Deleted ${listsDeleted} shopping lists`);
+
+            logger.info(`✅ Cleared ${deliveryQuotesDeleted} delivery quotes, ${itemsDeleted} items and ${listsDeleted} lists`);
 
             res.status(200).json({
                 status: 'success',
-                message: 'All shopping lists cleared successfully',
+                message: 'All shopping lists and related data cleared successfully',
                 data: {
+                    deliveryQuotesDeleted,
                     itemsDeleted,
                     listsDeleted,
+                    totalDeleted: deliveryQuotesDeleted + itemsDeleted + listsDeleted,
                 },
             });
 
@@ -1383,6 +1394,7 @@ class SeederController {
                     chatMessages: 0,
                     orderTrails: 0,
                     orders: 0,
+                    deliveryQuotes: 0,
                 };
 
                 // Delete in reverse order to respect foreign key constraints
@@ -1405,7 +1417,7 @@ class SeederController {
                 deletedCounts.orderTrails = deletedOrderTrails;
                 logger.info(`🗑️ Deleted ${deletedOrderTrails} order trails`);
 
-                // 3. Delete Orders
+                // 3. Delete Orders (must happen before DeliveryQuotes since Orders reference them)
                 const deletedOrders = await Order.destroy({
                     where: {},
                     transaction,
@@ -1413,6 +1425,15 @@ class SeederController {
                 });
                 deletedCounts.orders = deletedOrders;
                 logger.info(`🗑️ Deleted ${deletedOrders} orders`);
+
+                // 4. Delete Delivery Quotes (must happen after Orders)
+                const deletedDeliveryQuotes = await DeliveryQuote.destroy({
+                    where: {},
+                    transaction,
+                    force: true,
+                });
+                deletedCounts.deliveryQuotes = deletedDeliveryQuotes;
+                logger.info(`🗑️ Deleted ${deletedDeliveryQuotes} delivery quotes`);
 
                 return deletedCounts;
             });
@@ -1424,7 +1445,7 @@ class SeederController {
                 message: 'All orders and related data dropped successfully',
                 data: {
                     deletedCounts: results,
-                    totalDeleted: results.chatMessages + results.orderTrails + results.orders,
+                    totalDeleted: results.chatMessages + results.orderTrails + results.orders + results.deliveryQuotes,
                     completedAt: new Date().toISOString(),
                 },
             });

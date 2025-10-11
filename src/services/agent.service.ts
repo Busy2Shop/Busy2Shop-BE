@@ -13,6 +13,9 @@ import AgentLocation, { IAgentLocation } from '../models/agentLocation.model';
 import { GoogleMapsService } from '../utils/googleMaps';
 import { logger } from '../utils/logger';
 import EnhancedChatService from './chat-enhanced.service';
+import ShipBubbleService from './shipbubble.service';
+import DeliveryQuote from '../models/deliveryQuote.model';
+import moment from 'moment';
 
 export interface IViewAgentsQuery {
     page?: number;
@@ -2367,48 +2370,113 @@ export default class AgentService {
                 delivery_instructions: `Busy2Shop Order ${order.orderNumber}. Please deliver to customer.`,
             };
 
+            // ShipBubble Integration - Use existing quote from shopping list
             try {
-                // Import delivery service dynamically to avoid circular dependencies
-                const { kwikDeliveryService } = await import('./kwikDelivery.service');
+                logger.info(`Initiating ShipBubble delivery for order ${orderId} by agent ${agentId}`);
 
-                // Authenticate with Kwik API
-                await kwikDeliveryService.authenticate({
-                    domain: process.env.KWIK_DOMAIN || 'busy2shop',
-                    environment: process.env.KWIK_ENVIRONMENT || 'production',
-                    email: process.env.KWIK_EMAIL || '',
-                    password: process.env.KWIK_PASSWORD || '',
+                // Find delivery quote by shopping list ID
+                const quote = await DeliveryQuote.findOne({
+                    where: { shopping_list_id: order.shoppingListId },
+                    order: [['createdAt', 'DESC']], // Get most recent quote
+                    transaction,
                 });
 
-                // Create delivery request
-                const deliveryResponse = await kwikDeliveryService.createDeliveryRequest(deliveryRequest);
-
-                if (deliveryResponse.status === 'success') {
-                    // Update order with delivery information
-                    await order.update({
-                        status: 'delivery',
-                        deliveryStartedAt: new Date(),
-                        agentNotes: `${order.agentNotes || ''}\nKwik Delivery: ${deliveryResponse.task_id}, ETA: ${deliveryResponse.estimated_delivery_time}`,
-                    }, { transaction });
-
-                    logger.info(`Delivery requested for order ${orderId} by agent ${agentId}. Task ID: ${deliveryResponse.task_id}`);
-
-                    return {
-                        success: true,
-                        data: {
-                            taskId: deliveryResponse.task_id,
-                            estimatedTime: deliveryResponse.estimated_delivery_time,
-                            riderDetails: deliveryResponse.rider_details,
-                            trackingUrl: deliveryResponse.tracking_url,
-                        },
-                        message: 'Delivery requested successfully',
-                    };
-                } else {
-                    throw new Error(deliveryResponse.error_message || 'Delivery request failed');
+                if (!quote) {
+                    logger.error('[ShipBubble] No delivery quote found for shopping list:', order.shoppingListId);
+                    throw new BadRequestError(
+                        'No delivery quote available. Please ensure customer completed checkout with delivery address.'
+                    );
                 }
 
+                // Check if quote expired (24 hours)
+                if (new Date() > new Date(quote.expires_at)) {
+                    logger.error('[ShipBubble] Delivery quote expired');
+                    throw new BadRequestError(
+                        'Delivery quote has expired. Please ask customer to refresh their checkout.'
+                    );
+                }
+
+                // Use existing quote
+                const requestToken = quote.request_token;
+                const couriers = quote.couriers as any[];
+                let selectedCourier: any;
+
+                // Get selected courier or use recommended one
+                if (quote.selected_courier_id) {
+                    selectedCourier = couriers.find((c: any) => c.id === quote.selected_courier_id || c.courier_id === quote.selected_courier_id);
+                } else {
+                    // Auto-select recommended courier based on order value
+                    const recommendation = ShipBubbleService.recommendCourier({
+                        couriers: couriers,
+                        fastestCourier: couriers[0], // Fallback
+                        cheapestCourier: couriers[0], // Fallback
+                        orderTotal: parseFloat(order.totalAmount.toString()),
+                    });
+                    selectedCourier = recommendation.recommended;
+                }
+
+                if (!selectedCourier) {
+                    throw new BadRequestError('No suitable courier found for delivery');
+                }
+
+                // Create shipping label
+                const labelResponse = await ShipBubbleService.createShippingLabel({
+                    request_token: requestToken,
+                    courier_id: selectedCourier.id || selectedCourier.courier_id,
+                    service_code: selectedCourier.service_code,
+                });
+
+                logger.info(`[ShipBubble] Label created successfully:`, {
+                    orderId,
+                    shipbubbleOrderId: labelResponse.order_id,
+                    trackingNumber: labelResponse.tracking_number,
+                });
+
+                // Update order with delivery metadata
+                await order.update({
+                    status: 'delivery',
+                    deliveryStartedAt: new Date(),
+                    deliveryMetadata: {
+                        shipbubbleOrderId: labelResponse.order_id,
+                        trackingNumber: labelResponse.tracking_number,
+                        courierName: labelResponse.courier_name || selectedCourier.courier_name,
+                        courierId: selectedCourier.id || selectedCourier.courier_id,
+                        courierImage: selectedCourier.courier_image,
+                        courierServiceCode: selectedCourier.service_code,
+                        trackingUrl: labelResponse.tracking_url,
+                        estimatedDeliveryDate: labelResponse.estimated_delivery_date,
+                        deliveryStatus: 'pending_pickup',
+                        labelUrl: labelResponse.label_url,
+                    },
+                }, { transaction });
+
+                // Update quote status
+                await quote.update({
+                    status: 'label_created',
+                    selected_courier_id: selectedCourier.id || selectedCourier.courier_id,
+                    selected_service_code: selectedCourier.service_code,
+                    selected_amount: selectedCourier.amount || selectedCourier.total,
+                }, { transaction });
+
+                return {
+                    success: true,
+                    data: {
+                        shipbubbleOrderId: labelResponse.order_id,
+                        courierName: labelResponse.courier_name || selectedCourier.courier_name,
+                        courierPhone: selectedCourier.courier_phone,
+                        trackingUrl: labelResponse.tracking_url,
+                        trackingNumber: labelResponse.tracking_number,
+                        estimatedDeliveryTime: selectedCourier.duration,
+                        deliveryFee: selectedCourier.amount || selectedCourier.total,
+                        orderStatus: 'delivery',
+                        deliveryStatus: 'pending_pickup',
+                    },
+                    message: 'Delivery requested successfully via ShipBubble',
+                };
+
             } catch (error: any) {
-                logger.error(`Delivery request failed for order ${orderId}:`, error.message);
-                throw new BadRequestError(`Failed to request delivery: ${error.message}`);
+                logger.error(`[ShipBubble] Delivery request failed for order ${orderId}:`, error);
+                throw new BadRequestError(`Failed to request delivery: ${error.message || 'ShipBubble API error'}`);
             }
         });
     }
@@ -2432,40 +2500,27 @@ export default class AgentService {
             throw new NotFoundError('Order not found or not in delivery status');
         }
 
-        // Extract task ID from agent notes
+        // TODO: ShipBubble Integration
+        // Extract ShipBubble order_id from agent notes
+        // Call GET /shipping/labels/:order_id to get tracking data
+        // Return status, tracking_url, package_status, rider_info, etc.
+
         const agentNotes = order.agentNotes || '';
-        const taskIdMatch = agentNotes.match(/Kwik Delivery: ([^,]+)/);
 
-        if (!taskIdMatch || !taskIdMatch[1]) {
-            throw new BadRequestError('No delivery tracking information found');
-        }
+        // Placeholder tracking information
+        logger.info(`Delivery tracking requested for order ${orderId} by agent ${agentId} (ShipBubble integration pending)`);
 
-        const taskId = taskIdMatch[1].trim();
-
-        try {
-            // Import delivery service dynamically
-            const { kwikDeliveryService } = await import('./kwikDelivery.service');
-
-            // Authenticate with Kwik API
-            await kwikDeliveryService.authenticate({
-                domain: process.env.KWIK_DOMAIN || 'busy2shop',
-                environment: process.env.KWIK_ENVIRONMENT || 'production',
-                email: process.env.KWIK_EMAIL || '',
-                password: process.env.KWIK_PASSWORD || '',
-            });
-
-            const trackingData = await kwikDeliveryService.trackDelivery(taskId);
-
-            return {
-                success: true,
-                data: trackingData,
-                message: 'Delivery tracking data retrieved',
-            };
-
-        } catch (error: any) {
-            logger.error(`Failed to track delivery for order ${orderId}:`, error.message);
-            throw new BadRequestError(`Failed to track delivery: ${error.message}`);
-        }
+        return {
+            success: true,
+            data: {
+                orderNumber: order.orderNumber,
+                status: order.status,
+                deliveryStartedAt: order.deliveryStartedAt,
+                agentNotes: agentNotes,
+                message: 'ShipBubble tracking integration coming soon',
+            },
+            message: 'Delivery tracking data (placeholder - ShipBubble integration pending)',
+        };
     }
 
     /**

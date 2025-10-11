@@ -450,46 +450,113 @@ export default class ShoppingListService {
         customerId: string,
         itemData: IShoppingListItem,
     ): Promise<ShoppingListItem> {
+        console.log('🔧 [SERVICE] addItemToList called:', {
+            listId,
+            customerId,
+            itemName: itemData.name,
+            productId: itemData.productId,
+            estimatedPrice: itemData.estimatedPrice,
+            timestamp: new Date().toISOString()
+        });
+
         const list = await this.getShoppingList(listId);
+        console.log('✅ [SERVICE] Shopping list retrieved:', {
+            listId: list.id,
+            listName: list.name,
+            status: list.status,
+            ownerId: list.customerId
+        });
 
         // Check if the user is the owner of the list
         if (list.customerId !== customerId) {
+            console.error('❌ [SERVICE] Authorization failed: User is not list owner');
             throw new ForbiddenError('You are not authorized to modify this shopping list');
         }
 
         // Can only add items if the list is in draft status
         if (list.status !== 'draft') {
+            console.error('❌ [SERVICE] Validation failed: List is not in draft status');
             throw new BadRequestError('Cannot add items to a submitted shopping list');
         }
 
-        // If product ID is provided, get its information
+        console.log('✅ [SERVICE] Authorization and status checks passed');
+
+        // If product ID is provided, try to get its information
+        // But allow items to be added even if product doesn't exist (for manual entry)
         if (itemData.productId) {
+            console.log('🔍 [SERVICE] Looking up product:', itemData.productId);
+            const productStartTime = Date.now();
             const product = await Product.findByPk(itemData.productId);
-            if (!product) {
-                throw new NotFoundError('Product not found');
-            }
-            // Use product information for the item
-            itemData.name = product.name;
+            const productLookupDuration = Date.now() - productStartTime;
 
-            // Apply markup to product price (10% default from new pricing model)
-            if (product.price) {
-                const markupPercentage = await SystemSettingsService.getItemMarkupPercentage();
-                itemData.estimatedPrice = PriceCalculatorService.applyMarkup(product.price, markupPercentage);
+            if (product) {
+                console.log('✅ [SERVICE] Product found:', {
+                    productId: product.id,
+                    productName: product.name,
+                    productPrice: product.price,
+                    lookupDuration: `${productLookupDuration}ms`
+                });
+
+                // Product exists - use product information
+                itemData.name = product.name;
+
+                // Apply markup to product price (10% default from new pricing model)
+                if (product.price) {
+                    const markupPercentage = await SystemSettingsService.getItemMarkupPercentage();
+                    const originalPrice = product.price;
+                    itemData.estimatedPrice = PriceCalculatorService.applyMarkup(product.price, markupPercentage);
+                    console.log('💰 [SERVICE] Price calculated:', {
+                        originalPrice,
+                        markupPercentage: `${markupPercentage}%`,
+                        finalPrice: itemData.estimatedPrice
+                    });
+                } else {
+                    itemData.estimatedPrice = product.price;
+                }
+
+                // Store the first product image if available
+                itemData.productImage = product.images && product.images.length > 0 ? product.images[0] : null;
             } else {
-                itemData.estimatedPrice = product.price;
+                // Product doesn't exist - log warning but allow item to be added with provided data
+                console.warn(`⚠️ [SERVICE] Product ${itemData.productId} not found after ${productLookupDuration}ms, using provided item data`);
+                // Clear productId since product doesn't exist
+                itemData.productId = null;
             }
-
-            // Store the first product image if available
-            itemData.productImage = product.images && product.images.length > 0 ? product.images[0] : null;
+        } else {
+            console.log('ℹ️ [SERVICE] No productId provided, using manual item data');
         }
 
+        console.log('💾 [SERVICE] Creating shopping list item:', {
+            name: itemData.name,
+            quantity: itemData.quantity,
+            estimatedPrice: itemData.estimatedPrice,
+            productId: itemData.productId
+        });
+
+        const createStartTime = Date.now();
         const newItem = await ShoppingListItem.create({
             ...itemData,
             shoppingListId: listId,
         });
+        const createDuration = Date.now() - createStartTime;
+
+        console.log('✅ [SERVICE] Item created successfully:', {
+            itemId: newItem.id,
+            createDuration: `${createDuration}ms`
+        });
 
         // Update estimated total of the shopping lists
+        console.log('🧮 [SERVICE] Updating shopping list total...');
+        const totalStartTime = Date.now();
         await this.updateShoppingListTotal(listId);
+        const totalDuration = Date.now() - totalStartTime;
+        console.log(`✅ [SERVICE] Total updated in ${totalDuration}ms`);
+
+        console.log('🎉 [SERVICE] addItemToList completed successfully:', {
+            itemId: newItem.id,
+            itemName: newItem.name,
+            listId
+        });
 
         return newItem;
     }
@@ -1014,33 +1081,37 @@ export default class ShoppingListService {
         let finalEstimatedPrice = itemData.estimatedPrice;
         let userProvidedPrice = itemData.userProvidedPrice || null;
 
-        // If product ID is provided, get its information
+        // If product ID is provided, try to get its information
+        // But allow items to be added even if product doesn't exist (for manual entry)
         if (itemData.productId) {
             const product = await Product.findByPk(itemData.productId);
-            if (!product) {
-                throw new NotFoundError('Product not found');
-            }
+            if (product) {
+                // Product exists - use product information
+                itemData.name = product.name;
+                // Store the first product image if available
+                itemData.productImage = product.images && product.images.length > 0 ? product.images[0] : null;
 
-            // Use product information for the item
-            itemData.name = product.name;
-            // Store the first product image if available
-            itemData.productImage = product.images && product.images.length > 0 ? product.images[0] : null;
-
-            // Handle pricing logic
-            if (product.price !== null) {
-                // Product has a price, apply markup (10% default from new pricing model)
-                const markupPercentage = await SystemSettingsService.getItemMarkupPercentage();
-                finalEstimatedPrice = PriceCalculatorService.applyMarkup(product.price, markupPercentage);
-                userProvidedPrice = null; // Clear user provided price
-            } else {
-                // Product has no price, require user to provide one
-                if (!itemData.userProvidedPrice) {
-                    throw new BadRequestError(
-                        'This product has no preset price. Please provide your expected price.',
-                    );
+                // Handle pricing logic
+                if (product.price !== null) {
+                    // Product has a price, apply markup (10% default from new pricing model)
+                    const markupPercentage = await SystemSettingsService.getItemMarkupPercentage();
+                    finalEstimatedPrice = PriceCalculatorService.applyMarkup(product.price, markupPercentage);
+                    userProvidedPrice = null; // Clear user provided price
+                } else {
+                    // Product has no price, require user to provide one
+                    if (!itemData.userProvidedPrice) {
+                        throw new BadRequestError(
+                            'This product has no preset price. Please provide your expected price.',
+                        );
+                    }
+                    finalEstimatedPrice = null;
+                    userProvidedPrice = itemData.userProvidedPrice;
                 }
-                finalEstimatedPrice = null;
-                userProvidedPrice = itemData.userProvidedPrice;
+            } else {
+                // Product doesn't exist - log warning but allow item to be added with provided data
+                console.warn(`Product ${itemData.productId} not found, using provided item data`);
+                // Clear productId since product doesn't exist
+                itemData.productId = null;
             }
         }
 

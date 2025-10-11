@@ -44,7 +44,10 @@ export enum SYSTEM_SETTING_KEYS {
     BUSINESS_HOURS = 'business_hours',
     HOLIDAY_DATES = 'holiday_dates',
     REFERRAL_BONUS_AMOUNT = 'referral_bonus_amount',
-    FIRST_ORDER_DISCOUNT = 'first_order_discount'
+    FIRST_ORDER_DISCOUNT = 'first_order_discount',
+    COURIER_SELECTION_SETTINGS = 'courier_selection_settings',
+    ADMIN_PHONE = 'admin_phone',
+    ADMIN_EMAIL = 'admin_email'
 }
 
 export interface ISystemSettings {
@@ -131,5 +134,12 @@ export type SystemSettingValueMap = {
         type: 'percentage' | 'fixed';
         value: number;
         maxAmount?: number;
+    };
+    [SYSTEM_SETTING_KEYS.COURIER_SELECTION_SETTINGS]: {
+        highValueThreshold: number;
+        mediumValueThreshold: number;
+        maxDeliveryCostPercentage: number;
+        prioritizeSpeed: boolean;
+        autoSelectRecommended: boolean;
     };
 };

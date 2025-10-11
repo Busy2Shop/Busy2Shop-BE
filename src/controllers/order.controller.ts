@@ -12,19 +12,33 @@ export default class OrderController {
         // UUIDs are 36 characters long with specific format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
         const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         const orderNumberPattern = /^B2S-[A-Z0-9]{5,}$/;
-        
+
         // If it matches the order number pattern, it's an order number
         if (orderNumberPattern.test(id)) {
             return true;
         }
-        
+
         // If it matches UUID pattern, it's a UUID
         if (uuidPattern.test(id)) {
             return false;
         }
-        
+
         // Fallback: if it starts with B2S-, treat as order number
         return id.startsWith('B2S-');
+    }
+
+    private static isValidUUID(id: string): boolean {
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        return uuidPattern.test(id);
+    }
+
+    private static validateOrderId(id: string): void {
+        const isOrderNum = this.isOrderNumber(id);
+        const isUUID = this.isValidUUID(id);
+
+        if (!isOrderNum && !isUUID) {
+            throw new BadRequestError('Invalid order ID format. Must be either a valid UUID or order number (B2S-XXXXX)');
+        }
     }
 
     private static extractOrderQueryParams(query: Request['query']): Record<string, unknown> {
@@ -33,8 +47,23 @@ export default class OrderController {
         const queryParams: Record<string, unknown> = {};
 
         if (page && size) {
-            queryParams.page = Number(page);
-            queryParams.size = Number(size);
+            let pageNum = Number(page);
+            let sizeNum = Number(size);
+
+            // Validate pagination parameters
+            if (isNaN(pageNum) || pageNum < 1) {
+                throw new BadRequestError('Page must be a positive number');
+            }
+            if (isNaN(sizeNum) || sizeNum < 1) {
+                throw new BadRequestError('Size must be a positive number');
+            }
+            // Cap maximum size for DoS protection
+            if (sizeNum > 100) {
+                sizeNum = 100;
+            }
+
+            queryParams.page = pageNum;
+            queryParams.size = sizeNum;
         }
 
         if (status) queryParams.status = status;
@@ -45,7 +74,7 @@ export default class OrderController {
     }
 
     static async createOrder(req: AuthenticatedRequest, res: Response) {
-        const { shoppingListId, deliveryAddress, customerNotes } = req.body;
+        const { shoppingListId, deliveryAddress, customerNotes, deliveryQuoteId } = req.body;
 
         if (!shoppingListId || !deliveryAddress) {
             throw new BadRequestError('Shopping list ID and delivery address are required');
@@ -72,6 +101,8 @@ export default class OrderController {
             await OrderService.calculateTotals(shoppingListId);
 
         // Validate minimum order amount (₦5,000 in new pricing model)
+        // OPTIMIZATION: This is now included in the batched settings fetch inside calculateTotals
+        // so minimum order check uses the same cache
         const SystemSettingsService = (await import('../services/systemSettings.service')).default;
         const { SYSTEM_SETTING_KEYS } = await import('../models/systemSettings.model');
         const minimumOrder = await SystemSettingsService.getSetting(
@@ -97,6 +128,7 @@ export default class OrderController {
             appliedDiscounts: [], // Will be populated if discounts were applied
             deliveryAddress,
             customerNotes,
+            deliveryQuoteId, // Link to the delivery quote
         });
 
         res.status(201).json({
@@ -139,6 +171,9 @@ export default class OrderController {
         const { id } = req.params;
 
         try {
+            // Validate order ID format
+            OrderController.validateOrderId(id);
+
             // Check if the id is a UUID (old format) or orderNumber (new format)
             let order;
             if (OrderController.isOrderNumber(id)) {
@@ -178,8 +213,24 @@ export default class OrderController {
         const { id } = req.params;
         const { status } = req.body;
 
+        // Validate order ID format
+        OrderController.validateOrderId(id);
+
         if (!status) {
             throw new BadRequestError('Status is required');
+        }
+
+        // Validate status value
+        const validStatuses = [
+            'pending', 'accepted', 'in_progress', 'shopping',
+            'shopping_completed', 'delivery', 'picked_up', 'in_transit',
+            'out_for_delivery', 'delivered', 'completed', 'cancelled', 'rejected'
+        ];
+
+        if (!validStatuses.includes(status)) {
+            throw new BadRequestError(
+                `Invalid status value '${status}'. Must be one of: ${validStatuses.join(', ')}`
+            );
         }
 
         const order = await OrderService.updateOrderStatus(id, req.user.id, status);

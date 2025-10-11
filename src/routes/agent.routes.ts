@@ -68,7 +68,7 @@ router.post('/shopping-lists/:shoppingListId/start-shopping', AuthenticatedContr
 router.post('/shopping-lists/:shoppingListId/complete-shopping', AuthenticatedController(AgentController.completeShopping)); // Complete shopping
 
 // Delivery management routes
-router.post('/orders/:orderId/request-delivery', AuthenticatedController(AgentController.requestDelivery)); // Request delivery via Kwik
+router.post('/orders/:orderId/request-delivery', AuthenticatedController(AgentController.requestDelivery)); // Request delivery
 router.get('/orders/:orderId/track-delivery', AuthenticatedController(AgentController.trackOrderDelivery)); // Track delivery status
 
 // More specific static paths

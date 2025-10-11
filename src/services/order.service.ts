@@ -163,9 +163,10 @@ export default class OrderService {
                 throw new ForbiddenError('You are not assigned to this order');
             }
 
-            // Agents can only set certain statuses
-            if (!['accepted', 'in_progress', 'completed'].includes(status)) {
-                throw new ForbiddenError('Agents can only accept, start or complete orders');
+            // Agents can set statuses throughout the shopping and delivery workflow
+            // accepted → in_progress → shopping → shopping_completed → delivery → completed
+            if (!['accepted', 'in_progress', 'shopping', 'shopping_completed', 'delivery', 'completed'].includes(status)) {
+                throw new ForbiddenError('Agents can only update orders through the shopping and delivery workflow');
             }
         } else if (order.customerId === userId) {
             // Customers can only cancel their own orders
@@ -1105,9 +1106,22 @@ export default class OrderService {
         // For now, we'll calculate a clean subtotal and let the order creation handle discount audit trail
         const subtotal = originalSubtotal - appliedDiscountAmount;
 
-        // Use SystemSettings service for consistent fee calculation
-        const serviceFee = await SystemSettingsService.calculateServiceFee(subtotal);
-        const deliveryFee = await SystemSettingsService.getDeliveryFee();
+        // OPTIMIZATION: Fetch all required settings in ONE database query
+        const { SYSTEM_SETTING_KEYS } = await import('../models/systemSettings.model');
+        const settings = await SystemSettingsService.getSettings([
+            SYSTEM_SETTING_KEYS.SERVICE_FEE_AMOUNT,
+            SYSTEM_SETTING_KEYS.DELIVERY_FEE,
+            SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE,
+        ]);
+
+        // Calculate service fee
+        const serviceFee = Math.round((settings[SYSTEM_SETTING_KEYS.SERVICE_FEE_AMOUNT] || 1000) * 100) / 100;
+
+        // Calculate delivery fee (base + surcharge)
+        const deliveryFee = Math.round(
+            ((settings[SYSTEM_SETTING_KEYS.DELIVERY_FEE] || 500) +
+            (settings[SYSTEM_SETTING_KEYS.DELIVERY_SURCHARGE] || 500)) * 100
+        ) / 100;
 
         // Calculate total amount
         const totalAmount = Math.max(0, subtotal + serviceFee + deliveryFee);

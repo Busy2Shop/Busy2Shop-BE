@@ -1,15 +1,26 @@
 // src/controllers/delivery.controller.ts
 import { Request, Response } from 'express';
-import { kwikDeliveryService } from '../services/kwikDelivery.service';
 import Order from '../models/order.model';
 import User from '../models/user.model';
 import { logger } from '../utils/logger';
 import { BadRequestError } from '../utils/customErrors';
 
+/**
+ * Delivery Controller
+ * Handles delivery requests for orders (ready for ShipBubble integration)
+ *
+ * Note: This controller is provider-agnostic and ready to integrate with ShipBubble API
+ */
 class DeliveryController {
     /**
      * Request delivery for an order
      * POST /api/v1/delivery/request
+     *
+     * TODO: Integrate with ShipBubble API
+     * - Validate sender and receiver addresses
+     * - Fetch shipping rates from multiple couriers
+     * - Create shipping label with selected courier
+     * - Store shipment details in order
      */
     async requestDelivery(req: Request, res: Response): Promise<void> {
         try {
@@ -26,15 +37,15 @@ class DeliveryController {
 
             // Get order details
             const order = await Order.findOne({
-                where: { 
-                    id: orderId, 
-                    agentId: agentId, 
+                where: {
+                    id: orderId,
+                    agentId: agentId,
                 },
                 include: [
                     {
                         model: User,
                         as: 'customer',
-                        attributes: ['firstName', 'lastName', 'phone'],
+                        attributes: ['firstName', 'lastName', 'phone', 'email'],
                     },
                 ],
             });
@@ -55,103 +66,40 @@ class DeliveryController {
                 return;
             }
 
-            const deliveryAddress = typeof order.deliveryAddress === 'string' 
+            const deliveryAddress = typeof order.deliveryAddress === 'string'
                 ? JSON.parse(order.deliveryAddress)
                 : order.deliveryAddress;
             const customer = order.customer as any;
             const customerPhone = JSON.parse(customer.phone);
 
-            // Authenticate with Kwik API (in production, store credentials securely)
-            await kwikDeliveryService.authenticate({
-                domain: process.env.KWIK_DOMAIN || 'busy2shop',
-                environment: process.env.KWIK_ENVIRONMENT || 'production',
-                email: process.env.KWIK_EMAIL || '',
-                password: process.env.KWIK_PASSWORD || '',
+            // TODO: ShipBubble Integration Steps:
+            // 1. Validate customer address using ShipBubble's /shipping/address/validate endpoint
+            // 2. Get shipping rates using /shipping/fetch_rates endpoint
+            // 3. Let customer/agent choose courier
+            // 4. Create shipping label using /shipping/labels endpoint
+            // 5. Store order_id from ShipBubble in order record
+
+            // For now, return placeholder response
+            logger.info('Delivery request initiated (pending ShipBubble integration)', {
+                orderId,
+                agentId,
+                customerAddress: deliveryAddress,
             });
 
-            // Create delivery request
-            const deliveryRequest = {
-                pickup_address: {
-                    latitude: 6.5244, // Default pickup location (should be from system settings)
-                    longitude: 3.3792,
-                    address: process.env.PICKUP_ADDRESS || 'ShopRite Ikeja City Mall, Lagos',
-                },
-                delivery_address: {
-                    latitude: deliveryAddress.latitude,
-                    longitude: deliveryAddress.longitude,
-                    address: `${deliveryAddress.street}, ${deliveryAddress.city}`,
-                },
-                customer_details: {
-                    name: `${customer.firstName} ${customer.lastName}`,
-                    phone: `${customerPhone.countryCode}${customerPhone.number}`,
-                },
-                order_details: {
-                    order_number: order.orderNumber,
-                    total_amount: typeof order.totalAmount === 'string' 
-                        ? parseFloat(order.totalAmount) 
-                        : order.totalAmount,
-                    delivery_fee: typeof order.deliveryFee === 'string'
-                        ? parseFloat(order.deliveryFee)
-                        : order.deliveryFee,
-                    payment_method: 'prepaid' as const,
-                },
-                vehicle_type: 'bike' as const,
-                delivery_instructions: `Busy2Shop Order ${order.orderNumber}. Customer: ${customer.firstName} ${customer.lastName}`,
-            };
-
-            // Validate addresses
-            if (!kwikDeliveryService.validateAddresses(
-                deliveryRequest.pickup_address,
-                deliveryRequest.delivery_address
-            )) {
-                res.status(400).json({
-                    status: 'error',
-                    message: 'Invalid pickup or delivery address',
-                });
-                return;
-            }
-
-            // Create delivery request
-            const deliveryResponse = await kwikDeliveryService.createDeliveryRequest(deliveryRequest);
-
-            if (deliveryResponse.status === 'success') {
-                // Update order with delivery information
-                await order.update({
-                    agentNotes: `Kwik Delivery: ${deliveryResponse.task_id}, ETA: ${deliveryResponse.estimated_delivery_time}`,
-                    deliveryStartedAt: new Date(),
-                });
-
-                // Log the delivery request
-                logger.info('Delivery request created successfully', {
+            res.status(200).json({
+                status: 'success',
+                message: 'Delivery integration pending - ShipBubble API will be integrated soon',
+                data: {
                     orderId,
-                    taskId: deliveryResponse.task_id,
-                    agentId,
-                });
-
-                res.status(200).json({
-                    status: 'success',
-                    message: 'Delivery requested successfully',
-                    data: {
-                        taskId: deliveryResponse.task_id,
-                        estimatedTime: deliveryResponse.estimated_delivery_time,
-                        riderDetails: deliveryResponse.rider_details,
-                        trackingUrl: deliveryResponse.tracking_url,
+                    deliveryAddress,
+                    customerDetails: {
+                        name: `${customer.firstName} ${customer.lastName}`,
+                        phone: `${customerPhone.countryCode}${customerPhone.number}`,
+                        email: customer.email,
                     },
-                });
-            } else {
-                logger.error('Delivery request failed', {
-                    orderId,
-                    error: deliveryResponse.error_message,
-                });
-
-                res.status(500).json({
-                    status: 'error',
-                    message: 'Failed to request delivery',
-                    data: {
-                        error: deliveryResponse.error_message,
-                    },
-                });
-            }
+                    note: 'ShipBubble integration coming soon',
+                },
+            });
 
         } catch (error: any) {
             logger.error('Error requesting delivery:', error);
@@ -165,6 +113,10 @@ class DeliveryController {
     /**
      * Track delivery status
      * GET /api/v1/delivery/track/:taskId
+     *
+     * TODO: Integrate with ShipBubble API
+     * - Use GET /shipping/labels/:order_id to get shipment status
+     * - Return tracking URL, status, rider info, etc.
      */
     async trackDelivery(req: Request, res: Response): Promise<void> {
         try {
@@ -178,20 +130,20 @@ class DeliveryController {
                 return;
             }
 
-            // Authenticate with Kwik API
-            await kwikDeliveryService.authenticate({
-                domain: process.env.KWIK_DOMAIN || 'busy2shop',
-                environment: process.env.KWIK_ENVIRONMENT || 'production',
-                email: process.env.KWIK_EMAIL || '',
-                password: process.env.KWIK_PASSWORD || '',
-            });
+            // TODO: Call ShipBubble GET /shipping/labels/:order_id endpoint
+            // Returns: status, tracking_url, courier info, package_status array, rider_info
 
-            const trackingData = await kwikDeliveryService.trackDelivery(taskId);
+            logger.info('Delivery tracking requested (pending ShipBubble integration)', {
+                taskId,
+            });
 
             res.status(200).json({
                 status: 'success',
-                message: 'Delivery tracking data retrieved',
-                data: trackingData,
+                message: 'Delivery tracking integration pending',
+                data: {
+                    taskId,
+                    note: 'ShipBubble tracking integration coming soon',
+                },
             });
 
         } catch (error: any) {
@@ -206,10 +158,15 @@ class DeliveryController {
     /**
      * Get delivery estimate
      * POST /api/v1/delivery/estimate
+     *
+     * TODO: Integrate with ShipBubble API
+     * - Validate both pickup and delivery addresses
+     * - Call /shipping/fetch_rates to get rates from all couriers
+     * - Return fastest_courier, cheapest_courier, and all available options
      */
     async getDeliveryEstimate(req: Request, res: Response): Promise<void> {
         try {
-            const { pickupLatitude, pickupLongitude, deliveryLatitude, deliveryLongitude, vehicleType } = req.body;
+            const { pickupLatitude, pickupLongitude, deliveryLatitude, deliveryLongitude } = req.body;
 
             if (!pickupLatitude || !pickupLongitude || !deliveryLatitude || !deliveryLongitude) {
                 res.status(400).json({
@@ -219,18 +176,6 @@ class DeliveryController {
                 return;
             }
 
-            const pickup = {
-                latitude: pickupLatitude,
-                longitude: pickupLongitude,
-                address: 'Pickup Location',
-            };
-
-            const delivery = {
-                latitude: deliveryLatitude,
-                longitude: deliveryLongitude,
-                address: 'Delivery Location',
-            };
-
             // Calculate distance (Haversine formula)
             const distance = this.calculateDistance(
                 pickupLatitude,
@@ -239,46 +184,31 @@ class DeliveryController {
                 deliveryLongitude
             );
 
-            // Calculate delivery fee
-            const deliveryFee = kwikDeliveryService.calculateDeliveryFee(distance);
+            // Basic local calculation (fallback)
+            const estimatedFee = this.calculateLocalDeliveryFee(distance);
+            const estimatedTime = distance < 5 ? '30-45 minutes' : distance < 10 ? '45-60 minutes' : '60-90 minutes';
 
-            try {
-                // Authenticate and get real estimate from Kwik
-                await kwikDeliveryService.authenticate({
-                    domain: process.env.KWIK_DOMAIN || 'busy2shop',
-                    environment: process.env.KWIK_ENVIRONMENT || 'production',
-                    email: process.env.KWIK_EMAIL || '',
-                    password: process.env.KWIK_PASSWORD || '',
-                });
+            // TODO: ShipBubble Integration:
+            // 1. Validate addresses: POST /shipping/address/validate
+            // 2. Get address_codes from validation response
+            // 3. Fetch rates: POST /shipping/fetch_rates with address_codes
+            // 4. Return fastest_courier, cheapest_courier, and all courier options
 
-                const kwikEstimate = await kwikDeliveryService.getDeliveryEstimate(pickup, delivery, vehicleType);
+            logger.info('Delivery estimate requested (using local calculation)', {
+                distance: distance.toFixed(2),
+                estimatedFee,
+            });
 
-                res.status(200).json({
-                    status: 'success',
-                    message: 'Delivery estimate calculated',
-                    data: {
-                        distance: distance.toFixed(2),
-                        estimatedFee: deliveryFee,
-                        estimatedTime: kwikEstimate.estimated_time || '45-60 minutes',
-                        kwikEstimate: kwikEstimate,
-                    },
-                });
-
-            } catch (kwikError) {
-                // Fallback to local calculation if Kwik API fails
-                logger.warn('Kwik API estimate failed, using local calculation:', kwikError);
-
-                res.status(200).json({
-                    status: 'success',
-                    message: 'Delivery estimate calculated (local)',
-                    data: {
-                        distance: distance.toFixed(2),
-                        estimatedFee: deliveryFee,
-                        estimatedTime: distance < 5 ? '30-45 minutes' : '45-60 minutes',
-                        note: 'Estimate based on local calculation',
-                    },
-                });
-            }
+            res.status(200).json({
+                status: 'success',
+                message: 'Delivery estimate calculated (local)',
+                data: {
+                    distance: distance.toFixed(2),
+                    estimatedFee,
+                    estimatedTime,
+                    note: 'ShipBubble multi-courier rates coming soon',
+                },
+            });
 
         } catch (error: any) {
             logger.error('Error calculating delivery estimate:', error);
@@ -292,6 +222,9 @@ class DeliveryController {
     /**
      * Cancel delivery
      * POST /api/v1/delivery/cancel
+     *
+     * TODO: Integrate with ShipBubble API
+     * - Call POST /shipping/labels/cancel/:order_id to cancel shipment
      */
     async cancelDelivery(req: Request, res: Response): Promise<void> {
         try {
@@ -306,33 +239,23 @@ class DeliveryController {
                 return;
             }
 
-            // Authenticate with Kwik API
-            await kwikDeliveryService.authenticate({
-                domain: process.env.KWIK_DOMAIN || 'busy2shop',
-                environment: process.env.KWIK_ENVIRONMENT || 'production',
-                email: process.env.KWIK_EMAIL || '',
-                password: process.env.KWIK_PASSWORD || '',
+            // TODO: Call ShipBubble POST /shipping/labels/cancel/:order_id endpoint
+
+            logger.info('Delivery cancellation requested (pending ShipBubble integration)', {
+                taskId,
+                reason,
+                agentId,
             });
 
-            const cancelled = await kwikDeliveryService.cancelDelivery(taskId, reason);
-
-            if (cancelled) {
-                logger.info('Delivery cancelled successfully', {
+            res.status(200).json({
+                status: 'success',
+                message: 'Delivery cancellation integration pending',
+                data: {
                     taskId,
                     reason,
-                    agentId,
-                });
-
-                res.status(200).json({
-                    status: 'success',
-                    message: 'Delivery cancelled successfully',
-                });
-            } else {
-                res.status(500).json({
-                    status: 'error',
-                    message: 'Failed to cancel delivery',
-                });
-            }
+                    note: 'ShipBubble cancellation integration coming soon',
+                },
+            });
 
         } catch (error: any) {
             logger.error('Error cancelling delivery:', error);
@@ -345,23 +268,39 @@ class DeliveryController {
 
     /**
      * Calculate distance between two points using Haversine formula
+     * @returns Distance in kilometers
      */
     private calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
         const R = 6371; // Earth's radius in kilometers
         const dLat = this.toRadians(lat2 - lat1);
         const dLon = this.toRadians(lon2 - lon1);
-        
-        const a = 
+
+        const a =
             Math.sin(dLat / 2) * Math.sin(dLat / 2) +
             Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
             Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        
+
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     }
 
+    /**
+     * Convert degrees to radians
+     */
     private toRadians(degrees: number): number {
         return degrees * (Math.PI / 180);
+    }
+
+    /**
+     * Calculate local delivery fee (fallback when ShipBubble is unavailable)
+     * This is a simple calculation and should be replaced with ShipBubble rates
+     */
+    private calculateLocalDeliveryFee(distance: number, baseRate: number = 500, perKmRate: number = 100): number {
+        const calculatedFee = baseRate + (distance * perKmRate);
+        const minimumFee = 300;
+        const maximumFee = 5000;
+
+        return Math.min(Math.max(calculatedFee, minimumFee), maximumFee);
     }
 }
 
