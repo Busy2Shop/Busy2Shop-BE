@@ -923,10 +923,25 @@ export default class ShoppingListController {
             // Calculate subtotal from shopping list items
             const productIds = shoppingList.items.map((item: any) => item.productId).filter(Boolean);
 
-            // First pass: Get raw discounts to identify product-specific discounts
+            // OPTIMIZATION: Calculate initial subtotal WITHOUT discounts first
+            let initialSubtotal = 0;
+            for (const item of shoppingList.items) {
+                const currentPrice = PriceCalculatorService.getEffectivePrice(item);
+                initialSubtotal += PriceCalculatorService.calculateItemTotal(
+                    { ...item, discountedPrice: currentPrice },
+                    item.quantity
+                );
+            }
+
+            console.log('💵 [VALIDATE & SYNC] Initial subtotal calculated:', {
+                initialSubtotal,
+                itemCount: shoppingList.items.length,
+            });
+
+            // OPTIMIZATION: Fetch discounts ONCE with proper subtotal (removed redundant first query)
             const rawDiscounts = await DiscountCampaignService.getAvailableDiscountsForUser({
                 userId: req.user.id,
-                orderAmount: 0, // We'll calculate this properly after price calculations
+                orderAmount: initialSubtotal,
                 marketId: shoppingList.marketId,
                 productIds,
             });
@@ -945,7 +960,7 @@ export default class ShoppingListController {
                 productDiscounts: productDiscounts.length,
             });
 
-            // Calculate subtotal and apply product-specific discounts
+            // Calculate final subtotal and apply product-specific discounts
             let subtotal = 0;
             const itemValidationResults: Array<{
                 itemId: string;
@@ -994,24 +1009,22 @@ export default class ShoppingListController {
                 });
             }
 
-            console.log('💵 [VALIDATE & SYNC] Subtotal calculated:', {
+            console.log('💵 [VALIDATE & SYNC] Final subtotal with discounts:', {
                 subtotal,
-                itemCount: shoppingList.items.length,
+                initialSubtotal,
+                savings: initialSubtotal - subtotal,
             });
 
-            // Update the discount query with the calculated subtotal
-            const updatedRawDiscounts = await DiscountCampaignService.getAvailableDiscountsForUser({
-                userId: req.user.id,
-                orderAmount: subtotal,
-                marketId: shoppingList.marketId,
-                productIds,
-            });
+            // Use the fetched rawDiscounts (already has correct subtotal)
+            const updatedRawDiscounts = rawDiscounts;
 
-            // Enhanced discount validation with system constraints
-            const [MAX_DISCOUNT_PERCENTAGE, MIN_ORDER_FOR_DISCOUNT, MAX_SINGLE_DISCOUNT_AMOUNT] = await Promise.all([
+            // OPTIMIZATION: Batch ALL system settings queries at once (moved from later in code)
+            const [MAX_DISCOUNT_PERCENTAGE, MIN_ORDER_FOR_DISCOUNT, MAX_SINGLE_DISCOUNT_AMOUNT, serviceFeeValue, ADMIN_PHONE] = await Promise.all([
                 SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MAXIMUM_DISCOUNT_PERCENTAGE),
                 SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MINIMUM_ORDER_FOR_DISCOUNT),
                 SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.MAXIMUM_SINGLE_DISCOUNT_AMOUNT),
+                SystemSettingsService.calculateServiceFee(subtotal),
+                SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.ADMIN_PHONE),
             ]);
 
             let secureDiscounts: any[] = [];
@@ -1120,8 +1133,8 @@ export default class ShoppingListController {
                 ),
             };
 
-            // Calculate service fee using system settings
-            const serviceFee = await SystemSettingsService.calculateServiceFee(subtotal);
+            // OPTIMIZATION: Use pre-fetched service fee value
+            const serviceFee = serviceFeeValue;
 
             // Calculate auto-applied discount amount (already applied to item prices)
             let autoAppliedDiscountAmount = 0;
@@ -1145,10 +1158,13 @@ export default class ShoppingListController {
                 console.log('📍 [VALIDATE & SYNC] User address provided, fetching ShipBubble quote...');
 
                 try {
-                    // Get customer address with user info
-                    const userAddress = await UserAddress.findByPk(userAddressId, {
-                        include: [{ model: User, as: 'user' }],
-                    });
+                    // OPTIMIZATION: Fetch userAddress and market in parallel
+                    const [userAddress, market] = await Promise.all([
+                        UserAddress.findByPk(userAddressId, {
+                            include: [{ model: User, as: 'user' }],
+                        }),
+                        Market.findByPk(shoppingList.marketId),
+                    ]);
 
                     if (!userAddress) {
                         throw new NotFoundError('Customer address not found');
@@ -1159,8 +1175,6 @@ export default class ShoppingListController {
                         throw new NotFoundError('User not found for address');
                     }
 
-                    // Get market
-                    const market = await Market.findByPk(shoppingList.marketId);
                     if (!market) {
                         throw new NotFoundError('Market not found');
                     }
@@ -1182,8 +1196,8 @@ export default class ShoppingListController {
                         receiverAddressCode = cachedReceiver.address_code;
                     } else {
                         console.log('🔄 [ShipBubble] Validating receiver address with API');
-                        const adminPhone = await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.ADMIN_PHONE);
-                        const userPhone = normalizePhoneNumber(user.phone || userAddress.contactPhone) || adminPhone || '+2348167291741';
+                        // OPTIMIZATION: Use pre-fetched ADMIN_PHONE
+                        const userPhone = normalizePhoneNumber(user.phone || userAddress.contactPhone) || ADMIN_PHONE || '+2348167291741';
 
                         const validated = await ShipBubbleService.validateAddress({
                             name: `${user.firstName} ${user.lastName}`.trim() || 'Customer',
@@ -1229,8 +1243,8 @@ export default class ShoppingListController {
                         senderAddressCode = cachedSender.address_code;
                     } else {
                         console.log('🔄 [ShipBubble] Validating sender address with API');
-                        const adminPhone = await SystemSettingsService.getSetting(SYSTEM_SETTING_KEYS.ADMIN_PHONE);
-                        const marketPhone = normalizePhoneNumber(market.phoneNumber) || adminPhone || '+2348167291741';
+                        // OPTIMIZATION: Use pre-fetched ADMIN_PHONE
+                        const marketPhone = normalizePhoneNumber(market.phoneNumber) || ADMIN_PHONE || '+2348167291741';
 
                         const validated = await ShipBubbleService.validateAddress({
                             name: market.name || 'Market',
