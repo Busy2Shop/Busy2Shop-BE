@@ -762,11 +762,18 @@ export default class ShoppingListController {
 
             const dimensions = ShipBubbleService.getPackageDimensions(totalWeight);
 
+            // Calculate smart pickup date based on time constraints and market hours
+            const pickup_date = ShipBubbleService.calculatePickupDate({
+                // Pre-order quote - no shopping completed yet
+                // Will respect 6 PM cutoff and market-specific hours
+                marketOperatingHours: market.operatingHours,
+            });
+
             // Fetch rates from ShipBubble
             const ratesResponse = await ShipBubbleService.fetchShippingRates({
                 sender_address_code: senderAddressCode,
                 reciever_address_code: receiverAddressCode,
-                pickup_date: moment().add(1, 'day').format('YYYY-MM-DD'),
+                pickup_date,
                 category_id: 0,
                 package_items: shoppingList.items.map(item => ({
                     name: item.name || 'Grocery Item',
@@ -1263,11 +1270,18 @@ export default class ShoppingListController {
                         dimensions,
                     });
 
+                    // Calculate smart pickup date based on time constraints and market hours
+                    const pickup_date = ShipBubbleService.calculatePickupDate({
+                        // Pre-order validation - no shopping completed yet
+                        // Will respect 6 PM cutoff and market-specific hours
+                        marketOperatingHours: market.operatingHours,
+                    });
+
                     // Fetch rates from ShipBubble
                     const ratesResponse = await ShipBubbleService.fetchShippingRates({
                         sender_address_code: senderAddressCode,
                         reciever_address_code: receiverAddressCode,
-                        pickup_date: moment().add(1, 'day').format('YYYY-MM-DD'),
+                        pickup_date,
                         category_id: 0, // Will be overridden by ShipBubbleService
                         package_items: shoppingList.items.map(item => ({
                             name: item.name || 'Grocery Item',

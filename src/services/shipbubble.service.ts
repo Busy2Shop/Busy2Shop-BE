@@ -336,6 +336,240 @@ export default class ShipBubbleService {
     }
 
     /**
+     * Parse time string (e.g., "07:00", "18:30") to hour (7, 18.5)
+     * @param timeString - Time in HH:MM format
+     * @returns Hour as decimal (e.g., "18:30" → 18.5)
+     */
+    private static parseTimeToHour(timeString: string): number {
+        const [hours, minutes] = timeString.split(':').map(Number);
+        return hours + (minutes / 60);
+    }
+
+    /**
+     * Get market hours for a specific day from operatingHours object
+     * @param operatingHours - Market operating hours object
+     * @param dayOfWeek - Day of week (0=Sunday, 6=Saturday)
+     * @returns Object with open/close hours, or null if market is closed
+     */
+    private static getMarketHoursForDay(
+        operatingHours: any,
+        dayOfWeek: number
+    ): { open: number; close: number } | null {
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const dayName = dayNames[dayOfWeek];
+
+        if (!operatingHours || !operatingHours[dayName]) {
+            return null; // Market closed or no hours defined
+        }
+
+        const dayHours = operatingHours[dayName];
+
+        // Check if market is closed (e.g., { open: "closed", close: "closed" })
+        if (dayHours.open === 'closed' || dayHours.close === 'closed' || !dayHours.open || !dayHours.close) {
+            return null;
+        }
+
+        return {
+            open: this.parseTimeToHour(dayHours.open),
+            close: this.parseTimeToHour(dayHours.close),
+        };
+    }
+
+    /**
+     * Calculate optimal pickup date based on ShipBubble constraints and business logic
+     *
+     * ShipBubble Constraints:
+     * - Rates requested after 6 PM (GMT+1 / WAT) are scheduled for next day
+     * - Cannot request pickup more than 7 days in future
+     * - Pickup must be on a business day (Mon-Sat for Nigerian markets)
+     *
+     * Business Logic:
+     * - Allow 30-60 min buffer for shopping completion
+     * - Consider market-specific opening hours (uses market operatingHours if provided)
+     * - Agent should complete shopping before requesting pickup
+     * - If market is closed on a day, skip to next open day
+     *
+     * @param options.shoppingCompletedAt - When shopping was completed (optional)
+     * @param options.marketOperatingHours - Market's operatingHours object (JSONB from Market model)
+     * @param options.marketOpeningHour - Manual override for market opening hour (default: 7 AM)
+     * @param options.marketClosingHour - Manual override for market closing hour (default: 6 PM / 18:00)
+     * @param options.bufferMinutes - Buffer time after shopping for pickup (default: 30)
+     * @returns Pickup date in YYYY-MM-DD format
+     */
+    static calculatePickupDate(options: {
+        shoppingCompletedAt?: Date;
+        marketOperatingHours?: any;
+        marketOpeningHour?: number;
+        marketClosingHour?: number;
+        bufferMinutes?: number;
+    } = {}): string {
+        const {
+            shoppingCompletedAt,
+            marketOperatingHours,
+            marketOpeningHour,
+            marketClosingHour,
+            bufferMinutes = 30,
+        } = options;
+
+        // Use Lagos timezone (WAT = GMT+1)
+        const now = new Date();
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
+        const currentDay = now.getDay(); // 0 = Sunday, 6 = Saturday
+
+        // Calculate earliest possible pickup time
+        let earliestPickup = new Date(now);
+
+        // If shopping was completed, use that as base time + buffer
+        if (shoppingCompletedAt) {
+            earliestPickup = new Date(shoppingCompletedAt);
+            earliestPickup.setMinutes(earliestPickup.getMinutes() + bufferMinutes);
+        }
+
+        // Use the earliest pickup time for all time-based checks
+        const checkHour = earliestPickup.getHours();
+        const checkMinute = earliestPickup.getMinutes();
+        const checkDecimalHour = checkHour + (checkMinute / 60); // For more precise comparison
+
+        // Determine market hours for today
+        let effectiveMarketOpen = marketOpeningHour ?? 7; // Default 7 AM
+        let effectiveMarketClose = marketClosingHour ?? 18; // Default 6 PM
+
+        // If market operating hours are provided, use them
+        if (marketOperatingHours) {
+            const todayMarketHours = this.getMarketHoursForDay(marketOperatingHours, currentDay);
+            if (todayMarketHours) {
+                effectiveMarketOpen = todayMarketHours.open;
+                effectiveMarketClose = todayMarketHours.close;
+            } else {
+                // Market is closed today, move to next day
+                effectiveMarketOpen = 24; // Set impossible time to force next day
+                effectiveMarketClose = 0;
+            }
+        }
+
+        // Apply ShipBubble 6 PM cutoff rule
+        // Requests after 6 PM WAT must be scheduled for next day
+        const isAfter6PM = checkDecimalHour >= 18; // 6 PM or later
+
+        // Apply market hours constraint
+        // If current time is before market opens, still allow same day (market will open)
+        // If current time is after market closes, move to next day
+        const isBeforeMarketOpens = checkDecimalHour < effectiveMarketOpen;
+        const isAfterMarketCloses = checkDecimalHour >= effectiveMarketClose;
+
+        // Determine pickup date
+        let pickupDate = new Date(earliestPickup);
+
+        // ONLY move to next day if:
+        // 1. After 6 PM ShipBubble cutoff, OR
+        // 2. After market closing time (market already closed)
+        // Do NOT move if just before market opens - same day pickup can still happen
+        if (isAfter6PM || isAfterMarketCloses) {
+            pickupDate.setDate(pickupDate.getDate() + 1);
+        }
+
+        // Ensure pickup is on a day when market is open
+        // Try up to 7 days to find an open day
+        let pickupDay = pickupDate.getDay();
+        let daysChecked = 0;
+        let maxAttempts = 7; // ShipBubble 7-day limit
+
+        while (daysChecked < maxAttempts) {
+            pickupDay = pickupDate.getDay();
+
+            // Check if market is open on this day
+            let isMarketOpenOnDay = true;
+
+            if (marketOperatingHours) {
+                const dayMarketHours = this.getMarketHoursForDay(marketOperatingHours, pickupDay);
+                if (!dayMarketHours) {
+                    // Market closed on this day
+                    isMarketOpenOnDay = false;
+                }
+            } else {
+                // No operating hours provided, assume closed only on Sunday (Nigerian default)
+                if (pickupDay === 0) {
+                    isMarketOpenOnDay = false;
+                }
+            }
+
+            if (isMarketOpenOnDay) {
+                break; // Found an open day
+            }
+
+            // Move to next day
+            pickupDate.setDate(pickupDate.getDate() + 1);
+            daysChecked++;
+        }
+
+        // Ensure we don't exceed 7-day ShipBubble limit
+        const maxPickupDate = new Date(now);
+        maxPickupDate.setDate(maxPickupDate.getDate() + 7);
+
+        if (pickupDate > maxPickupDate) {
+            // If calculated date exceeds limit, use max allowed date
+            pickupDate = maxPickupDate;
+
+            // But ensure market is still open on that day
+            // Work backwards from max date to find an open day
+            let foundOpenDay = false;
+            for (let i = 0; i < 7; i++) {
+                pickupDay = pickupDate.getDay();
+
+                let isMarketOpenOnDay = true;
+                if (marketOperatingHours) {
+                    const dayMarketHours = this.getMarketHoursForDay(marketOperatingHours, pickupDay);
+                    if (!dayMarketHours) {
+                        isMarketOpenOnDay = false;
+                    }
+                } else {
+                    // No operating hours provided, assume closed only on Sunday
+                    if (pickupDay === 0) {
+                        isMarketOpenOnDay = false;
+                    }
+                }
+
+                if (isMarketOpenOnDay) {
+                    foundOpenDay = true;
+                    break;
+                }
+
+                // Move back one day
+                pickupDate.setDate(pickupDate.getDate() - 1);
+            }
+
+            if (!foundOpenDay) {
+                // Fallback: use max date anyway (unlikely scenario)
+                pickupDate = maxPickupDate;
+            }
+        }
+
+        // Format as YYYY-MM-DD for ShipBubble API
+        const year = pickupDate.getFullYear();
+        const month = String(pickupDate.getMonth() + 1).padStart(2, '0');
+        const day = String(pickupDate.getDate()).padStart(2, '0');
+
+        const formattedDate = `${year}-${month}-${day}`;
+
+        logger.info('[ShipBubble] Calculated pickup date:', {
+            now: now.toISOString(),
+            currentHour,
+            currentMinute,
+            isAfter6PM,
+            isBeforeMarketOpens,
+            isAfterMarketCloses,
+            effectiveMarketOpen,
+            effectiveMarketClose,
+            usedMarketOperatingHours: !!marketOperatingHours,
+            pickupDate: formattedDate,
+            dayOfWeek: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][pickupDate.getDay()],
+        });
+
+        return formattedDate;
+    }
+
+    /**
      * Fetch shipping rates from multiple couriers
      * @returns Request token (24-hour expiry) and courier options with pricing
      */
@@ -651,11 +885,28 @@ export default class ShipBubbleService {
             const response = await this.getClient().get('/shipping/wallet/balance');
 
             if (response.data.status === 'success') {
+                const { balance, currency } = response.data.data;
+
+                // Map currency to country code
+                const countryCodeMap: { [key: string]: string } = {
+                    'NGN': 'NG',
+                    'USD': 'US',
+                    'GHS': 'GH',
+                    'KES': 'KE',
+                };
+
+                const country_code = countryCodeMap[currency] || 'NG'; // Default to NG
+
                 logger.info('[ShipBubble] Wallet balance retrieved:', {
-                    balance: response.data.data.balance,
-                    country: response.data.data.country_code,
+                    balance,
+                    currency,
+                    country_code,
                 });
-                return response.data.data;
+
+                return {
+                    balance,
+                    country_code,
+                };
             }
 
             throw new BadRequestError(response.data.message || 'Failed to get wallet balance');

@@ -203,12 +203,19 @@ export default class DeliveryShipBubbleController {
 
             const dimensions = ShipBubbleService.getPackageDimensions(totalWeight);
 
+            // Calculate smart pickup date based on time constraints and market hours
+            const pickup_date = ShipBubbleService.calculatePickupDate({
+                // No shopping completed yet - this is pre-order quote
+                // Will respect 6 PM cutoff and market-specific hours
+                marketOperatingHours: shoppingList.market?.operatingHours,
+            });
+
             // Fetch rates from ShipBubble
             // Note: category_id is set by ShipBubbleService (environment-aware)
             const ratesResponse = await ShipBubbleService.fetchShippingRates({
                 sender_address_code: senderAddressCode,
                 reciever_address_code: receiverAddressCode,
-                pickup_date: moment().add(1, 'day').format('YYYY-MM-DD'), // Tomorrow
+                pickup_date,
                 category_id: 0, // Will be overridden by ShipBubbleService based on environment
                 package_items: shoppingList.items.map(item => ({
                     name: item.name || 'Grocery Item',
@@ -403,7 +410,10 @@ export default class DeliveryShipBubbleController {
 
                 // Re-fetch rates with same parameters
                 const shoppingList = await ShoppingList.findByPk(quote.shopping_list_id, {
-                    include: [{ model: ShoppingListItem, as: 'items' }],
+                    include: [
+                        { model: ShoppingListItem, as: 'items' },
+                        { model: Market, as: 'market' },
+                    ],
                 });
 
                 if (!shoppingList) {
@@ -415,10 +425,16 @@ export default class DeliveryShipBubbleController {
                 );
                 const dimensions = ShipBubbleService.getPackageDimensions(totalWeight);
 
+                // Calculate smart pickup date (shopping is completed at this point)
+                const pickup_date = ShipBubbleService.calculatePickupDate({
+                    shoppingCompletedAt: order.shoppingCompletedAt || new Date(),
+                    marketOperatingHours: shoppingList.market?.operatingHours,
+                });
+
                 const newRates = await ShipBubbleService.fetchShippingRates({
                     sender_address_code: quote.sender_address_code,
                     reciever_address_code: quote.receiver_address_code,
-                    pickup_date: moment().add(1, 'day').format('YYYY-MM-DD'),
+                    pickup_date,
                     category_id: quote.category_id,
                     package_items: shoppingList.items.map(item => ({
                         name: item.name || 'Grocery Item',

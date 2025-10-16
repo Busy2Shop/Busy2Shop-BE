@@ -166,5 +166,16 @@ router.put('/discount-campaigns/:id', adminAuth('admin'), AdminAuthenticatedCont
 router.delete('/discount-campaigns/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteDiscountCampaign));
 router.patch('/discount-campaigns/:id/status', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleDiscountCampaignStatus));
 
+// Admin Delivery Management Routes (ShipBubble Integration)
+router.get('/delivery/wallet/balance', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDeliveryWalletBalance));
+router.post('/delivery/wallet/fund', adminAuth('admin'), AdminAuthenticatedController(AdminController.requestDeliveryWalletFund));
+router.get('/delivery/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDeliveryStats));
+router.get('/delivery/shipments', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllDeliveries));
+router.get('/delivery/shipments/:orderId', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDeliveryDetails));
+router.get('/delivery/track/:trackingNumber', adminAuth('admin'), AdminAuthenticatedController(AdminController.trackDelivery));
+router.post('/delivery/shipments/:shipbubbleOrderId/cancel', adminAuth('admin'), AdminAuthenticatedController(AdminController.cancelDelivery));
+router.get('/delivery/categories', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDeliveryCategories));
+router.get('/delivery/couriers', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDeliveryCouriers));
+
 export default router;
 

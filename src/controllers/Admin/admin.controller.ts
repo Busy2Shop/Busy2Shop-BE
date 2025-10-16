@@ -26,6 +26,8 @@ import { IDiscountCampaign, DiscountType, DiscountTargetType, CampaignStatus } f
 import DiscountUsage from '../../models/discountUsage.model';
 import User from '../../models/user.model';
 import { logger } from '../../utils/logger';
+import ShipBubbleService from '../../services/shipbubble.service';
+import DeliveryQuote from '../../models/deliveryQuote.model';
 
 export default class AdminController {
     // static async getUserStats(req: Request, res: Response) {
@@ -3604,6 +3606,464 @@ export default class AdminController {
             });
         } catch (error) {
             logger.error('Error duplicating discount campaign:', error);
+            throw error;
+        }
+    }
+
+    // ========================================
+    // DELIVERY MANAGEMENT ENDPOINTS
+    // ========================================
+
+    /**
+     * Get ShipBubble wallet balance
+     * GET /api/v1/admin/delivery/wallet/balance
+     */
+    static async getDeliveryWalletBalance(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const walletData = await ShipBubbleService.getWalletBalance();
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Wallet balance retrieved successfully',
+                data: walletData,
+            });
+        } catch (error) {
+            logger.error('Error fetching delivery wallet balance:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Request wallet fund
+     * POST /api/v1/admin/delivery/wallet/fund
+     */
+    static async requestDeliveryWalletFund(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { amount } = req.body;
+
+            if (!amount || amount <= 0) {
+                throw new BadRequestError('Valid amount is required');
+            }
+
+            const fundingData = await ShipBubbleService.requestWalletFund(amount);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Wallet funding request created successfully',
+                data: fundingData,
+            });
+        } catch (error) {
+            logger.error('Error requesting wallet fund:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all deliveries/shipments with pagination and filters
+     * GET /api/v1/admin/delivery/shipments
+     */
+    static async getAllDeliveries(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { page = 1, perPage = 20, q, status, courierName } = req.query;
+
+            // Get shipments from ShipBubble
+            const shipBubbleResponse = await ShipBubbleService.getShipments(
+                Number(page),
+                Number(perPage)
+            );
+
+            // Transform ShipBubble results to match frontend structure
+            const shipBubbleResults = shipBubbleResponse.results || [];
+
+            // Get all shipbubble order IDs
+            const shipbubbleOrderIds = shipBubbleResults.map((item: any) => item.order_id);
+
+            // Query our database to get orders with customer and agent info
+            const orders = await Order.findAll({
+                where: {
+                    deliveryMetadata: {
+                        shipbubbleOrderId: { [Op.in]: shipbubbleOrderIds }
+                    }
+                },
+                include: [
+                    {
+                        model: User,
+                        as: 'customer',
+                        attributes: ['id', 'firstName', 'lastName', 'email', 'phone'],
+                    },
+                    {
+                        model: User,
+                        as: 'agent',
+                        attributes: ['id', 'firstName', 'lastName', 'email'],
+                    },
+                ],
+                attributes: ['id', 'orderNumber', 'status', 'deliveryMetadata', 'createdAt'],
+            });
+
+            // Create a map for quick lookup
+            const orderMap = new Map(
+                orders.map(order => [order.deliveryMetadata?.shipbubbleOrderId, order])
+            );
+
+            // Transform shipments to match frontend interface
+            const transformedShipments = shipBubbleResults
+                .map((shipment: any) => {
+                    const order = orderMap.get(shipment.order_id);
+
+                    // Skip if order not found in our database
+                    if (!order) return null;
+
+                    return {
+                        id: shipment.order_id,
+                        orderId: order.id,
+                        orderNumber: order.orderNumber,
+                        shipbubbleOrderId: shipment.order_id,
+                        trackingNumber: shipment.courier?.tracking_code || '',
+                        trackingUrl: shipment.tracking_url || '',
+                        courierName: shipment.courier?.name || '',
+                        status: shipment.status,
+                        deliveryFee: shipment.payment?.shipping_fee || 0,
+                        createdAt: shipment.date,
+                        customer: {
+                            id: order.customer.id,
+                            name: `${order.customer.firstName} ${order.customer.lastName}`,
+                            email: order.customer.email,
+                            phone: order.customer.phone || '',
+                        },
+                        agent: {
+                            id: order.agent.id,
+                            name: `${order.agent.firstName} ${order.agent.lastName}`,
+                            email: order.agent.email,
+                        },
+                    };
+                })
+                .filter(Boolean); // Remove null entries
+
+            // Apply filters if provided
+            let filteredShipments = transformedShipments;
+
+            if (q) {
+                const searchQuery = q.toString().toLowerCase();
+                filteredShipments = filteredShipments.filter((shipment: any) =>
+                    shipment.orderNumber?.toLowerCase().includes(searchQuery) ||
+                    shipment.trackingNumber?.toLowerCase().includes(searchQuery) ||
+                    shipment.customer.name?.toLowerCase().includes(searchQuery)
+                );
+            }
+
+            if (status) {
+                filteredShipments = filteredShipments.filter((shipment: any) =>
+                    shipment.status === status
+                );
+            }
+
+            if (courierName) {
+                filteredShipments = filteredShipments.filter((shipment: any) =>
+                    shipment.courierName?.toLowerCase().includes(courierName.toString().toLowerCase())
+                );
+            }
+
+            // Transform pagination
+            const pagination = {
+                total: shipBubbleResponse.pagination?.total || 0,
+                page: shipBubbleResponse.pagination?.current || Number(page),
+                perPage: shipBubbleResponse.pagination?.perPage || Number(perPage),
+                totalPages: Math.ceil((shipBubbleResponse.pagination?.total || 0) / Number(perPage)),
+            };
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Deliveries retrieved successfully',
+                data: {
+                    shipments: filteredShipments,
+                    pagination,
+                },
+            });
+        } catch (error) {
+            logger.error('Error fetching deliveries:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get delivery details with order information
+     * GET /api/v1/admin/delivery/shipments/:orderId
+     */
+    static async getDeliveryDetails(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { orderId } = req.params;
+
+            if (!orderId) {
+                throw new BadRequestError('Order ID is required');
+            }
+
+            // Get order with full details - use findOne with where clause for proper UUID casting
+            const order = await Order.findOne({
+                where: { id: orderId },
+                include: [
+                    {
+                        model: User,
+                        as: 'customer',
+                        attributes: ['id', 'firstName', 'lastName', 'email', 'phone'],
+                    },
+                    {
+                        model: User,
+                        as: 'agent',
+                        attributes: ['id', 'firstName', 'lastName', 'email', 'phone'],
+                    },
+                    {
+                        model: ShoppingList,
+                        as: 'shoppingList',
+                        include: [
+                            {
+                                model: Market,
+                                as: 'market',
+                            },
+                            {
+                                model: ShoppingListItem,
+                                as: 'items',
+                            },
+                        ],
+                    },
+                ],
+            });
+
+            if (!order) {
+                throw new NotFoundError('Order not found');
+            }
+
+            // Get ShipBubble tracking data if available
+            let trackingData = null;
+            if (order.deliveryMetadata?.trackingNumber) {
+                try {
+                    trackingData = await ShipBubbleService.trackShipment(
+                        order.deliveryMetadata.trackingNumber
+                    );
+                } catch (trackError) {
+                    logger.warn('Could not fetch tracking data:', trackError);
+                }
+            }
+
+            // Build concise response with only necessary fields
+            const deliveryDetails = {
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                status: order.status,
+                totalAmount: order.totalAmount,
+                deliveryFee: order.deliveryFee,
+                deliveryAddress: order.deliveryAddress,
+                customer: {
+                    id: order.customer.id,
+                    name: `${order.customer.firstName} ${order.customer.lastName}`,
+                    email: order.customer.email,
+                    phone: order.customer.phone,
+                },
+                agent: {
+                    id: order.agent.id,
+                    name: `${order.agent.firstName} ${order.agent.lastName}`,
+                    email: order.agent.email,
+                    phone: order.agent.phone,
+                },
+                market: {
+                    id: order.shoppingList.market.id,
+                    name: order.shoppingList.market.name,
+                    address: order.shoppingList.market.address,
+                },
+                items: order.shoppingList.items.map(item => ({
+                    name: item.name,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    estimatedPrice: item.estimatedPrice,
+                    productImage: item.productImage,
+                })),
+                delivery: {
+                    courierName: order.deliveryMetadata?.courierName || 'N/A',
+                    trackingNumber: order.deliveryMetadata?.shipbubbleOrderId || 'N/A',
+                    trackingUrl: order.deliveryMetadata?.trackingUrl || '',
+                    deliveryStatus: order.deliveryMetadata?.deliveryStatus || 'unknown',
+                },
+                timeline: {
+                    acceptedAt: order.acceptedAt,
+                    shoppingStartedAt: order.shoppingStartedAt,
+                    shoppingCompletedAt: order.shoppingCompletedAt,
+                    deliveryStartedAt: order.deliveryStartedAt,
+                    completedAt: order.completedAt,
+                },
+                tracking: trackingData,
+            };
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Delivery details retrieved successfully',
+                data: deliveryDetails,
+            });
+        } catch (error) {
+            logger.error('Error fetching delivery details:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Track a shipment
+     * GET /api/v1/admin/delivery/track/:trackingNumber
+     */
+    static async trackDelivery(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { trackingNumber } = req.params;
+
+            if (!trackingNumber) {
+                throw new BadRequestError('Tracking number is required');
+            }
+
+            const trackingData = await ShipBubbleService.trackShipment(trackingNumber);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Shipment tracking data retrieved successfully',
+                data: trackingData,
+            });
+        } catch (error) {
+            logger.error('Error tracking shipment:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Cancel a shipment
+     * POST /api/v1/admin/delivery/shipments/:shipbubbleOrderId/cancel
+     */
+    static async cancelDelivery(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { shipbubbleOrderId } = req.params;
+
+            if (!shipbubbleOrderId) {
+                throw new BadRequestError('ShipBubble order ID is required');
+            }
+
+            await ShipBubbleService.cancelShipment(shipbubbleOrderId);
+
+            // Update order delivery metadata
+            const order = await Order.findOne({
+                where: {
+                    'deliveryMetadata.shipbubbleOrderId': shipbubbleOrderId,
+                },
+            });
+
+            if (order) {
+                await order.update({
+                    deliveryMetadata: {
+                        ...order.deliveryMetadata,
+                        deliveryStatus: 'cancelled',
+                        cancelledAt: new Date().toISOString(),
+                    },
+                });
+            }
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Shipment cancelled successfully',
+            });
+        } catch (error) {
+            logger.error('Error cancelling shipment:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get package categories
+     * GET /api/v1/admin/delivery/categories
+     */
+    static async getDeliveryCategories(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const categories = await ShipBubbleService.getPackageCategories();
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Package categories retrieved successfully',
+                data: { categories },
+            });
+        } catch (error) {
+            logger.error('Error fetching package categories:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get available couriers
+     * GET /api/v1/admin/delivery/couriers
+     */
+    static async getDeliveryCouriers(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const couriers = await ShipBubbleService.getAvailableCouriers();
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Available couriers retrieved successfully',
+                data: { couriers },
+            });
+        } catch (error) {
+            logger.error('Error fetching available couriers:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get delivery statistics
+     * GET /api/v1/admin/delivery/stats
+     */
+    static async getDeliveryStats(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            // Get wallet balance
+            const walletData = await ShipBubbleService.getWalletBalance();
+
+            // Get delivery counts from database
+            const totalDeliveries = await Order.count({
+                where: {
+                    deliveryMetadata: {
+                        [Op.ne]: null,
+                    },
+                },
+            });
+
+            const inTransitDeliveries = await Order.count({
+                where: {
+                    status: 'delivery',
+                },
+            });
+
+            const completedDeliveries = await Order.count({
+                where: {
+                    status: 'completed',
+                    deliveryMetadata: {
+                        [Op.ne]: null,
+                    },
+                },
+            });
+
+            const pendingDeliveries = await Order.count({
+                where: {
+                    status: 'shopping_completed',
+                    deliveryMetadata: {
+                        [Op.eq]: null,
+                    },
+                },
+            });
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Delivery statistics retrieved successfully',
+                data: {
+                    wallet: walletData,
+                    deliveries: {
+                        total: totalDeliveries,
+                        inTransit: inTransitDeliveries,
+                        completed: completedDeliveries,
+                        pending: pendingDeliveries,
+                    },
+                },
+            });
+        } catch (error) {
+            logger.error('Error fetching delivery stats:', error);
             throw error;
         }
     }
