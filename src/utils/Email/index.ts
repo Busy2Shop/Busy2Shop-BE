@@ -1,5 +1,9 @@
 import EmailTemplate from './templates';
 import { chatNotificationTemplate } from './templates/chatNotification';
+import { ticketCreatedTemplate } from './templates/support/ticketCreated';
+import { ticketAssignedTemplate } from './templates/support/ticketAssigned';
+import { ticketResponseTemplate } from './templates/support/ticketResponse';
+import { ticketResolvedTemplate } from './templates/support/ticketResolved';
 import { logger } from '../logger';
 import { RESEND_API_KEY, EMAIL_SERVICE } from '../constants';
 import { Resend } from 'resend';
@@ -177,6 +181,176 @@ export default class EmailService {
             return true;
         } catch (error) {
             logger.error('Error sending chat notification email:', error);
+            return false;
+        }
+    }
+
+    // ========================================
+    // SUPPORT TICKET EMAIL METHODS
+    // ========================================
+
+    /**
+     * Send ticket created confirmation email to customer
+     */
+    async sendTicketCreatedEmail(data: {
+        recipientEmail: string;
+        name: string;
+        ticketId: string;
+        subject: string;
+        category: string;
+    }): Promise<boolean> {
+        try {
+            const html = ticketCreatedTemplate({
+                name: data.name,
+                ticketId: data.ticketId,
+                subject: data.subject,
+                category: data.category,
+            });
+
+            await this.send({
+                email: data.recipientEmail,
+                subject: `Support Ticket Created - #${data.ticketId}`,
+                html,
+                from: 'support',
+                postmarkInfo: [
+                    {
+                        recipientEmail: data.recipientEmail,
+                        postMarkTemplateData: {},
+                    },
+                ],
+            });
+
+            logger.info(`Ticket created email sent to ${data.recipientEmail} for ticket #${data.ticketId}`);
+            return true;
+        } catch (error) {
+            logger.error('Error sending ticket created email:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Send ticket assigned notification to admin
+     */
+    async sendTicketAssignedEmail(data: {
+        recipientEmail: string;
+        adminName: string;
+        ticketId: string;
+        subject: string;
+        priority: string;
+        category: string;
+        customerName: string;
+        customerEmail: string;
+    }): Promise<boolean> {
+        try {
+            const html = ticketAssignedTemplate({
+                adminName: data.adminName,
+                ticketId: data.ticketId,
+                subject: data.subject,
+                priority: data.priority,
+                category: data.category,
+                customerName: data.customerName,
+                customerEmail: data.customerEmail,
+            });
+
+            await this.send({
+                email: data.recipientEmail,
+                subject: `Support Ticket Assigned - #${data.ticketId}`,
+                html,
+                from: 'support',
+                postmarkInfo: [
+                    {
+                        recipientEmail: data.recipientEmail,
+                        postMarkTemplateData: {},
+                    },
+                ],
+            });
+
+            logger.info(`Ticket assigned email sent to ${data.recipientEmail} for ticket #${data.ticketId}`);
+            return true;
+        } catch (error) {
+            logger.error('Error sending ticket assigned email:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Send new response notification
+     */
+    async sendTicketResponseEmail(data: {
+        recipientEmail: string;
+        name: string;
+        ticketId: string;
+        subject: string;
+        response: string;
+        responderName: string;
+        isAdmin: boolean;
+    }): Promise<boolean> {
+        try {
+            const html = ticketResponseTemplate({
+                name: data.name,
+                ticketId: data.ticketId,
+                subject: data.subject,
+                response: data.response,
+                responderName: data.responderName,
+                isAdmin: data.isAdmin,
+            });
+
+            await this.send({
+                email: data.recipientEmail,
+                subject: `New Response on Ticket #${data.ticketId}`,
+                html,
+                from: 'support',
+                postmarkInfo: [
+                    {
+                        recipientEmail: data.recipientEmail,
+                        postMarkTemplateData: {},
+                    },
+                ],
+            });
+
+            logger.info(`Ticket response email sent to ${data.recipientEmail} for ticket #${data.ticketId}`);
+            return true;
+        } catch (error) {
+            logger.error('Error sending ticket response email:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Send ticket resolved notification to customer
+     */
+    async sendTicketResolvedEmail(data: {
+        recipientEmail: string;
+        name: string;
+        ticketId: string;
+        subject: string;
+        resolvedBy: string;
+    }): Promise<boolean> {
+        try {
+            const html = ticketResolvedTemplate({
+                name: data.name,
+                ticketId: data.ticketId,
+                subject: data.subject,
+                resolvedBy: data.resolvedBy,
+            });
+
+            await this.send({
+                email: data.recipientEmail,
+                subject: `Ticket Resolved - #${data.ticketId}`,
+                html,
+                from: 'support',
+                postmarkInfo: [
+                    {
+                        recipientEmail: data.recipientEmail,
+                        postMarkTemplateData: {},
+                    },
+                ],
+            });
+
+            logger.info(`Ticket resolved email sent to ${data.recipientEmail} for ticket #${data.ticketId}`);
+            return true;
+        } catch (error) {
+            logger.error('Error sending ticket resolved email:', error);
             return false;
         }
     }

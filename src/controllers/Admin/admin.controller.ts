@@ -4067,4 +4067,224 @@ export default class AdminController {
             throw error;
         }
     }
+
+    // ========================================
+    // SUPPORT TICKET MANAGEMENT
+    // ========================================
+
+    /**
+     * Get all support tickets with filtering
+     * GET /api/admin/support/tickets
+     */
+    static async getAllSupportTickets(req: AdminAuthenticatedRequest, res: Response) {
+        const SupportTicketService = (await import('../../services/supportTicket.service')).default;
+        const { TicketState, TicketPriority, TicketCategory, TicketType } = await import('../../models/supportTicket.model');
+
+        const {
+            page = 1,
+            perPage = 20,
+            state,
+            priority,
+            category,
+            type,
+            assignedAdminId,
+            search,
+        } = req.query;
+
+        const result = await SupportTicketService.getAllTickets({
+            page: Number(page),
+            size: Number(perPage),
+            state: state as any,
+            priority: priority as any,
+            category: category as any,
+            type: type as any,
+            assignedAdminId: assignedAdminId as string,
+            search: search as string,
+        });
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Support tickets retrieved successfully',
+            data: result,
+        });
+    }
+
+    /**
+     * Get support ticket statistics
+     * GET /api/admin/support/stats
+     */
+    static async getSupportTicketStats(req: AdminAuthenticatedRequest, res: Response) {
+        const SupportTicketService = (await import('../../services/supportTicket.service')).default;
+
+        const stats = await SupportTicketService.getTicketStats();
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket statistics retrieved successfully',
+            data: stats,
+        });
+    }
+
+    /**
+     * Get specific support ticket
+     * GET /api/admin/support/tickets/:id
+     */
+    static async getSupportTicket(req: AdminAuthenticatedRequest, res: Response) {
+        const SupportTicketService = (await import('../../services/supportTicket.service')).default;
+        const { id } = req.params;
+
+        const ticket = await SupportTicketService.getTicketById(id);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket retrieved successfully',
+            data: ticket,
+        });
+    }
+
+    /**
+     * Assign ticket to admin (Super Admin only)
+     * PATCH /api/admin/support/tickets/:id/assign
+     */
+    static async assignSupportTicket(req: AdminAuthenticatedRequest, res: Response) {
+        const SupportTicketService = (await import('../../services/supportTicket.service')).default;
+        const { id } = req.params;
+        const { adminId } = req.body;
+
+        if (!req.isSuperAdmin) {
+            throw new ForbiddenError('Only super admins can assign tickets');
+        }
+
+        if (!adminId) {
+            throw new BadRequestError('Admin ID is required');
+        }
+
+        // Use req.admin.id if available (regular admin), otherwise use req.email (super admin)
+        const assignerId = req.admin?.id || req.email;
+
+        if (!assignerId) {
+            throw new ForbiddenError('Admin authentication required');
+        }
+
+        const ticket = await SupportTicketService.assignTicket(id, adminId, assignerId);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket assigned successfully',
+            data: ticket,
+        });
+    }
+
+    /**
+     * Update ticket status
+     * PATCH /api/admin/support/tickets/:id/status
+     */
+    static async updateSupportTicketStatus(req: AdminAuthenticatedRequest, res: Response) {
+        const SupportTicketService = (await import('../../services/supportTicket.service')).default;
+        const { TicketState } = await import('../../models/supportTicket.model');
+        const { id } = req.params;
+        const { state } = req.body;
+
+        if (!id) {
+            throw new BadRequestError('Ticket ID is required');
+        }
+
+        if (!state) {
+            throw new BadRequestError('Status is required');
+        }
+
+        if (!Object.values(TicketState).includes(state)) {
+            throw new BadRequestError('Invalid ticket status');
+        }
+
+        // Use req.admin.id if available (regular admin), otherwise use req.email (super admin)
+        const adminId = req.admin?.id || req.email;
+
+        console.log('DEBUG - req.admin:', req.admin);
+        console.log('DEBUG - req.email:', req.email);
+        console.log('DEBUG - req.isSuperAdmin:', req.isSuperAdmin);
+        console.log('DEBUG - adminId:', adminId);
+
+        if (!adminId) {
+            throw new ForbiddenError('Admin authentication required');
+        }
+
+        const ticket = await SupportTicketService.updateTicketStatus(id, state, adminId);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket status updated successfully',
+            data: ticket,
+        });
+    }
+
+    /**
+     * Update ticket priority
+     * PATCH /api/admin/support/tickets/:id/priority
+     */
+    static async updateSupportTicketPriority(req: AdminAuthenticatedRequest, res: Response) {
+        const SupportTicketService = (await import('../../services/supportTicket.service')).default;
+        const { TicketPriority } = await import('../../models/supportTicket.model');
+        const { id } = req.params;
+        const { priority } = req.body;
+
+        if (!priority) {
+            throw new BadRequestError('Priority is required');
+        }
+
+        if (!Object.values(TicketPriority).includes(priority)) {
+            throw new BadRequestError('Invalid ticket priority');
+        }
+
+        // Use req.admin.id if available (regular admin), otherwise use req.email (super admin)
+        const adminId = req.admin?.id || req.email;
+
+        if (!adminId) {
+            throw new ForbiddenError('Admin authentication required');
+        }
+
+        const ticket = await SupportTicketService.updatePriority(id, priority, adminId);
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Ticket priority updated successfully',
+            data: ticket,
+        });
+    }
+
+    /**
+     * Add response to ticket
+     * POST /api/admin/support/tickets/:id/response
+     */
+    static async addSupportTicketResponse(req: AdminAuthenticatedRequest, res: Response) {
+        const SupportTicketService = (await import('../../services/supportTicket.service')).default;
+        const { id } = req.params;
+        const { message } = req.body;
+
+        if (!message) {
+            throw new BadRequestError('Message is required');
+        }
+
+        // Use req.admin.id if available (regular admin), otherwise use req.email (super admin)
+        const adminId = req.admin?.id || req.email;
+        const responderName = req.admin?.name || 'Admin';
+
+        if (!adminId) {
+            throw new ForbiddenError('Admin authentication required');
+        }
+
+        const ticket = await SupportTicketService.addResponse(
+            id,
+            message,
+            adminId,
+            responderName,
+            true  // isAdmin
+        );
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Response added successfully',
+            data: ticket,
+        });
+    }
 }

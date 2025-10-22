@@ -177,5 +177,16 @@ router.post('/delivery/shipments/:shipbubbleOrderId/cancel', adminAuth('admin'),
 router.get('/delivery/categories', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDeliveryCategories));
 router.get('/delivery/couriers', adminAuth('admin'), AdminAuthenticatedController(AdminController.getDeliveryCouriers));
 
+// ========================================
+// SUPPORT TICKET ROUTES
+// ========================================
+router.get('/support/tickets', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllSupportTickets));
+router.get('/support/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getSupportTicketStats));
+router.get('/support/tickets/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getSupportTicket));
+router.patch('/support/tickets/:id/assign', adminAuth('admin'), AdminAuthenticatedController(AdminController.assignSupportTicket));
+router.patch('/support/tickets/:id/status', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateSupportTicketStatus));
+router.patch('/support/tickets/:id/priority', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateSupportTicketPriority));
+router.post('/support/tickets/:id/response', adminAuth('admin'), AdminAuthenticatedController(AdminController.addSupportTicketResponse));
+
 export default router;
 

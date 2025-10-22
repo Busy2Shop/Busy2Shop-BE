@@ -24,6 +24,7 @@ import discountCampaignRoute from './discountCampaign.routes';
 import systemSettingsRoute from './systemSettings.routes';
 import testRoute from './test.routes';
 import deliveryRoute from './delivery.routes';
+import supportRoute from './support.routes';
 
 const router = Router();
 
@@ -52,5 +53,6 @@ router.use('/discounts', discountCampaignRoute);
 router.use('/system/settings', systemSettingsRoute);
 router.use('/test', testRoute); // Test endpoints (no auth required)
 router.use('/delivery', deliveryRoute);
+router.use('/support', supportRoute);
 
 export default router;
