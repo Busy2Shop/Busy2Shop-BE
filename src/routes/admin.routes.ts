@@ -5,8 +5,10 @@ import KycController from '../controllers/kyc.controller';
 // import AlatPayController from '../controllers/payment/alatpay.controller';
 import { AuthenticatedController } from '../middlewares/authMiddleware';
 import suggestedListsRoutes from './admin/suggestedLists.routes';
+import { uploadMiddleware, UploadType } from '../middlewares/uploadMiddleware';
 
 const router: Router = express.Router();
+const upload = uploadMiddleware(UploadType.Array, 'files', 5);
 
 // Public routes for admin authentication
 router.post('/login', AdminController.loginSuperAdmin);
@@ -118,8 +120,8 @@ router.use('/shopping-lists', adminAuth('admin'), suggestedListsRoutes);
 router.get('/markets', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllMarkets));
 router.get('/markets/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getMarketStats));
 router.get('/markets/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getMarket));
-router.post('/markets', adminAuth('admin'), AdminAuthenticatedController(AdminController.createMarket));
-router.put('/markets/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateMarket));
+router.post('/markets', adminAuth('admin'), upload, AdminAuthenticatedController(AdminController.createMarket));
+router.put('/markets/:id', adminAuth('admin'), upload, AdminAuthenticatedController(AdminController.updateMarket));
 router.delete('/markets/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteMarket));
 router.patch('/markets/:id/toggle-pin', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleMarketPin));
 
@@ -127,9 +129,9 @@ router.patch('/markets/:id/toggle-pin', adminAuth('admin'), AdminAuthenticatedCo
 router.get('/products', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllProducts));
 router.get('/products/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getProductStats));
 router.get('/products/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getProduct));
-router.post('/products', adminAuth('admin'), AdminAuthenticatedController(AdminController.createProduct));
+router.post('/products', adminAuth('admin'), upload, AdminAuthenticatedController(AdminController.createProduct));
 router.post('/products/bulk', adminAuth('admin'), AdminAuthenticatedController(AdminController.bulkCreateProducts));
-router.put('/products/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateProduct));
+router.put('/products/:id', adminAuth('admin'), upload, AdminAuthenticatedController(AdminController.updateProduct));
 router.delete('/products/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteProduct));
 router.patch('/products/:id/toggle-pin', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleProductPin));
 router.post('/products/bulk-operation', adminAuth('admin'), AdminAuthenticatedController(AdminController.bulkProductOperation));
@@ -138,8 +140,8 @@ router.post('/products/bulk-operation', adminAuth('admin'), AdminAuthenticatedCo
 router.get('/categories', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllCategories));
 router.get('/categories/stats', adminAuth('admin'), AdminAuthenticatedController(AdminController.getCategoryStats));
 router.get('/categories/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.getCategory));
-router.post('/categories', adminAuth('admin'), AdminAuthenticatedController(AdminController.createCategory));
-router.put('/categories/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.updateCategory));
+router.post('/categories', adminAuth('admin'), upload, AdminAuthenticatedController(AdminController.createCategory));
+router.put('/categories/:id', adminAuth('admin'), upload, AdminAuthenticatedController(AdminController.updateCategory));
 router.delete('/categories/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteCategory));
 router.patch('/categories/:id/toggle-pin', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleCategoryPin));
 

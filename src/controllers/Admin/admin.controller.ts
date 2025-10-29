@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 import { Request, Response } from 'express';
 import AdminService from '../../services/AdminServices/admin.service';
 import { AdminAuthenticatedRequest } from '../../middlewares/authMiddleware';
@@ -19,7 +20,6 @@ import MarketService from '../../services/market.service';
 import ProductService from '../../services/product.service';
 import CategoryService from '../../services/category.service';
 import Product from '../../models/product.model';
-import Category from '../../models/category.model';
 import FeaturedPromotionService from '../../services/featuredPromotion.service';
 import DiscountCampaignService from '../../services/discountCampaign.service';
 import { IDiscountCampaign, DiscountType, DiscountTargetType, CampaignStatus } from '../../models/discountCampaign.model';
@@ -27,7 +27,7 @@ import DiscountUsage from '../../models/discountUsage.model';
 import User from '../../models/user.model';
 import { logger } from '../../utils/logger';
 import ShipBubbleService from '../../services/shipbubble.service';
-import DeliveryQuote from '../../models/deliveryQuote.model';
+import CloudinaryClientConfig from '../../clients/cloudinary.config';
 
 export default class AdminController {
     // static async getUserStats(req: Request, res: Response) {
@@ -713,7 +713,7 @@ export default class AdminController {
                 include: [{ model: ShoppingList, as: 'shoppingList', attributes: ['name'] }],
                 limit: parseInt(size as string),
                 offset: (parseInt(page as string) - 1) * parseInt(size as string),
-                order: [['createdAt', 'DESC']]
+                order: [['createdAt', 'DESC']],
             });
         } else if (user.status.userType === 'agent') {
             orders = await Order.findAll({
@@ -721,7 +721,7 @@ export default class AdminController {
                 include: [{ model: ShoppingList, as: 'shoppingList', attributes: ['name'] }],
                 limit: parseInt(size as string),
                 offset: (parseInt(page as string) - 1) * parseInt(size as string),
-                order: [['createdAt', 'DESC']]
+                order: [['createdAt', 'DESC']],
             });
         }
 
@@ -798,7 +798,7 @@ export default class AdminController {
             throw new BadRequestError('Deletion reason is required');
         }
 
-        const user = await UserService.viewSingleUser(id);
+        // const user = await UserService.viewSingleUser(id);
 
         await UserService.updateUserSettings(id, {
             isDeactivated: true,
@@ -932,7 +932,7 @@ export default class AdminController {
             const result = await Order.findAndCountAll({
                 where: {
                     customerId: id,
-                    ...whereCondition
+                    ...whereCondition,
                 },
                 include: [{
                     model: ShoppingList,
@@ -941,8 +941,8 @@ export default class AdminController {
                     include: [{
                         model: ShoppingListItem,
                         as: 'items',
-                        attributes: ['id', 'name', 'quantity', 'unit', 'notes']
-                    }]
+                        attributes: ['id', 'name', 'quantity', 'unit', 'notes'],
+                    }],
                 }],
                 limit: parseInt(size as string),
                 offset: (parseInt(page as string) - 1) * parseInt(size as string),
@@ -963,7 +963,7 @@ export default class AdminController {
                 updatedAt: order.updatedAt,
                 completedAt: order.completedAt,
                 shoppingList: order.shoppingList,
-                items: order.shoppingList?.items || []
+                items: order.shoppingList?.items || [],
             }));
 
             totalCount = result.count;
@@ -972,7 +972,7 @@ export default class AdminController {
             const result = await Order.findAndCountAll({
                 where: {
                     agentId: id,
-                    ...whereCondition
+                    ...whereCondition,
                 },
                 include: [{
                     model: ShoppingList,
@@ -981,8 +981,8 @@ export default class AdminController {
                     include: [{
                         model: ShoppingListItem,
                         as: 'items',
-                        attributes: ['id', 'name', 'quantity', 'unit', 'notes']
-                    }]
+                        attributes: ['id', 'name', 'quantity', 'unit', 'notes'],
+                    }],
                 }],
                 limit: parseInt(size as string),
                 offset: (parseInt(page as string) - 1) * parseInt(size as string),
@@ -1004,7 +1004,7 @@ export default class AdminController {
                 acceptedAt: order.acceptedAt,
                 completedAt: order.completedAt,
                 shoppingList: order.shoppingList,
-                items: order.shoppingList?.items || []
+                items: order.shoppingList?.items || [],
             }));
 
             totalCount = result.count;
@@ -1080,14 +1080,14 @@ export default class AdminController {
             
             if (startDate || endDate) {
                 whereCondition.createdAt = {};
-                if (startDate) whereCondition.createdAt[require('sequelize').Op.gte] = new Date(startDate as string);
-                if (endDate) whereCondition.createdAt[require('sequelize').Op.lte] = new Date(endDate as string);
+                if (startDate) whereCondition.createdAt[Op.gte] = new Date(startDate as string);
+                if (endDate) whereCondition.createdAt[Op.lte] = new Date(endDate as string);
             }
 
             const result = await AgentLocation.findAndCountAll({
                 where: {
                     agentId: id,
-                    ...whereCondition
+                    ...whereCondition,
                 },
                 limit: parseInt(size as string),
                 offset: (parseInt(page as string) - 1) * parseInt(size as string),
@@ -1105,7 +1105,7 @@ export default class AdminController {
                 timestamp: location.timestamp || location.createdAt,
                 isActive: location.isActive,
                 createdAt: location.createdAt,
-                status: location.isActive ? 'active' : 'inactive'
+                status: location.isActive ? 'active' : 'inactive',
             }));
             
             res.status(200).json({
@@ -1145,7 +1145,7 @@ export default class AdminController {
                 isActive: address.isActive,
                 createdAt: address.createdAt,
                 lastUsedAt: address.lastUsedAt,
-                status: address.isActive ? 'active' : 'inactive'
+                status: address.isActive ? 'active' : 'inactive',
             }));
             
             res.status(200).json({
@@ -1407,7 +1407,7 @@ export default class AdminController {
             startDate, 
             endDate, 
             orderNumber, 
-            q 
+            q, 
         } = req.query;
 
         try {
@@ -1427,21 +1427,21 @@ export default class AdminController {
             // Date range filter
             if (startDate || endDate) {
                 const dateFilter: any = {};
-                if (startDate) dateFilter[require('sequelize').Op.gte] = new Date(startDate as string);
-                if (endDate) dateFilter[require('sequelize').Op.lte] = new Date(endDate as string);
+                if (startDate) dateFilter[Op.gte] = new Date(startDate as string);
+                if (endDate) dateFilter[Op.lte] = new Date(endDate as string);
                 whereConditions.createdAt = dateFilter;
             }
 
             // Text search across multiple fields
             if (q) {
                 const searchTerm = q as string;
-                whereConditions[require('sequelize').Op.or] = [
-                    { orderNumber: { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
-                    { '$customer.firstName$': { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
-                    { '$customer.lastName$': { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
-                    { '$customer.email$': { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
-                    { '$agent.firstName$': { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
-                    { '$agent.lastName$': { [require('sequelize').Op.iLike]: `%${searchTerm}%` } },
+                whereConditions[Op.or] = [
+                    { orderNumber: { [Op.iLike]: `%${searchTerm}%` } },
+                    { '$customer.firstName$': { [Op.iLike]: `%${searchTerm}%` } },
+                    { '$customer.lastName$': { [Op.iLike]: `%${searchTerm}%` } },
+                    { '$customer.email$': { [Op.iLike]: `%${searchTerm}%` } },
+                    { '$agent.firstName$': { [Op.iLike]: `%${searchTerm}%` } },
+                    { '$agent.lastName$': { [Op.iLike]: `%${searchTerm}%` } },
                 ];
             }
 
@@ -1449,12 +1449,12 @@ export default class AdminController {
                 where: whereConditions,
                 include: [
                     {
-                        model: require('../../models/user.model').default,
+                        model: User,
                         as: 'customer',
                         attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
                     },
                     {
-                        model: require('../../models/user.model').default,
+                        model: User,
                         as: 'agent',
                         attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
                     },
@@ -1466,15 +1466,15 @@ export default class AdminController {
                             {
                                 model: ShoppingListItem,
                                 as: 'items',
-                                attributes: ['id', 'name', 'quantity', 'unit', 'estimatedPrice', 'actualPrice', 'notes']
+                                attributes: ['id', 'name', 'quantity', 'unit', 'estimatedPrice', 'actualPrice', 'notes'],
                             },
                             {
                                 model: Market,
                                 as: 'market',
                                 attributes: ['id', 'name', 'address'],
-                            }
-                        ]
-                    }
+                            },
+                        ],
+                    },
                 ],
                 limit: queryParams.size,
                 offset: (queryParams.page - 1) * queryParams.size,
@@ -1561,12 +1561,12 @@ export default class AdminController {
                 order = await Order.findByPk(id, {
                     include: [
                         {
-                            model: require('../../models/user.model').default,
+                            model: User,
                             as: 'customer',
                             attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
                         },
                         {
-                            model: require('../../models/user.model').default,
+                            model: User,
                             as: 'agent',
                             attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
                         },
@@ -1578,16 +1578,16 @@ export default class AdminController {
                                 {
                                     model: ShoppingListItem,
                                     as: 'items',
-                                    attributes: ['id', 'name', 'quantity', 'unit', 'estimatedPrice', 'actualPrice', 'notes']
+                                    attributes: ['id', 'name', 'quantity', 'unit', 'estimatedPrice', 'actualPrice', 'notes'],
                                 },
                                 {
                                     model: Market,
                                     as: 'market',
                                     attributes: ['id', 'name', 'address'],
-                                }
-                            ]
-                        }
-                    ]
+                                },
+                            ],
+                        },
+                    ],
                 });
             }
 
@@ -1634,7 +1634,7 @@ export default class AdminController {
                     metadata: { 
                         previousStatus: order.status,
                         newStatus: status,
-                        adminNotes: notes 
+                        adminNotes: notes, 
                     },
                 });
             } catch (trailError) {
@@ -1645,16 +1645,16 @@ export default class AdminController {
             const updatedOrder = await Order.findByPk(id, {
                 include: [
                     {
-                        model: require('../../models/user.model').default,
+                        model: User,
                         as: 'customer',
                         attributes: ['id', 'firstName', 'lastName', 'email'],
                     },
                     {
-                        model: require('../../models/user.model').default,
+                        model: User,
                         as: 'agent',
                         attributes: ['id', 'firstName', 'lastName', 'email'],
-                    }
-                ]
+                    },
+                ],
             });
 
             res.status(200).json({
@@ -1712,16 +1712,16 @@ export default class AdminController {
             const updatedOrder = await Order.findByPk(id, {
                 include: [
                     {
-                        model: require('../../models/user.model').default,
+                        model: User,
                         as: 'customer',
                         attributes: ['id', 'firstName', 'lastName', 'email'],
                     },
                     {
-                        model: require('../../models/user.model').default,
+                        model: User,
                         as: 'agent',
                         attributes: ['id', 'firstName', 'lastName', 'email'],
-                    }
-                ]
+                    },
+                ],
             });
 
             res.status(200).json({
@@ -1780,16 +1780,16 @@ export default class AdminController {
             const updatedOrder = await Order.findByPk(id, {
                 include: [
                     {
-                        model: require('../../models/user.model').default,
+                        model: User,
                         as: 'customer',
                         attributes: ['id', 'firstName', 'lastName', 'email'],
                     },
                     {
-                        model: require('../../models/user.model').default,
+                        model: User,
                         as: 'agent',
                         attributes: ['id', 'firstName', 'lastName', 'email'],
-                    }
-                ]
+                    },
+                ],
             });
 
             res.status(200).json({
@@ -1862,7 +1862,7 @@ export default class AdminController {
                     model: ShoppingList,
                     as: 'shoppingList',
                     attributes: ['id', 'marketId'],
-                }]
+                }],
             });
 
             if (!order) {
@@ -1933,10 +1933,10 @@ export default class AdminController {
             // Check if order exists and is eligible for agent assignment
             const order = await Order.findByPk(id, {
                 include: [{
-                    model: require('../../models/user.model').default,
+                    model: User,
                     as: 'customer',
                     attributes: ['id', 'firstName', 'lastName', 'email'],
-                }]
+                }],
             });
 
             if (!order) {
@@ -2003,12 +2003,12 @@ export default class AdminController {
             const updatedOrder = await Order.findByPk(id, {
                 include: [
                     {
-                        model: require('../../models/user.model').default,
+                        model: User,
                         as: 'customer',
                         attributes: ['id', 'firstName', 'lastName', 'email'],
                     },
                     {
-                        model: require('../../models/user.model').default,
+                        model: User,
                         as: 'agent',
                         attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'displayImage'],
                     },
@@ -2016,8 +2016,8 @@ export default class AdminController {
                         model: ShoppingList,
                         as: 'shoppingList',
                         attributes: ['id', 'name', 'status'],
-                    }
-                ]
+                    },
+                ],
             });
 
             res.status(200).json({
@@ -2057,7 +2057,7 @@ export default class AdminController {
             location,
             dob,
             status,
-            settings
+            settings,
         } = req.body;
 
         if (!firstName?.trim() || !lastName?.trim() || !email?.trim() || !userType) {
@@ -2220,7 +2220,7 @@ export default class AdminController {
     static async getMarket(req: AdminAuthenticatedRequest, res: Response) {
         try {
             const { id } = req.params;
-            const { includeProducts, includeCategories, productsLimit = 10 } = req.query;
+            const { includeProducts, productsLimit = 10 } = req.query;
 
             const market = await MarketService.viewSingleMarket(id);
 
@@ -2228,7 +2228,7 @@ export default class AdminController {
             const productCount = await Product.count({ where: { marketId: id } });
             const categoryCount = market.categories?.length || 0;
 
-            let marketData: any = {
+            const marketData: any = {
                 ...market.toJSON(),
                 productCount,
                 categoryCount,
@@ -2245,8 +2245,8 @@ export default class AdminController {
                             model: Market,
                             as: 'market',
                             attributes: ['id', 'name'],
-                        }
-                    ]
+                        },
+                    ],
                 });
                 marketData.recentProducts = products;
             }
@@ -2267,17 +2267,49 @@ export default class AdminController {
             const {
                 name,
                 address,
-                location,
                 phoneNumber,
                 marketType,
                 description,
-                operatingHours,
-                categoryIds,
                 ownerId,
             } = req.body;
 
-            if (!name || !address || !location || !marketType) {
-                throw new BadRequestError('Name, address, location, and market type are required');
+            // Parse JSON fields from FormData
+            const location = typeof req.body.location === 'string'
+                ? JSON.parse(req.body.location)
+                : req.body.location;
+
+            const operatingHours = req.body.operatingHours
+                ? (typeof req.body.operatingHours === 'string'
+                    ? JSON.parse(req.body.operatingHours)
+                    : req.body.operatingHours)
+                : undefined;
+
+            const categoryIds = req.body.categoryIds
+                ? (typeof req.body.categoryIds === 'string'
+                    ? JSON.parse(req.body.categoryIds)
+                    : req.body.categoryIds)
+                : [];
+
+            if (!address || !location || !marketType) {
+                throw new BadRequestError('Address, location, and market type are required');
+            }
+
+            // Handle market images upload
+            // eslint-disable-next-line no-undef
+            const files = req.files as Express.Multer.File[] | undefined;
+            const imageUrls: string[] = [];
+
+            if (files && files.length > 0) {
+                // Upload each image to Cloudinary
+                for (const file of files) {
+                    const result = await CloudinaryClientConfig.uploadtoCloudinary({
+                        fileBuffer: file.buffer,
+                        id: req.email, // Use admin email as ID
+                        name: file.originalname,
+                        type: 'market',
+                    });
+                    imageUrls.push(result.url as string);
+                }
             }
 
             const marketData = {
@@ -2288,6 +2320,7 @@ export default class AdminController {
                 marketType,
                 description,
                 operatingHours,
+                images: imageUrls,
                 ownerId: ownerId || null,
                 isActive: true,
             };
@@ -2308,7 +2341,39 @@ export default class AdminController {
     static async updateMarket(req: AdminAuthenticatedRequest, res: Response) {
         try {
             const { id } = req.params;
-            const updateData = req.body;
+            const updateData: any = { ...req.body };
+
+            // Parse JSON fields from FormData if they are strings
+            if (updateData.location && typeof updateData.location === 'string') {
+                updateData.location = JSON.parse(updateData.location);
+            }
+
+            if (updateData.operatingHours && typeof updateData.operatingHours === 'string') {
+                updateData.operatingHours = JSON.parse(updateData.operatingHours);
+            }
+
+            if (updateData.categoryIds && typeof updateData.categoryIds === 'string') {
+                updateData.categoryIds = JSON.parse(updateData.categoryIds);
+            }
+
+            // Handle market images upload
+            // eslint-disable-next-line no-undef
+            const files = req.files as Express.Multer.File[] | undefined;
+            const imageUrls: string[] = [];
+
+            if (files && files.length > 0) {
+                // Upload each image to Cloudinary
+                for (const file of files) {
+                    const result = await CloudinaryClientConfig.uploadtoCloudinary({
+                        fileBuffer: file.buffer,
+                        id: req.email, // Use admin email as ID
+                        name: file.originalname,
+                        type: 'market',
+                    });
+                    imageUrls.push(result.url as string);
+                }
+                updateData.images = imageUrls;
+            }
 
             const updatedMarket = await MarketService.updateMarket(id, updateData);
 
@@ -2453,10 +2518,50 @@ export default class AdminController {
 
     static async createProduct(req: AdminAuthenticatedRequest, res: Response) {
         try {
-            const productData = req.body;
+            const productData = { ...req.body };
+
+            // Parse JSON fields from FormData if they are strings
+            if (productData.attributes && typeof productData.attributes === 'string') {
+                productData.attributes = JSON.parse(productData.attributes);
+            }
 
             if (!productData.name || !productData.price || !productData.marketId) {
                 throw new BadRequestError('Product name, price, and market ID are required');
+            }
+
+            // Handle product images upload
+            // eslint-disable-next-line no-undef
+            const files = req.files as Express.Multer.File[] | undefined;
+            const imageUrls: string[] = [];
+
+            if (files && files.length > 0) {
+                // Upload each image to Cloudinary
+                for (const file of files) {
+                    const result = await CloudinaryClientConfig.uploadtoCloudinary({
+                        fileBuffer: file.buffer,
+                        id: req.email, // Use admin email as ID
+                        name: file.originalname,
+                        type: 'product',
+                    });
+                    imageUrls.push(result.url as string);
+                }
+                productData.images = imageUrls;
+            }
+
+            // Convert string booleans to actual booleans
+            if (typeof productData.isAvailable === 'string') {
+                productData.isAvailable = productData.isAvailable === 'true';
+            }
+            if (typeof productData.isPinned === 'string') {
+                productData.isPinned = productData.isPinned === 'true';
+            }
+
+            // Convert numeric fields
+            if (typeof productData.price === 'string') {
+                productData.price = parseFloat(productData.price);
+            }
+            if (productData.stockQuantity && typeof productData.stockQuantity === 'string') {
+                productData.stockQuantity = parseInt(productData.stockQuantity);
             }
 
             const newProduct = await ProductService.addProduct(productData);
@@ -2475,7 +2580,47 @@ export default class AdminController {
     static async updateProduct(req: AdminAuthenticatedRequest, res: Response) {
         try {
             const { id } = req.params;
-            const updateData = req.body;
+            const updateData: any = { ...req.body };
+
+            // Parse JSON fields from FormData if they are strings
+            if (updateData.attributes && typeof updateData.attributes === 'string') {
+                updateData.attributes = JSON.parse(updateData.attributes);
+            }
+
+            // Handle product images upload
+            // eslint-disable-next-line no-undef
+            const files = req.files as Express.Multer.File[] | undefined;
+            const imageUrls: string[] = [];
+
+            if (files && files.length > 0) {
+                // Upload each image to Cloudinary
+                for (const file of files) {
+                    const result = await CloudinaryClientConfig.uploadtoCloudinary({
+                        fileBuffer: file.buffer,
+                        id: req.email, // Use admin email as ID
+                        name: file.originalname,
+                        type: 'product',
+                    });
+                    imageUrls.push(result.url as string);
+                }
+                updateData.images = imageUrls;
+            }
+
+            // Convert string booleans to actual booleans
+            if (typeof updateData.isAvailable === 'string') {
+                updateData.isAvailable = updateData.isAvailable === 'true';
+            }
+            if (typeof updateData.isPinned === 'string') {
+                updateData.isPinned = updateData.isPinned === 'true';
+            }
+
+            // Convert numeric fields
+            if (updateData.price && typeof updateData.price === 'string') {
+                updateData.price = parseFloat(updateData.price);
+            }
+            if (updateData.stockQuantity && typeof updateData.stockQuantity === 'string') {
+                updateData.stockQuantity = parseInt(updateData.stockQuantity);
+            }
 
             const updatedProduct = await ProductService.updateProduct(id, 'admin', updateData);
 
@@ -2547,7 +2692,7 @@ export default class AdminController {
 
     static async bulkProductOperation(req: AdminAuthenticatedRequest, res: Response) {
         try {
-            const { productIds, operation, data } = req.body;
+            const { productIds, operation } = req.body;
 
             if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
                 throw new BadRequestError('Product IDs array is required');
@@ -2712,7 +2857,7 @@ export default class AdminController {
     static async getCategory(req: AdminAuthenticatedRequest, res: Response) {
         try {
             const { id } = req.params;
-            const { includeMarkets, includeProducts } = req.query;
+            // const { includeMarkets, includeProducts } = req.query;
 
             const category = await CategoryService.viewSingleCategory(id);
 
@@ -2754,7 +2899,30 @@ export default class AdminController {
                 throw new BadRequestError('Category name is required');
             }
 
-            const categoryData = { name, description, icon };
+            // Handle category images upload
+            // eslint-disable-next-line no-undef
+            const files = req.files as Express.Multer.File[] | undefined;
+            const imageUrls: string[] = [];
+
+            if (files && files.length > 0) {
+                // Upload each image to Cloudinary
+                for (const file of files) {
+                    const result = await CloudinaryClientConfig.uploadtoCloudinary({
+                        fileBuffer: file.buffer,
+                        id: req.email, // Use admin email as ID
+                        name: file.originalname,
+                        type: 'category',
+                    });
+                    imageUrls.push(result.url as string);
+                }
+            }
+
+            const categoryData = {
+                name,
+                description,
+                icon,
+                images: imageUrls,
+            };
             const newCategory = await CategoryService.addCategory(categoryData);
 
             res.status(201).json({
@@ -2771,7 +2939,26 @@ export default class AdminController {
     static async updateCategory(req: AdminAuthenticatedRequest, res: Response) {
         try {
             const { id } = req.params;
-            const updateData = req.body;
+            const updateData: any = { ...req.body };
+
+            // Handle category images upload
+            // eslint-disable-next-line no-undef
+            const files = req.files as Express.Multer.File[] | undefined;
+            const imageUrls: string[] = [];
+
+            if (files && files.length > 0) {
+                // Upload each image to Cloudinary
+                for (const file of files) {
+                    const result = await CloudinaryClientConfig.uploadtoCloudinary({
+                        fileBuffer: file.buffer,
+                        id: req.email, // Use admin email as ID
+                        name: file.originalname,
+                        type: 'category',
+                    });
+                    imageUrls.push(result.url as string);
+                }
+                updateData.images = imageUrls;
+            }
 
             const updatedCategory = await CategoryService.updateCategory(id, updateData);
 
@@ -2830,7 +3017,7 @@ export default class AdminController {
                 productStats,
                 categoryStats,
                 revenueStats,
-                fulfillmentMetrics
+                fulfillmentMetrics,
             ] = await Promise.all([
                 // User statistics
                 Database.query(`
@@ -2908,7 +3095,7 @@ export default class AdminController {
                         ELSE 0 END as avg_delivery_time_hours
                     FROM "Orders"
                     WHERE "createdAt" >= NOW() - INTERVAL '30 days'
-                `, { type: QueryTypes.SELECT })
+                `, { type: QueryTypes.SELECT }),
             ]);
 
             const userData = userStats[0] as any;
@@ -2920,7 +3107,7 @@ export default class AdminController {
             const fulfillmentData = fulfillmentMetrics[0] as any;
 
             // Calculate growth percentages (simplified - you can enhance with historical data)
-            const todayDate = new Date().toISOString().split('T')[0];
+            // const todayDate = new Date().toISOString().split('T')[0];
             const [growthMetrics] = await Database.query(`
                 SELECT
                     COUNT(CASE WHEN DATE("createdAt") = CURRENT_DATE THEN 1 END) as new_users_today,
@@ -2950,24 +3137,24 @@ export default class AdminController {
                             value: parseInt(userData.active_users || '0'),
                             total: parseInt(userData.total_users || '0'),
                             growth: `+${userGrowthPercentage}% from last month`,
-                            newToday: parseInt(growth.new_users_today || '0')
+                            newToday: parseInt(growth.new_users_today || '0'),
                         },
                         ordersToday: {
                             value: parseInt(orderData.orders_today || '0'),
                             growth: `+${orderGrowthPercentage}% from yesterday`,
-                            totalOrders: parseInt(orderData.total_orders || '0')
+                            totalOrders: parseInt(orderData.total_orders || '0'),
                         },
                         revenue: {
                             value: parseFloat(revenueData.revenue_this_week || '0'),
                             monthlyServiceCharges: parseFloat(revenueData.service_charges_this_month || '0'),
                             totalRevenue: parseFloat(orderData.total_revenue || '0'),
-                            avgOrderValue: parseFloat(orderData.avg_order_value || '0')
+                            avgOrderValue: parseFloat(orderData.avg_order_value || '0'),
                         },
                         activeAgents: {
                             value: parseInt(userData.active_agents || '0'),
                             total: parseInt(userData.total_agents || '0'),
-                            growth: `+${parseInt(growth.new_users_today || '0')} new this week`
-                        }
+                            growth: `+${parseInt(growth.new_users_today || '0')} new this week`,
+                        },
                     },
 
                     // Fulfillment metrics
@@ -2975,14 +3162,14 @@ export default class AdminController {
                         completedOrders: parseFloat(fulfillmentData.completion_rate || '0'),
                         onTimeDelivery: parseFloat(fulfillmentData.on_time_delivery_rate || '0'),
                         avgDeliveryTime: parseFloat(fulfillmentData.avg_delivery_time_hours || '0'),
-                        customerSatisfaction: 92.0 // This would come from a ratings table
+                        customerSatisfaction: 92.0, // This would come from a ratings table
                     },
 
                     // Financial overview
                     financial: {
                         serviceChargesThisMonth: parseFloat(revenueData.service_charges_this_month || '0'),
                         agentBonusesThisMonth: parseFloat(revenueData.agent_bonuses_this_month || '0'),
-                        revenueThisWeek: parseFloat(revenueData.revenue_this_week || '0')
+                        revenueThisWeek: parseFloat(revenueData.revenue_this_week || '0'),
                     },
 
                     // Platform statistics
@@ -2994,33 +3181,33 @@ export default class AdminController {
                         totalProducts: parseInt(productData.total_products || '0'),
                         activeProducts: parseInt(productData.active_products || '0'),
                         totalCategories: parseInt(categoryData.total_categories || '0'),
-                        activeCategories: parseInt(categoryData.active_categories || '0')
+                        activeCategories: parseInt(categoryData.active_categories || '0'),
                     },
 
                     // System alerts data
                     alerts: [
                         {
-                            type: "info",
-                            title: "Agent Applications",
+                            type: 'info',
+                            title: 'Agent Applications',
                             description: `${parseInt(userData.total_agents) - parseInt(userData.active_agents)} new applications pending review`,
-                            priority: "medium"
+                            priority: 'medium',
                         },
                         {
-                            type: "success",
-                            title: "Platform Growth",
+                            type: 'success',
+                            title: 'Platform Growth',
                             description: `${growth.new_users_today} new users registered today`,
-                            priority: "low"
+                            priority: 'low',
                         },
                         {
-                            type: parseInt(orderData.orders_today) > 100 ? "warning" : "info",
-                            title: parseInt(orderData.orders_today) > 100 ? "High Order Volume" : "Normal Operations",
+                            type: parseInt(orderData.orders_today) > 100 ? 'warning' : 'info',
+                            title: parseInt(orderData.orders_today) > 100 ? 'High Order Volume' : 'Normal Operations',
                             description: parseInt(orderData.orders_today) > 100 ?
                                 `${orderData.orders_today} orders received today - 50% above average` :
                                 `${orderData.orders_today} orders received today`,
-                            priority: parseInt(orderData.orders_today) > 100 ? "high" : "low"
-                        }
-                    ]
-                }
+                            priority: parseInt(orderData.orders_today) > 100 ? 'high' : 'low',
+                        },
+                    ],
+                },
             });
         } catch (error) {
             console.error('Error in getDashboardStats:', error);
@@ -3346,13 +3533,13 @@ export default class AdminController {
                     lastName: '',
                     phone: {
                         countryCode: '+234',
-                        number: '0000000000'
+                        number: '0000000000',
                     },
                     status: {
                         activated: true,
                         emailVerified: true,
-                        userType: 'customer'
-                    }
+                        userType: 'customer',
+                    },
                 });
             }
 
@@ -3575,13 +3762,13 @@ export default class AdminController {
                     lastName: '',
                     phone: {
                         countryCode: '+234',
-                        number: '0000000000'
+                        number: '0000000000',
                     },
                     status: {
                         activated: true,
                         emailVerified: true,
-                        userType: 'customer'
-                    }
+                        userType: 'customer',
+                    },
                 });
             }
 
@@ -3682,8 +3869,8 @@ export default class AdminController {
             const orders = await Order.findAll({
                 where: {
                     deliveryMetadata: {
-                        shipbubbleOrderId: { [Op.in]: shipbubbleOrderIds }
-                    }
+                        shipbubbleOrderId: { [Op.in]: shipbubbleOrderIds },
+                    },
                 },
                 include: [
                     {
@@ -4078,7 +4265,6 @@ export default class AdminController {
      */
     static async getAllSupportTickets(req: AdminAuthenticatedRequest, res: Response) {
         const SupportTicketService = (await import('../../services/supportTicket.service')).default;
-        const { TicketState, TicketPriority, TicketCategory, TicketType } = await import('../../models/supportTicket.model');
 
         const {
             page = 1,

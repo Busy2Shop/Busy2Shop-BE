@@ -76,11 +76,7 @@ export default class ProductService {
             throw new NotFoundError('Market not found');
         }
 
-        // If this is a market type that explicitly shouldn't have products
-        if (market.marketType === 'local_market') {
-            throw new BadRequestError('This type of market cannot have products');
-        }
-
+        // All market types can have products
         return await Product.create({ ...productData });
     }
 
@@ -307,10 +303,14 @@ export default class ProductService {
     ): Promise<Product> {
         const product = await this.getProduct(id);
 
-        // Check if the market belongs to this owner (unless it's an admin updating pin status)
+        // Check if the market belongs to this owner (unless it's an admin)
         const market = await Market.findByPk(product.marketId);
-        if (!market || (market.ownerId !== ownerId && !Object.prototype.hasOwnProperty.call(dataToUpdate, 'isPinned'))) {
-            throw new ForbiddenError('You are not authorized to update this product');
+
+        // Allow admin to bypass ownership check
+        if (ownerId !== 'admin') {
+            if (!market || (market.ownerId !== ownerId && !Object.prototype.hasOwnProperty.call(dataToUpdate, 'isPinned'))) {
+                throw new ForbiddenError('You are not authorized to update this product');
+            }
         }
 
         // Cannot change the market ID
@@ -326,10 +326,14 @@ export default class ProductService {
     static async deleteProduct(id: string, ownerId: string): Promise<void> {
         const product = await this.getProduct(id);
 
-        // Check if the market belongs to this owner
+        // Check if the market belongs to this owner (unless it's an admin)
         const market = await Market.findByPk(product.marketId);
-        if (!market || market.ownerId !== ownerId) {
-            throw new ForbiddenError('You are not authorized to delete this product');
+
+        // Allow admin to bypass ownership check
+        if (ownerId !== 'admin') {
+            if (!market || market.ownerId !== ownerId) {
+                throw new ForbiddenError('You are not authorized to delete this product');
+            }
         }
 
         await product.destroy();
@@ -338,10 +342,14 @@ export default class ProductService {
     static async toggleProductAvailability(id: string, ownerId: string): Promise<Product> {
         const product = await this.getProduct(id);
 
-        // Check if the market belongs to this owner
+        // Check if the market belongs to this owner (unless it's an admin)
         const market = await Market.findByPk(product.marketId);
-        if (!market || market.ownerId !== ownerId) {
-            throw new ForbiddenError('You are not authorized to update this product');
+
+        // Allow admin to bypass ownership check
+        if (ownerId !== 'admin') {
+            if (!market || market.ownerId !== ownerId) {
+                throw new ForbiddenError('You are not authorized to update this product');
+            }
         }
 
         await product.update({ isAvailable: !product.isAvailable });
