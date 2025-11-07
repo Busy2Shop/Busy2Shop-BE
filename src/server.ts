@@ -9,6 +9,7 @@ import { NODE_ENV, PORT } from './utils/constants';
 import queues, { gracefulShutdown as shutdownQueues } from './queues';
 import UserPresenceService from './services/user-presence.service';
 import SmartNotificationDispatcher from './services/smart-notification.dispatcher';
+import CallService from './services/call.service';
 
 // Create the HTTP server
 const server = http.createServer(app);
@@ -39,8 +40,21 @@ async function startServer(): Promise<void> {
         // }
 
         // Initialize Socket.IO
-        new SocketConfig(server);
-        logger.info('Chat Client initialized');
+        logger.info('🔍 About to initialize Socket.IO');
+        const socketConfig = new SocketConfig(server);
+        logger.info('✅ Socket.IO initialized - Chat Client ready');
+
+        // Initialize CallService with Socket.IO server
+        logger.info('🔍 About to initialize CallService');
+        const callServiceInstance = CallService;
+        logger.info('🔍 CallService instance check:', {
+            type: typeof callServiceInstance,
+            hasSetSocketServer: typeof callServiceInstance.setSocketServer === 'function',
+            hasGetSocketServer: typeof callServiceInstance.getSocketServer === 'function'
+        });
+
+        callServiceInstance.setSocketServer(socketConfig.getIO());
+        logger.info('✅ Call service initialization complete');
 
         // Initialize smart notification services
         UserPresenceService.initialize();
@@ -81,6 +95,10 @@ async function startServer(): Promise<void> {
             // First, close the HTTP server to stop accepting new connections
             server.close(async () => {
                 try {
+                    // Shut down call service
+                    CallService.shutdown();
+                    logger.info('📞 Call service shut down successfully');
+
                     // Shut down smart notification services
                     UserPresenceService.shutdown();
                     SmartNotificationDispatcher.shutdown();
@@ -118,6 +136,13 @@ async function startServer(): Promise<void> {
             logger.info('SIGINT received. Shutting down gracefully');
             server.close(async () => {
                 try {
+                    // Shut down call service
+                    CallService.shutdown();
+
+                    // Shut down notification services
+                    UserPresenceService.shutdown();
+                    SmartNotificationDispatcher.shutdown();
+
                     await shutdownQueues();
                     await Promise.all([
                         redisClient.quit(),

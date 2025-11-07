@@ -1171,6 +1171,52 @@ export default class AgentService {
     }
 
     /**
+     * Release agent from an order (reduce workload, update status)
+     * Called when order is cancelled, completed, or reassigned
+     */
+    static async releaseAgentFromOrder(
+        agentId: string,
+        orderId: string,
+        transaction?: Transaction,
+    ): Promise<void> {
+        console.log(`Releasing agent ${agentId} from order ${orderId}`);
+
+        // Get current active orders count for this agent (excluding the order being released)
+        const activeOrdersCount = await Order.count({
+            where: {
+                agentId: agentId,
+                id: { [Op.ne]: orderId }, // Exclude the current order
+                status: {
+                    [Op.in]: ['accepted', 'in_progress', 'shopping', 'shopping_completed', 'delivery'],
+                },
+            },
+            transaction,
+        });
+
+        console.log(`Agent ${agentId} now has ${activeOrdersCount} active orders (after release)`);
+
+        // Determine agent status after release
+        const shouldAcceptOrders = activeOrdersCount < 3;
+        const currentStatus = activeOrdersCount >= 3 ? 'busy' : 'available';
+
+        console.log(`Agent ${agentId} status after release: ${currentStatus}, accepting orders: ${shouldAcceptOrders}`);
+
+        // Update agent status
+        await UserSettings.update(
+            {
+                agentMetaData: Sequelize.literal(`
+                    COALESCE("agentMetaData", '{}') ||
+                    '{"currentStatus": "${currentStatus}", "isAcceptingOrders": ${shouldAcceptOrders}, "lastStatusUpdate": "${new Date().toISOString()}"}'
+                `),
+            },
+            {
+                where: { userId: agentId },
+                transaction,
+            }
+        );
+    }
+
+    /**
      * Get agent's current status
      */
     static async getAgentStatus(agentId: string): Promise<{

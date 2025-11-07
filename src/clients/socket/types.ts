@@ -27,6 +27,7 @@ export interface SocketUser {
     id: string;
     type: SenderType;
     name: string;
+    profileImage?: string;
     isSuperAdmin?: boolean;
 }
 
@@ -43,6 +44,16 @@ export interface ClientToServerEvents {
     'mark-messages-read': (orderId: string) => void;
     'leave-order-chat': (orderId: string) => void;
     heartbeat: () => void;
+    // Call events
+    'call:check-availability': (data: { orderId: string; recipientId: string }) => void;
+    'call:initiate': (data: { orderId: string; recipientId: string; recipientType: 'agent' | 'customer' }) => void;
+    'call:accept': (data: { callId: string }) => void;
+    'call:reject': (data: { callId: string; reason?: string }) => void;
+    'call:reconnect': (data: { callId: string; userId: string }) => void;
+    'call:offer': (data: { callId: string; recipientId: string; sdp: any }) => void;
+    'call:answer': (data: { callId: string; callerId: string; sdp: any }) => void;
+    'call:ice-candidate': (data: { callId: string; recipientId: string; candidate: RTCIceCandidateInit }) => void;
+    'call:end': (data: { callId: string; duration?: number; reason?: string }) => void;
 }
 
 export interface ServerToClientEvents {
@@ -55,6 +66,19 @@ export interface ServerToClientEvents {
     'connection-status': (data: { status: string; userId: string; userType: string }) => void;
     'messages-read': (data: { orderId: string; userId: string }) => void;
     error: (error: { message: string }) => void;
+    // Call events
+    'call:availability-response': (data: { available: boolean; reason?: string; recipientId?: string; orderId?: string }) => void;
+    'call:initiated': (data: { callId?: string; orderId: string; recipientId: string }) => void;
+    'call:incoming': (data: { callId: string; callerId: string; callerName: string; orderId: string; orderNumber: string }) => void;
+    'call:accepted': (data: { callId: string; acceptedBy: string; acceptedAt: number; recipientSocketId: string | null; callerSocketId: string | null }) => void;
+    'call:rejected': (data: { callId: string; rejectedBy: string; reason?: string; rejectedAt: number }) => void;
+    'call:reconnected': (data: { callId: string; session: any; message: string }) => void;
+    'call:timeout': (data: { callId: string; reason: string; timeoutAt: number }) => void;
+    'call:ended': (data: { callId: string; endedBy: string; reason?: string; duration: number; endedAt: number }) => void;
+    'call:offer': (data: { callId: string; sdp: any; from: string; fromName?: string }) => void;
+    'call:answer': (data: { callId: string; sdp: any; from: string }) => void;
+    'call:ice-candidate': (data: { callId: string; candidate: RTCIceCandidateInit; from: string }) => void;
+    'call:error': (data: { message?: string; callId?: string }) => void;
 }
 
 export interface InterServerEvents {

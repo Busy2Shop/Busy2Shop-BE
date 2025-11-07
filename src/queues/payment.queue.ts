@@ -22,7 +22,7 @@ interface PaymentExpiryCheckJobData {
 // Create queues
 export const paymentWebhookQueue = new Queue<PaymentWebhookJobData>('payment-webhook', { connection });
 
-export const paymentExpiryCheckQueue = new Queue<PaymentExpiryCheckJobData>('payment-expiry-check', { connection});
+export const paymentExpiryCheckQueue = new Queue<PaymentExpiryCheckJobData>('payment-expiry-check', { connection });
 
 // Process webhook jobs
 const webhookWorker = new Worker<PaymentWebhookJobData>(
@@ -34,8 +34,8 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
 
         const { providerTransactionId, transactionId: _transactionId, userId: _userId, orderId, orderNumber, webhookStatus } = job.data;
         logger.info(`Processing payment webhook for transaction ${providerTransactionId}`, {
-            orderId, 
-            orderNumber, 
+            orderId,
+            orderNumber,
             webhookStatus,
         });
 
@@ -48,18 +48,18 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
 
             // Check if webhook status indicates completion
             const isWebhookCompleted = webhookStatus === 'completed' || webhookStatus === 'COMPLETED';
-            
+
             // Get the latest transaction status from AlatPay for verification
             const transactionStatus = await AlatPayService.checkTransactionStatus(providerTransactionId);
             const isAlatPayCompleted = transactionStatus?.status === 'COMPLETED' || transactionStatus?.status === 'completed';
-            
+
             // Process if either webhook status or AlatPay status indicates completion
             if (isWebhookCompleted || isAlatPayCompleted) {
                 logger.info(`Payment completed for transaction ${providerTransactionId}`, {
                     webhookCompleted: isWebhookCompleted,
                     alatPayCompleted: isAlatPayCompleted,
                 });
-                
+
                 // Find order by transaction ID using OrderService (properly handles model initialization)
                 let order = await OrderService.getOrderByPaymentId(providerTransactionId);
 
@@ -68,7 +68,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                     try {
                         order = await OrderService.getOrder(orderId);
                     } catch (error) {
-                        logger.debug(`Failed to find order by ID ${orderId}:`, error);
+                        logger.info(`Failed to find order by ID ${orderId}:`, error);
                     }
                 }
 
@@ -77,14 +77,14 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                     try {
                         order = await OrderService.getOrderByNumber(orderNumber);
                     } catch (error) {
-                        logger.debug(`Failed to find order by number ${orderNumber}:`, error);
+                        logger.info(`Failed to find order by number ${orderNumber}:`, error);
                     }
                 }
 
                 if (order) {
                     // Use database transaction to ensure atomic operations
                     const Database = (await import('../models/index')).Database;
-                    
+
                     await Database.transaction(async (transaction) => {
                         logger.info(`Starting payment completion processing for order ${order!.orderNumber}`, {
                             orderId: order!.id,
@@ -93,26 +93,26 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                             shoppingListId: order!.shoppingListId,
                             customerId: order!.customerId,
                         });
-                        
+
                         // 1. Update order payment status and record payment processed time
                         logger.info(`Updating order ${order!.orderNumber} payment status to completed`);
                         await OrderService.updateOrderPaymentStatus(order!.id, 'completed', transaction);
-                        
+
                         // 2. Update shopping list status to accepted (payment confirmed)
                         if (order!.shoppingListId) {
                             logger.info(`Updating shopping list ${order!.shoppingListId} status to accepted`);
                             await ShoppingListService.updateListStatus(
-                                order!.shoppingListId, 
-                                order!.customerId, 
+                                order!.shoppingListId,
+                                order!.customerId,
                                 'accepted',
                                 transaction
                             );
-                            
+
                             // 3. Sync shopping list items with order if needed (ensure alignment)
                             try {
                                 logger.info(`Syncing shopping list ${order!.shoppingListId} with order totals`);
                                 const shoppingList = await ShoppingListService.getShoppingList(order!.shoppingListId);
-                                
+
                                 if (shoppingList) {
                                     // Update estimated total and payment status using service method
                                     const updateData = {
@@ -120,16 +120,16 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                                         paymentStatus: 'completed' as const,
                                         paymentProcessedAt: new Date(),
                                     };
-                                    
+
                                     logger.info('Applying shopping list updates:', updateData);
-                                    
+
                                     await ShoppingListService.updateShoppingList(
                                         order!.shoppingListId,
                                         order!.customerId,
                                         updateData,
                                         transaction
                                     );
-                                    
+
                                     logger.info(`Shopping list ${order!.shoppingListId} synced with order totals`);
                                 } else {
                                     logger.error(`Shopping list ${order!.shoppingListId} not found for sync`);
@@ -139,7 +139,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                                 // Continue processing even if shopping list sync fails
                             }
                         }
-                        
+
                         // 4. Auto-assign agent to the completed order
                         let assignedAgentId = null;
                         try {
@@ -151,7 +151,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                                     await AgentService.assignOrderToAgent(order!.id, selectedAgent.id);
                                     assignedAgentId = selectedAgent.id;
                                     logger.info(`Agent ${selectedAgent.id} automatically assigned to order ${order!.orderNumber}`);
-                                    
+
                                     // 5. Update order status to in_progress now that agent is assigned
                                     await OrderService.updateOrderStatus(order!.id, order!.customerId, 'in_progress', transaction);
                                     logger.info(`Order ${order!.orderNumber} status updated to in_progress after agent assignment`);
@@ -163,7 +163,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                             logger.error(`Failed to auto-assign agent for order ${order!.orderNumber}:`, agentError);
                             // Continue processing even if agent assignment fails
                         }
-                        
+
                         // 6. Create comprehensive order trail entry
                         const OrderTrailService = (await import('../services/orderTrail.service')).default;
                         await OrderTrailService.logOrderEvent(order!.id, {
@@ -180,7 +180,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                                 processedAt: new Date().toISOString(),
                             },
                         });
-                        
+
                         logger.info(`Order ${order!.orderNumber} webhook processing completed successfully`, {
                             orderId: order!.id,
                             shoppingListId: order!.shoppingListId,
@@ -188,26 +188,26 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
                             paymentAmount: order!.totalAmount,
                         });
                     });
-                    
+
                     // Verify updates outside transaction
                     try {
                         const finalOrder = await OrderService.getOrder(order!.id, false, false);
                         const finalShoppingList = await ShoppingListService.getShoppingList(order!.shoppingListId);
-                        
+
                         logger.info(`Final status verification for order ${order!.orderNumber}:`, {
                             orderPaymentStatus: finalOrder.paymentStatus,
                             orderStatus: finalOrder.status,
                             shoppingListStatus: finalShoppingList.status,
                             shoppingListPaymentStatus: finalShoppingList.paymentStatus,
                         });
-                        
+
                         if (finalOrder.paymentStatus !== 'completed') {
                             logger.error(`CRITICAL: Order ${order!.orderNumber} payment status not updated correctly!`, {
                                 expected: 'completed',
                                 actual: finalOrder.paymentStatus,
                             });
                         }
-                        
+
                         if (finalShoppingList.status !== 'accepted') {
                             logger.error(`CRITICAL: Shopping list ${order.shoppingListId} status not updated correctly!`, {
                                 expected: 'accepted',
@@ -234,7 +234,7 @@ const webhookWorker = new Worker<PaymentWebhookJobData>(
             throw error;
         }
     },
-    { 
+    {
         connection,
         // Add better job configuration for webhook worker too
         concurrency: 10, // Process up to 10 webhooks concurrently
@@ -292,7 +292,7 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                     jobId: job.id,
                     orderId: order.id,
                 });
-                
+
                 // Job completed successfully - no further action needed
                 logger.info(`Payment expiry check job ${job.id} completed - order already processed`);
                 return; // Complete the job successfully
@@ -312,7 +312,7 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                     orderId: order.id,
                     timeRemainingMs: paymentTimeoutMs - timeSinceCreation,
                 });
-                
+
                 // Schedule a new check for when it actually expires
                 const remainingTime = paymentTimeoutMs - timeSinceCreation;
                 await paymentExpiryCheckQueue.add('check-expiry', {
@@ -326,7 +326,7 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                         delay: 5000,
                     },
                 });
-                
+
                 logger.info(`Rescheduled expiry check for order ${order.orderNumber} in ${Math.round(remainingTime / (1000 * 60))} minutes`);
                 return; // Complete the current job
             }
@@ -368,9 +368,9 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                         jobId: job.id,
                         orderId: order.id,
                     });
-                    
+
                     await OrderService.updateOrderPaymentStatus(order.id, 'completed');
-                    
+
                     await OrderTrailService.logOrderEvent(order.id, {
                         action: 'payment_confirmed_late',
                         description: 'Payment confirmed after expiry check',
@@ -380,7 +380,7 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                             detectedVia: 'expiry_check',
                         },
                     });
-                    
+
                     logger.info(`Order ${order.orderNumber} payment confirmed successfully`, {
                         jobId: job.id,
                         orderId: order.id,
@@ -392,9 +392,9 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                         orderId: order.id,
                         providerStatus: transactionStatus.status,
                     });
-                    
+
                     await OrderService.updateOrderPaymentStatus(order.id, 'expired');
-                    
+
                     await OrderTrailService.logOrderEvent(order.id, {
                         action: 'payment_expired',
                         description: `Payment expired - confirmed by provider after ${paymentTimeoutMinutes} minutes`,
@@ -406,7 +406,7 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                             detectedVia: 'expiry_check',
                         },
                     });
-                    
+
                     logger.info(`Order ${order.orderNumber} marked as expired (provider confirmed)`, {
                         jobId: job.id,
                         orderId: order.id,
@@ -419,9 +419,9 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                         providerStatus: transactionStatus.status,
                         action: 'expiring_locally',
                     });
-                    
+
                     await OrderService.updateOrderPaymentStatus(order.id, 'expired');
-                    
+
                     await OrderTrailService.logOrderEvent(order.id, {
                         action: 'payment_expired',
                         description: `Payment expired - local timeout after ${paymentTimeoutMinutes} minutes`,
@@ -434,7 +434,7 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                             detectedVia: 'expiry_check',
                         },
                     });
-                    
+
                     logger.info(`Order ${order.orderNumber} marked as expired (local timeout)`, {
                         jobId: job.id,
                         orderId: order.id,
@@ -447,9 +447,9 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                     orderId: order.id,
                     timeElapsedMinutes: Math.round(timeSinceCreation / (1000 * 60)),
                 });
-                
+
                 await OrderService.updateOrderPaymentStatus(order.id, 'expired');
-                
+
                 await OrderTrailService.logOrderEvent(order.id, {
                     action: 'payment_expired',
                     description: `Payment expired - API unavailable, expired based on local timeout after ${paymentTimeoutMinutes} minutes`,
@@ -462,7 +462,7 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                         timeElapsedMinutes: Math.round(timeSinceCreation / (1000 * 60)),
                     },
                 });
-                
+
                 logger.info(`Order ${order.orderNumber} marked as expired (API unavailable fallback)`, {
                     jobId: job.id,
                     orderId: order.id,
@@ -483,19 +483,19 @@ const expiryCheckWorker = new Worker<PaymentExpiryCheckJobData>(
                 transactionId,
                 userId,
             });
-            
+
             // For job queue errors, we need to handle them properly
             if (error.message && error.message.includes('Missing key for job')) {
                 logger.warn(`BullMQ job state error for job ${job.id} - job likely already processed`);
                 return; // Complete successfully to avoid retry loop
             }
-            
+
             // Don't throw the error - this prevents job from going to failed queue
             // Instead, log the error and complete the job so it doesn't get retried indefinitely
             return;
         }
     },
-    { 
+    {
         connection,
         // Add better job configuration
         concurrency: 5, // Process up to 5 expiry checks concurrently

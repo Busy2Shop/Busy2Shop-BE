@@ -116,6 +116,11 @@ export enum NotificationTypes {
     MARKET_CLOSED = 'Market Closed',
     MARKET_OPENED = 'Market Opened',
 
+    // Call Notifications
+    CALL_MISSED = 'Missed Call',
+    CALL_INCOMING = 'Incoming Call',
+    CALL_REJECTED = 'Call Declined',
+
     // Agent Notifications
     AGENT_ASSIGNED = 'Agent Assigned',
     AGENT_UNASSIGNED = 'Agent Unassigned',

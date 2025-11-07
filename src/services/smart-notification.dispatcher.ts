@@ -373,6 +373,99 @@ export class SmartNotificationDispatcher {
     }
 
     /**
+     * Dispatch incoming call notification (push only, urgent)
+     */
+    static async dispatchCallIncomingNotification(params: {
+        userId: string;
+        callId: string;
+        callerName: string;
+        orderNumber: string;
+    }): Promise<void> {
+        const { userId, callId, callerName, orderNumber } = params;
+
+        try {
+            // Send push notification immediately (urgent, no email)
+            await pushService.sendPushNotification({
+                userId,
+                title: `Incoming call from ${callerName}`,
+                message: `Order #${orderNumber}`,
+                data: {
+                    type: 'call_incoming',
+                    callId,
+                    orderNumber,
+                    priority: 'urgent',
+                },
+            });
+
+            logger.info('📞 Call incoming notification sent', { userId, callId });
+        } catch (error) {
+            logger.error('📞 Error sending call incoming notification:', error);
+        }
+    }
+
+    /**
+     * Dispatch missed call notification (push instant, email 5min delay)
+     */
+    static async dispatchCallMissedNotification(params: {
+        userId: string;
+        callId: string;
+        callerName: string;
+        orderNumber: string;
+    }): Promise<void> {
+        const { userId, callId, callerName, orderNumber } = params;
+
+        try {
+            const notification: INotification = {
+                id: uuidv4(),
+                userId,
+                heading: 'Missed Call',
+                title: NotificationTypes.CALL_MISSED,
+                message: `You missed a call from ${callerName} on Order #${orderNumber}`,
+                resource: 'call',
+                actorId: callId,
+            };
+
+            // Push notification sent immediately, email delayed 5 minutes
+            await this.dispatchNotification(notification, {
+                priority: 'normal',
+                emailDelayMinutes: 5,
+            });
+
+            logger.info('📞 Missed call notification sent', { userId, callId });
+        } catch (error) {
+            logger.error('📞 Error sending missed call notification:', error);
+        }
+    }
+
+    /**
+     * Dispatch call rejected notification (push only)
+     */
+    static async dispatchCallRejectedNotification(params: {
+        userId: string;
+        callId: string;
+        rejectedByName: string;
+    }): Promise<void> {
+        const { userId, callId, rejectedByName } = params;
+
+        try {
+            await pushService.sendPushNotification({
+                userId,
+                title: 'Call Declined',
+                message: `${rejectedByName} declined your call`,
+                data: {
+                    type: 'call_rejected',
+                    callId,
+                    priority: 'normal',
+                },
+            });
+
+            logger.info('📞 Call rejected notification sent', { userId, callId });
+        } catch (error) {
+            logger.error('📞 Error sending call rejected notification:', error);
+        }
+    }
+
+    /**
      * Shutdown the dispatcher
      */
     static shutdown(): void {

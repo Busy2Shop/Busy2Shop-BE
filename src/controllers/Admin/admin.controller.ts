@@ -1756,25 +1756,100 @@ export default class AdminController {
             }
 
             const previousAgentId = order.agentId;
-            
+            let previousAgent = null;
+
+            // Get previous agent details if exists
+            if (previousAgentId) {
+                try {
+                    const UserService = require('../../services/user.service').default;
+                    previousAgent = await UserService.viewSingleUser(previousAgentId);
+                } catch (error) {
+                    console.warn('Could not fetch previous agent details:', error);
+                }
+            }
+
+            // Release previous agent (update their status)
+            if (previousAgentId) {
+                try {
+                    const AgentService = require('../../services/agent.service').default;
+                    await AgentService.releaseAgentFromOrder(previousAgentId, id);
+                    console.log(`Released previous agent ${previousAgentId} from order ${id}`);
+                } catch (releaseError) {
+                    console.warn('Could not release previous agent:', releaseError);
+                }
+            }
+
             // Update order with new agent
             await order.update({ agentId });
+
+            // Assign new agent (update their busy status)
+            try {
+                const AgentService = require('../../services/agent.service').default;
+                await AgentService.setAgentBusy(agentId, id);
+                console.log(`Set new agent ${agentId} as busy for order ${id}`);
+            } catch (busyError) {
+                console.warn('Could not update new agent busy status:', busyError);
+            }
 
             // Add to order trail
             try {
                 const OrderTrailService = require('../../services/orderTrail.service').default;
                 await OrderTrailService.addTrailEntry(id, {
                     action: 'order_reassigned',
-                    description: `Order reassigned to agent ${agent.firstName} ${agent.lastName}`,
+                    description: `Order reassigned from ${previousAgent ? `${previousAgent.firstName} ${previousAgent.lastName}` : 'previous agent'} to agent ${agent.firstName} ${agent.lastName}`,
                     performedBy: 'admin',
                     performedByType: 'admin',
-                    metadata: { 
+                    metadata: {
                         previousAgentId,
+                        previousAgentName: previousAgent ? `${previousAgent.firstName} ${previousAgent.lastName}` : null,
                         newAgentId: agentId,
+                        newAgentName: `${agent.firstName} ${agent.lastName}`,
                     },
                 });
             } catch (trailError) {
                 console.warn('Could not add order trail entry:', trailError);
+            }
+
+            // Send notifications
+            try {
+                const NotificationService = require('../../services/notification.service').default;
+                const { NotificationTypes } = require('../../utils/interface');
+
+                // Notify customer about reassignment
+                await NotificationService.addNotification({
+                    userId: order.customerId,
+                    title: NotificationTypes.ORDER_ACCEPTED,
+                    heading: 'Order Reassigned to New Agent',
+                    message: `Your order #${order.orderNumber} has been reassigned to ${agent.firstName} ${agent.lastName}. You can now chat with your new agent.`,
+                    resource: order.id,
+                    actorId: agentId,
+                });
+
+                // Notify new agent about assignment
+                await NotificationService.addNotification({
+                    userId: agentId,
+                    title: NotificationTypes.NEW_ORDER_ASSIGNED,
+                    heading: 'Order Reassigned to You',
+                    message: `Order #${order.orderNumber} has been reassigned to you. Please review the shopping list and continue with the order.`,
+                    resource: order.id,
+                    actorId: order.customerId,
+                });
+
+                // Notify previous agent about removal (if exists)
+                if (previousAgentId) {
+                    await NotificationService.addNotification({
+                        userId: previousAgentId,
+                        title: NotificationTypes.ORDER_REJECTED,
+                        heading: 'Order Reassigned',
+                        message: `Order #${order.orderNumber} has been reassigned to another agent. This order is no longer under your responsibility.`,
+                        resource: order.id,
+                        actorId: 'admin',
+                    });
+                }
+
+                console.log(`Notifications sent for order reassignment: Order ${order.orderNumber}`);
+            } catch (notificationError) {
+                console.warn('Could not send reassignment notifications:', notificationError);
             }
 
             const updatedOrder = await Order.findByPk(id, {
@@ -1998,6 +2073,46 @@ export default class AdminController {
             } catch (trailError) {
                 console.warn('Could not add order trail entry:', trailError);
             }
+
+            // Send notifications to customer and agent
+            try {
+                const NotificationService = require('../../services/notification.service').default;
+                const { NotificationTypes } = require('../../utils/interface');
+
+                // Notify customer about agent assignment
+                await NotificationService.addNotification({
+                    userId: order.customerId,
+                    title: NotificationTypes.ORDER_ACCEPTED,
+                    heading: 'Agent Assigned to Your Order',
+                    message: `${agent.firstName} ${agent.lastName} has been assigned to your order #${order.orderNumber}. You can now chat with them about your shopping list.`,
+                    resource: order.id,
+                    actorId: agentId,
+                });
+
+                // Notify agent about new order assignment
+                await NotificationService.addNotification({
+                    userId: agentId,
+                    title: NotificationTypes.NEW_ORDER_ASSIGNED,
+                    heading: 'New Order Assigned',
+                    message: `You have been assigned to order #${order.orderNumber}. Please review the shopping list and start shopping.`,
+                    resource: order.id,
+                    actorId: order.customerId,
+                });
+
+                console.log(`Notifications sent for manual agent assignment: Order ${order.orderNumber} to Agent ${agentId}`);
+            } catch (notificationError) {
+                console.warn('Could not send assignment notifications:', notificationError);
+            }
+
+            // TODO: Send email notifications (implement email templates)
+            // try {
+            //     const EmailService = require('../../utils/Email').default;
+            //     const customer = order.customer;
+            //     // Email functionality can be added here once email templates are created
+            //     console.log(`Email notifications would be sent for manual agent assignment: Order ${order.orderNumber}`);
+            // } catch (emailError) {
+            //     console.warn('Could not send assignment email notifications:', emailError);
+            // }
 
             // Get updated order with agent details
             const updatedOrder = await Order.findByPk(id, {
