@@ -124,6 +124,9 @@ router.post('/markets', adminAuth('admin'), upload, AdminAuthenticatedController
 router.put('/markets/:id', adminAuth('admin'), upload, AdminAuthenticatedController(AdminController.updateMarket));
 router.delete('/markets/:id', adminAuth('admin'), AdminAuthenticatedController(AdminController.deleteMarket));
 router.patch('/markets/:id/toggle-pin', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleMarketPin));
+router.patch('/markets/:id/activate', adminAuth('admin'), AdminAuthenticatedController(AdminController.activateMarket));
+router.patch('/markets/:id/deactivate', adminAuth('admin'), AdminAuthenticatedController(AdminController.deactivateMarket));
+router.patch('/markets/:id/toggle-status', adminAuth('admin'), AdminAuthenticatedController(AdminController.toggleMarketStatus));
 
 // Admin Product Management Routes
 router.get('/products', adminAuth('admin'), AdminAuthenticatedController(AdminController.getAllProducts));

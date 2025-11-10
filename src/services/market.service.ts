@@ -201,4 +201,28 @@ export default class MarketService {
 
         return market;
     }
+
+    static async activateMarket(id: string): Promise<Market> {
+        const market = await this.viewSingleMarket(id);
+
+        await market.update({ isActive: true });
+
+        return market;
+    }
+
+    static async deactivateMarket(id: string): Promise<Market> {
+        const market = await this.viewSingleMarket(id);
+
+        await market.update({ isActive: false });
+
+        return market;
+    }
+
+    static async toggleMarketStatus(id: string): Promise<Market> {
+        const market = await this.viewSingleMarket(id);
+
+        await market.update({ isActive: !market.isActive });
+
+        return market;
+    }
 }

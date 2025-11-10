@@ -2537,6 +2537,57 @@ export default class AdminController {
         }
     }
 
+    static async activateMarket(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            const market = await MarketService.activateMarket(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Market activated successfully',
+                data: market,
+            });
+        } catch (error) {
+            console.error('Error in activateMarket:', error);
+            throw error;
+        }
+    }
+
+    static async deactivateMarket(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            const market = await MarketService.deactivateMarket(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: 'Market deactivated successfully',
+                data: market,
+            });
+        } catch (error) {
+            console.error('Error in deactivateMarket:', error);
+            throw error;
+        }
+    }
+
+    static async toggleMarketStatus(req: AdminAuthenticatedRequest, res: Response) {
+        try {
+            const { id } = req.params;
+
+            const market = await MarketService.toggleMarketStatus(id);
+
+            res.status(200).json({
+                status: 'success',
+                message: `Market ${market.isActive ? 'activated' : 'deactivated'} successfully`,
+                data: market,
+            });
+        } catch (error) {
+            console.error('Error in toggleMarketStatus:', error);
+            throw error;
+        }
+    }
+
     // ===== ADMIN PRODUCT MANAGEMENT =====
     static async getAllProducts(req: AdminAuthenticatedRequest, res: Response) {
         try {

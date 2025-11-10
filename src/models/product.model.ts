@@ -12,6 +12,7 @@ import {
 } from 'sequelize-typescript';
 import Market from './market.model';
 import Review from './review.model';
+import Category from './category.model';
 
 @Table
 export default class Product extends Model<Product | IProduct> {
@@ -91,6 +92,16 @@ export default class Product extends Model<Product | IProduct> {
     @BelongsTo(() => Market)
     market: Market;
 
+    @ForeignKey(() => Category)
+    @Column({
+        type: DataType.STRING,
+        allowNull: true,
+    })
+    categoryId: string;
+
+    @BelongsTo(() => Category)
+    category: Category;
+
     @HasMany(() => Review, 'productId')
     reviews: Review[];
 }
@@ -108,6 +119,8 @@ export interface IProduct {
     isAvailable?: boolean;
     isPinned?: boolean;
     marketId: string;
+    categoryId?: string;
     market?: Market;
+    category?: Category;
     reviews?: Review[];
 }

@@ -286,6 +286,12 @@ export default class ProductService {
                         },
                     ],
                 },
+                {
+                    model: Category,
+                    as: 'category',
+                    attributes: ['id', 'name', 'description'],
+                    required: false,
+                },
             ],
         });
 
