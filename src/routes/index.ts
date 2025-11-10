@@ -25,6 +25,7 @@ import systemSettingsRoute from './systemSettings.routes';
 import testRoute from './test.routes';
 import deliveryRoute from './delivery.routes';
 import supportRoute from './support.routes';
+import webrtcRoute from './webrtc.routes';
 
 const router = Router();
 
@@ -54,5 +55,6 @@ router.use('/system/settings', systemSettingsRoute);
 router.use('/test', testRoute); // Test endpoints (no auth required)
 router.use('/delivery', deliveryRoute);
 router.use('/support', supportRoute);
+router.use('/webrtc', webrtcRoute); // WebRTC TURN credentials (no auth required)
 
 export default router;
