@@ -30,7 +30,7 @@ export default class CloudinaryClientConfig {
             });
             const options = {
                 use_filename: true,
-                folder: `Base/${type}/${id}`,
+                folder: `Busy2shop/${type}/${id}`,
                 public_id: name,
             };
 
