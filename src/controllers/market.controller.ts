@@ -160,7 +160,7 @@ export default class MarketController {
 
         // Optionally include products using the correct method
         if (includeProducts === 'true') {
-            const productLimit = productsLimit ? Number(productsLimit) : 20;
+            const productLimit = productsLimit ? Number(productsLimit) : 200; // Increased default
             const productsResult = await ProductService.viewMarketProducts(id, {
                 page: 1,
                 size: productLimit,
@@ -194,7 +194,7 @@ export default class MarketController {
 
         const queryParams: Record<string, unknown> = {
             page: page ? Number(page) : 1,
-            size: limit ? Number(limit) : 20,
+            size: limit ? Number(limit) : 200, // Increased default to 200 to show more products
         };
 
         if (search) queryParams.q = search as string;
